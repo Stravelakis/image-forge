@@ -17,6 +17,7 @@ import {
   ITrash,
   IUpload,
   IX,
+  Lightbox,
   Modal,
   StatusChip,
 } from "./ui";
@@ -71,16 +72,37 @@ const timeAgo = (iso: string) => {
   return `${Math.floor(h / 24)}d ago`;
 };
 
-const Thumb = ({ row }: { row: ManifestRow }) => {
+/**
+ * A row's picture.
+ *
+ * `width` exists because this is used in two places that want very different
+ * sizes: the table, where 64px tells one row from another, and the detail
+ * panel, where you have opened the row precisely to LOOK at it. Both were
+ * pinned at 64px, which made the panel preview a thumbnail of a thumbnail.
+ *
+ * `onOpen` turns it into a button. `object-contain` rather than `object-cover`
+ * at panel size: cropping the edges off a sprite to fill a box hides the very
+ * framing you are checking.
+ */
+const Thumb = ({
+  row,
+  width = 64,
+  onOpen,
+}: {
+  row: ManifestRow;
+  width?: number;
+  onOpen?: () => void;
+}) => {
   const dims = ASPECTS[row.aspect_ratio];
   const ratio = dims.w / dims.h;
+  const height = Math.round(width / ratio);
   if (!row.preview) {
     return (
       <div
         className={`flex items-center justify-center overflow-hidden rounded-lg border border-dashed border-line2 bg-[var(--color-field)] ${
           row.status === "generating" ? "shimmer" : ""
         }`}
-        style={{ width: 64, height: Math.round(64 / ratio) }}
+        style={{ width, height }}
       >
         {row.status === "generating" ? <IHammer size={16} className="hammer-swing text-ember" /> : <span className="font-mono text-[9px] text-dust">{row.aspect_ratio}</span>}
       </div>
@@ -90,14 +112,29 @@ const Thumb = ({ row }: { row: ManifestRow }) => {
   // data: URL is a URL: put one in innerHTML and you get an empty box, so
   // every URL — svg or not — goes to <img> instead.
   const isSvg = row.preview.trimStart().startsWith("<svg");
-  return (
-    <div className="thumb-zoom overflow-hidden rounded-lg border border-line shadow-[0_4px_14px_rgba(0,0,0,0.35)]" style={{ width: 64, height: Math.round(64 / ratio) }}>
-      {isSvg ? (
-        <div className="develop h-full w-full" dangerouslySetInnerHTML={{ __html: row.preview }} />
-      ) : (
-        <img src={row.preview} alt={row.filename} className="develop h-full w-full object-cover" />
-      )}
+  const big = width > 120;
+  const inner = isSvg ? (
+    <div className="develop h-full w-full" dangerouslySetInnerHTML={{ __html: row.preview }} />
+  ) : (
+    <img src={row.preview} alt={row.filename} className={`develop h-full w-full ${big ? "object-contain" : "object-cover"}`} />
+  );
+  const box = (
+    <div
+      className={`overflow-hidden rounded-lg border border-line shadow-[0_4px_14px_rgba(0,0,0,0.35)] ${onOpen ? "" : "thumb-zoom"}`}
+      style={{ width, height }}
+    >
+      {inner}
     </div>
+  );
+  if (!onOpen) return box;
+  return (
+    <button
+      onClick={onOpen}
+      title="Open it full size"
+      className="btn-press cursor-zoom-in rounded-lg transition hover:brightness-110"
+    >
+      {box}
+    </button>
   );
 };
 
@@ -286,6 +323,8 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
   const { row, updateRow, deleteRow, duplicateRow, generateOne, forceRetry, setToPending, markSkipped, markImported, downloadRow, openScribe, onSelect, compare, strikeVariant, keepVariant, discardVariant } = p;
   const checks = validateFilename(row.filename, row.category, p.allRows.map((x) => ({ id: x.id, filename: x.filename })), row.id, p.filenameRules);
   const bad = checks.filter((c) => !c.pass);
+  /** The picture being shown full size, if any: the row's own, or a variant. */
+  const [zoom, setZoom] = useState<{ src: string; label: string } | null>(null);
 
   return (
     <aside className="slide-in-right flex h-full w-[400px] shrink-0 flex-col overflow-y-auto border-l border-line bg-coal/80 p-4 backdrop-blur">
@@ -301,8 +340,16 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
 
       <div className="space-y-4">
         {/* preview */}
-        <div className="flex justify-center rounded-xl border border-line bg-[var(--color-field)] p-3">
-          <Thumb row={row} />
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-line bg-[var(--color-field)] p-3">
+          <Thumb row={row} width={272} onOpen={row.preview ? () => setZoom({ src: row.preview!, label: row.filename }) : undefined} />
+          {row.preview && (
+            <button
+              onClick={() => setZoom({ src: row.preview!, label: row.filename })}
+              className="btn-press font-mono text-[10px] text-ember underline decoration-ember/40 underline-offset-2"
+            >
+              open full size
+            </button>
+          )}
         </div>
 
         {/* filename */}
@@ -433,17 +480,24 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <figure>
-                <Thumb row={row} />
+                <Thumb
+                  row={row}
+                  width={168}
+                  onOpen={row.preview ? () => setZoom({ src: row.preview!, label: `${row.filename} · original` }) : undefined}
+                />
                 <figcaption className="mt-1 text-center font-mono text-[9.5px] text-dust">original · seed {row.seed}</figcaption>
               </figure>
               <figure className="pop-in">
-                <div className="thumb-zoom overflow-hidden rounded-lg border border-potion/50">
+                <button
+                  onClick={() => setZoom({ src: compare.variant, label: `${row.filename} · variant seed ${compare.variantSeed}` })}
+                  title="Open it full size"
+                  className="btn-press block w-[168px] cursor-zoom-in overflow-hidden rounded-lg border border-potion/50 transition hover:brightness-110">
                   {compare.variant.trimStart().startsWith("<svg") ? (
                     <div className="h-full w-full [&>svg]:h-full [&>svg]:w-full" dangerouslySetInnerHTML={{ __html: compare.variant }} />
                   ) : (
-                    <img src={compare.variant} alt="variant" className="h-full w-full object-cover" />
+                    <img src={compare.variant} alt="variant" className="h-full w-full object-contain" />
                   )}
-                </div>
+                </button>
                 <figcaption className="mt-1 text-center font-mono text-[9.5px] text-potion">variant · seed {compare.variantSeed}</figcaption>
               </figure>
             </div>

@@ -360,3 +360,79 @@ export function useRevealObserver<T extends HTMLElement>() {
   }, []);
   return ref;
 }
+
+/* ---------------- full-size viewer ---------------- */
+
+/**
+ * One picture, as big as the window allows.
+ *
+ * The panel preview is 64px, which is enough to tell one row from another and
+ * nowhere near enough to judge whether a face came out blank or a hand grew a
+ * sixth finger — the things you actually open a row to check. The full picture
+ * was always there in `row.preview`; there was simply nothing that showed it.
+ *
+ * `image-rendering: pixelated` is deliberate for small sources: a 512px sprite
+ * blown up smooth turns to mush, and mush hides exactly the defects this is
+ * for. Anything already large is unaffected, being displayed at or below its
+ * own size.
+ */
+export function Lightbox({
+  src,
+  alt,
+  onClose,
+}: {
+  /** a data/blob URL, or a bare `<svg …>` string */
+  src: string;
+  alt: string;
+  onClose: () => void;
+}) {
+  // Escape closes it. Registered on the document rather than the overlay so it
+  // works without the overlay having taken focus first.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKey);
+    // The page behind must not scroll while this is open, or dismissing it
+    // leaves you somewhere you did not navigate to.
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [onClose]);
+
+  const isSvg = src.trimStart().startsWith("<svg");
+
+  return (
+    <div
+      onClick={onClose}
+      role="dialog"
+      aria-label={alt}
+      aria-modal="true"
+      className="fixed inset-0 z-[100] flex cursor-zoom-out flex-col items-center justify-center gap-3 bg-black/85 p-6 backdrop-blur-sm"
+    >
+      <div
+        // Stops a click on the picture itself from closing, so the image can be
+        // right-clicked and saved without the thing vanishing first.
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[86vh] max-w-[92vw] cursor-default overflow-auto rounded-xl border border-line2 bg-[var(--color-field)] shadow-[0_24px_70px_rgba(0,0,0,0.7)]"
+      >
+        {isSvg ? (
+          <div className="[&>svg]:max-h-[84vh] [&>svg]:max-w-[90vw]" dangerouslySetInnerHTML={{ __html: src }} />
+        ) : (
+          <img
+            src={src}
+            alt={alt}
+            style={{ imageRendering: "pixelated" }}
+            className="block max-h-[84vh] max-w-[90vw] object-contain"
+          />
+        )}
+      </div>
+      <p className="font-mono text-[11px] text-parch">
+        {alt} <span className="text-dust">· click anywhere or press Esc to close</span>
+      </p>
+    </div>
+  );
+}
