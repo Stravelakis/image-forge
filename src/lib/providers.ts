@@ -337,6 +337,11 @@ export const PROVIDER_META: Record<ProviderId, { name: string; short: string; ne
     note: "Free and unlimited in volume, but paced to one picture every few seconds. Anonymous use is now blocked by a bot check — get a free token at auth.pollinations.ai.",
     free: "free · needs a token",
   },
+  ovh: {
+    name: "OVHcloud · SDXL", short: "ovh", needsKey: false, dot: "#6e9fd8",
+    note: "Stable Diffusion XL, hosted free by OVHcloud. No key and no signup. Paced to two pictures a minute, always 1024×1024, and it takes no seed — the same prompt twice gives two different pictures.",
+    free: "free · no key · 2/min",
+  },
   gemini: {
     name: "Google · Nano Banana", short: "google", needsKey: true, dot: "#56b8a5",
     note: "Google's current image models, charged per picture. There is no free tier any more — the old Imagen free allowance ended when Google switched Imagen off on 17 August 2026. Batch jobs cost half.",

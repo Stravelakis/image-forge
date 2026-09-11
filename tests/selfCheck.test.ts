@@ -94,8 +94,16 @@ describe("things that are actually broken", () => {
     expect(hit?.detail).toMatch(/silently lose work/i);
   });
 
-  it("says plainly when no engine is set up at all", () => {
+  it("does not call it broken when only OVHcloud is available, because that one works", () => {
     const f = checkForge(settings({ cloudflare: { accountId: "", token: "" }, provider: "cloudflare" }), [row()]);
+    expect(idsOf(f)).not.toContain("no-engine");
+  });
+
+  it("says plainly when no engine is set up at all", () => {
+    const f = checkForge(
+      settings({ cloudflare: { accountId: "", token: "" }, provider: "cloudflare", pausedEngines: ["ovh"] }),
+      [row()]
+    );
     expect(idsOf(f)).toContain("no-engine");
   });
 
@@ -122,7 +130,7 @@ describe("things worth a look", () => {
 
   it("warns when every engine costs money", () => {
     const f = checkForge(
-      settings({ cloudflare: { accountId: "", token: "" }, geminiKeys: [key("a")], provider: "gemini" }),
+      settings({ cloudflare: { accountId: "", token: "" }, geminiKeys: [key("a")], provider: "gemini", pausedEngines: ["ovh"] }),
       [row()]
     );
     const hit = f.find((x) => x.id === "no-free-fallback");

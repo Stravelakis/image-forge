@@ -311,6 +311,8 @@ export function usableModels(settings: ForgeSettings): typeof MODELS {
     local: Boolean(settings.localBase?.trim()),
     cloudflare: Boolean(settings.cloudflare?.accountId?.trim() && settings.cloudflare?.token?.trim()),
     pollinations: Boolean(settings.pollinationsToken?.trim()),
+    // nothing to set up
+    ovh: true,
     gemini:
       (settings.geminiKeys ?? []).some((k) => k.key.trim()) ||
       (settings.geminiPaidKeys ?? []).some((k) => k.key.trim()),

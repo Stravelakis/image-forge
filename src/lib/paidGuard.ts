@@ -15,7 +15,7 @@ import { estimateCost, formatUsd, resolveRoute } from "./providers";
 import type { ManifestRow } from "../types";
 
 /** Engines that never cost anything. */
-export const FREE_ENGINES = new Set(["local", "simulated", "cloudflare", "pollinations"]);
+export const FREE_ENGINES = new Set(["local", "simulated", "cloudflare", "pollinations", "ovh"]);
 
 export interface CreditNote {
   /** what you called this credit, e.g. "tier 1 voucher" */
@@ -74,6 +74,9 @@ export function freeAlternativesFor(s: ForgeSettings): { id: string; label: stri
   if (s.cloudflare.accountId.trim() && s.cloudflare.token.trim())
     out.push({ id: "cloudflare", label: "Cloudflare — free, about 690 a day" });
   if (s.pollinationsToken.trim()) out.push({ id: "pollinations", label: "Pollinations — free, a little slow" });
+  // Needs nothing set up, so it is on offer unless you paused it.
+  if (!(s.pausedEngines ?? []).includes("ovh"))
+    out.push({ id: "ovh", label: "OVHcloud SDXL — free, no key, two a minute" });
   return out;
 }
 

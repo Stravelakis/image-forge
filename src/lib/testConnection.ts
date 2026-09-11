@@ -11,13 +11,14 @@
 
 import type { ForgeSettings } from "./providers";
 import { scribeChat } from "./providers";
-import { cloudflareUrl, inBrowser } from "./engines.mjs";
+import { cloudflareUrl, inBrowser, OVH_URL } from "./engines.mjs";
 import { askVision, type VisionEngine } from "./visionEngine";
 
 export type TestTarget =
   | "local"
   | "cloudflare"
   | "pollinations"
+  | "ovh"
   | "gemini-free"
   | "gemini-paid"
   | "openai"
@@ -132,6 +133,28 @@ async function testPollinations(s: ForgeSettings): Promise<TestResult> {
     );
   } catch {
     return bad("Could not reach Pollinations.");
+  }
+}
+
+/**
+ * OVHcloud needs no key, so the only question is whether it is up.
+ *
+ * Its model list is the check: free, unmetered, and it proves the address and
+ * the model are both still there. A picture would spend one of the two a
+ * minute you get, which is a poor trade for a yes/no.
+ */
+async function testOvh(): Promise<TestResult> {
+  try {
+    const res = await fetch(OVH_URL.replace(/\/api\/text2image$/, "/api/openai_compat/v1/models"), {
+      signal: timeout(15000),
+    });
+    if (!res.ok) return bad(`OVHcloud answered ${res.status}.`, explain(res.status, await res.text().catch(() => "")));
+    const json = (await res.json()) as { data?: { id?: string }[] };
+    const ids = (json.data ?? []).map((d) => d.id).filter(Boolean) as string[];
+    if (!ids.length) return bad("OVHcloud is up but lists no model.");
+    return ok("Working — no key needed.", `Serving ${ids.join(", ")}. Two pictures a minute, always 1024×1024.`);
+  } catch {
+    return bad("Could not reach OVHcloud.", "Check your internet connection.");
   }
 }
 
@@ -351,6 +374,8 @@ export async function testConnection(target: TestTarget, s: ForgeSettings): Prom
       return testCloudflare(s);
     case "pollinations":
       return testPollinations(s);
+    case "ovh":
+      return testOvh();
     case "gemini-free":
       return testGeminiKey(s.geminiKeys.find((k) => k.key.trim())?.key ?? "", s.geminiModel);
     case "gemini-paid":

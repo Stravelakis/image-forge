@@ -127,8 +127,12 @@ describe("the catalogue itself", () => {
 });
 
 describe("which models you can actually use", () => {
-  it("offers nothing when nothing is set up", () => {
-    expect(availableModelsForStyle(styleById("claymation")!, nothingSetUp)).toEqual([]);
+  it("offers only OVHcloud when nothing is set up, since it needs no setup", () => {
+    expect(availableModelsForStyle(styleById("claymation")!, nothingSetUp)).toEqual(["ovh-sdxl"]);
+  });
+
+  it("offers nothing when nothing is set up and OVHcloud is paused", () => {
+    expect(availableModelsForStyle(styleById("claymation")!, { ...nothingSetUp, pausedEngines: ["ovh"] })).toEqual([]);
   });
 
   it("counts your own machine only once it has an address and a model", () => {
@@ -157,8 +161,14 @@ describe("what a style will use by default", () => {
     expect(defaultModelForStyle(styleById("claymation")!, { ...cloudflareOnly, ...googleOnly })).toBe("cloudflare-flux");
   });
 
+  it("prefers OVHcloud over a paid model, because it is free and needs nothing", () => {
+    expect(defaultModelForStyle(styleById("claymation")!, googleOnly)).toBe("ovh-sdxl");
+  });
+
   it("uses a paid model when that is all you have", () => {
-    expect(defaultModelForStyle(styleById("claymation")!, googleOnly)).toBe("nano-banana-2-lite");
+    expect(defaultModelForStyle(styleById("claymation")!, { ...googleOnly, pausedEngines: ["ovh"] })).toBe(
+      "nano-banana-2-lite"
+    );
   });
 
   it("never picks a free model that cannot spell for a look that needs words", () => {

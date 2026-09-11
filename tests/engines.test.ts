@@ -525,3 +525,91 @@ describe("things only a live account revealed", () => {
     expect(JSON.stringify(body)).not.toContain("image/png");
   });
 });
+
+/**
+ * OVHcloud SDXL: free, no key, two pictures a minute.
+ *
+ * The engine keeps its own pace rather than handing a 429 to the normal
+ * rate-limit path, which would park the row for hours as though a daily quota
+ * had run out. These pin the pace, the retry, and the request shape.
+ */
+describe("OVHcloud SDXL", () => {
+  const png = () => new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), { status: 200, headers: { "content-type": "image/png" } });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("is free and needs no key", () => {
+    const def = MODELS.find((m) => m.id === "ovh-sdxl")!;
+    expect(def.priceUsd).toBe(0);
+    expect(def.needsKey).toBe(false);
+    expect(estimateCost([row({ model: "ovh-sdxl" })], settings()).total).toBe(0);
+  });
+
+  it("routes by model column and by chosen engine", () => {
+    expect(resolveRoute(row({ model: "ovh-sdxl" }), settings()).engine).toBe("ovh");
+    expect(resolveRoute(row({ model: "" }), settings({ provider: "ovh" })).engine).toBe("ovh");
+  });
+
+  it("sends the prompt and the negative prompt, with no key at all", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(png());
+    vi.stubGlobal("fetch", fetchMock);
+    const out = await generateBytes(
+      row({ model: "ovh-sdxl", prompt: "a clay fox", negative_prompt: "text" }),
+      settings(),
+      undefined,
+      () => {},
+      0
+    );
+    expect(out.mime).toBe("image/png");
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain("/api/text2image");
+    expect(init.headers.Authorization).toBeUndefined();
+    const body = JSON.parse(init.body);
+    expect(body.prompt).toContain("a clay fox");
+    expect(body.negative_prompt).toContain("text");
+  });
+
+  it("waits out a 429 for as long as the provider says, then tries again", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response("slow down", { status: 429, headers: { "RateLimit-Reset": "5" } }))
+      .mockResolvedValueOnce(png());
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = generateBytes(row({ model: "ovh-sdxl" }), settings(), undefined, () => {}, 0);
+    await vi.advanceTimersByTimeAsync(120_000);
+    const out = await pending;
+    expect(out.mime).toBe("image/png");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("paces parallel calls so they cannot bunch into a 429", async () => {
+    vi.useFakeTimers();
+    const times: number[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockImplementation(async () => {
+        times.push(Date.now());
+        return png();
+      })
+    );
+    const all = Promise.all(
+      [1, 2, 3].map((i) => generateBytes(row({ id: i, model: "ovh-sdxl" }), settings(), undefined, () => {}, 0))
+    );
+    await vi.advanceTimersByTimeAsync(200_000);
+    await all;
+    expect(times).toHaveLength(3);
+    // two a minute means at least thirty seconds between calls
+    expect(times[1] - times[0]).toBeGreaterThanOrEqual(30_000);
+    expect(times[2] - times[1]).toBeGreaterThanOrEqual(30_000);
+  });
+
+  it("refuses a reference picture, rather than quietly ignoring it", async () => {
+    await expect(
+      generateBytes(row({ model: "ovh-sdxl" }), settings(), undefined, () => {}, 0, { refImages: ["abc"] })
+    ).rejects.toThrow(/reference picture/);
+  });
+});

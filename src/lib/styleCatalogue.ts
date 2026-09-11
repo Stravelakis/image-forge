@@ -50,6 +50,7 @@ export const STYLE_GROUPS: { id: StyleGroup; label: string; hint: string }[] = [
 const LOCAL = "local";
 const FREE_CF = "cloudflare-flux";
 const FREE_POLLI = "flux";
+const FREE_OVH = "ovh-sdxl";
 const G_LITE = "nano-banana-2-lite";
 const G_FULL = "nano-banana-2";
 const G_ONE = "nano-banana";
@@ -57,7 +58,7 @@ const G_PRO = "gemini-3-pro-image";
 const OPENAI = "gpt-image-1";
 
 /** The usual order: your machine, then free cloud, then cheap paid, then good paid. */
-const USUAL: StyleModel[] = [LOCAL, FREE_CF, FREE_POLLI, G_LITE, G_FULL];
+const USUAL: StyleModel[] = [LOCAL, FREE_CF, FREE_POLLI, FREE_OVH, G_LITE, G_FULL];
 /** For looks that need precise composition — cloud first, local still offered. */
 const PRECISE: StyleModel[] = [G_FULL, G_LITE, LOCAL, FREE_CF];
 /**
@@ -495,6 +496,7 @@ export function availableModelsForStyle(
     pollinationsToken?: string;
     geminiKeys?: { key: string }[];
     openaiKeys?: { key: string }[];
+    pausedEngines?: string[];
   }
 ): StyleModel[] {
   const hasLocal = Boolean(s.localBase?.trim() && s.localModel?.trim());
@@ -507,6 +509,7 @@ export function availableModelsForStyle(
     if (m === "local") return hasLocal;
     if (m === "cloudflare-flux") return hasCf;
     if (m === "flux" || m === "turbo") return hasPolli;
+    if (m === "ovh-sdxl") return !s.pausedEngines?.includes("ovh"); // needs no setup, only not pausing
     if (m === "gpt-image-1" || m === "dall-e-3") return hasOpenai;
     return hasGoogle; // every remaining id is a Google model
   });
@@ -514,7 +517,7 @@ export function availableModelsForStyle(
 
 /** Is this model free to use? */
 export const isFreeModel = (m: StyleModel): boolean =>
-  m === "local" || m === "cloudflare-flux" || m === "flux" || m === "turbo";
+  m === "local" || m === "cloudflare-flux" || m === "flux" || m === "turbo" || m === "ovh-sdxl";
 
 /**
  * The model this style should use by default: the best FREE one you have set

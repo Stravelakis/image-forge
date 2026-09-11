@@ -120,23 +120,32 @@ describe("what it says about the credit", () => {
 describe("the free ways out", () => {
   it("offers every free engine that is set up", () => {
     const alts = freeAlternativesFor(settings());
-    expect(alts.map((a) => a.id)).toEqual(["local", "cloudflare", "pollinations"]);
+    expect(alts.map((a) => a.id)).toEqual(["local", "cloudflare", "pollinations", "ovh"]);
   });
 
   it("offers only what is actually configured", () => {
     const alts = freeAlternativesFor(
       settings({ localBase: "", cloudflare: { accountId: "", token: "" }, pollinationsToken: "tok" })
     );
-    expect(alts.map((a) => a.id)).toEqual(["pollinations"]);
+    expect(alts.map((a) => a.id)).toEqual(["pollinations", "ovh"]);
   });
 
   it("names your local model, so you know what you are switching to", () => {
     expect(freeAlternativesFor(settings())[0].label).toContain("flux.2-klein-4b");
   });
 
-  it("offers nothing when nothing free is set up, rather than pretending", () => {
+  it("still offers OVHcloud when nothing else is set up, because it needs nothing", () => {
+    const alts = freeAlternativesFor(
+      settings({ localBase: "", cloudflare: { accountId: "", token: "" }, pollinationsToken: "" })
+    );
+    expect(alts.map((a) => a.id)).toEqual(["ovh"]);
+  });
+
+  it("offers nothing when nothing free is set up and OVHcloud is paused, rather than pretending", () => {
     expect(
-      freeAlternativesFor(settings({ localBase: "", cloudflare: { accountId: "", token: "" }, pollinationsToken: "" }))
+      freeAlternativesFor(
+        settings({ localBase: "", cloudflare: { accountId: "", token: "" }, pollinationsToken: "", pausedEngines: ["ovh"] })
+      )
     ).toEqual([]);
   });
 });

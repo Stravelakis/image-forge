@@ -138,6 +138,20 @@ export const MODELS = [
     defaultCooldownH: 0,
   },
   {
+    id: "ovh-sdxl",
+    label: "OVHcloud SDXL",
+    engine: "ovh",
+    apiId: "stable-diffusion-xl-base-v10",
+    priceUsd: 0,
+    batchPriceUsd: null,
+    needsKey: false,
+    free: "free · no key · 2 a minute",
+    allowance: "no signup at all, paced to two pictures a minute",
+    note: "Stable Diffusion XL hosted by OVHcloud. Always 1024×1024 and no seed, so aspect ratio and seed are ignored.",
+    retiresOn: null,
+    defaultCooldownH: 0,
+  },
+  {
     id: "dall-e-3",
     label: "DALL·E 3",
     engine: "openai",
@@ -204,6 +218,11 @@ export const MODEL_TRAITS = {
     promptStyle: "One clear descriptive sentence followed by style words. Avoid very long prompts.",
   },
   turbo: { textQuality: "poor", promptStyle: "Very short and concrete. Subject, style, lighting. Nothing more." },
+  "ovh-sdxl": {
+    textQuality: "poor",
+    promptStyle:
+      "Short and front-loaded: subject first, then style words, then lighting. SDXL reads roughly the first seventy-five tokens and drops the rest, so anything important must come early.",
+  },
   "dall-e-3": {
     textQuality: "good",
     promptStyle: "Plain descriptive English. It rewrites your prompt itself, so state clearly what must not change.",
@@ -311,7 +330,7 @@ export class RetiredModelError extends Error {
 }
 
 /** Engines that cost nothing, whoever the model turns out to be. */
-const FREE_ENGINES = new Set(["local", "simulated", "cloudflare", "pollinations"]);
+const FREE_ENGINES = new Set(["local", "simulated", "cloudflare", "pollinations", "ovh"]);
 
 /** Which engine + API model id a row should be struck with. */
 /**
@@ -335,6 +354,7 @@ export const PROVIDER_LABELS = {
   gemini: "Google",
   cloudflare: "Cloudflare",
   pollinations: "Pollinations",
+  ovh: "OVHcloud",
   openai: "The OpenAI-compatible endpoint",
   local: "Your own machine",
 };
@@ -364,6 +384,10 @@ function resolveRouteIgnoringPauses(row, s) {
   if (s.provider === "cloudflare") {
     const def = findModel("cloudflare-flux");
     return { engine: "cloudflare", apiModel: def.apiId, def };
+  }
+  if (s.provider === "ovh") {
+    const def = findModel("ovh-sdxl");
+    return { engine: "ovh", apiModel: def.apiId, def };
   }
   if (s.provider === "pollinations") {
     const def = findModel(s.pollinationsModel) || findModel("flux");
@@ -446,6 +470,79 @@ export function explainFailure(status, body, engine) {
 }
 
 /* ---------------- engines ---------------- */
+
+/*
+ * OVHcloud's hosted SDXL. No key, no signup — confirmed 11 September 2026.
+ *
+ * The catch is the pace: anonymous callers get two pictures a minute, stated in
+ * the X-RateLimit-Limit-Minute header. Left to the normal rate-limit path, a 429
+ * would park the row for hours as if a daily quota had run out, which is wrong
+ * for a limit that clears in seconds. So the engine keeps its own pace: calls
+ * are queued one behind another, thirty-one seconds apart, however many lanes
+ * the queue is running. A 429 that still slips through is waited out for as
+ * long as the RateLimit-Reset header says, and tried again.
+ *
+ * It takes only a prompt and a negative prompt: no size, no seed. Every picture
+ * is 1024x1024, and the same prompt twice gives two different pictures.
+ */
+export const OVH_URL = "https://stable-diffusion-xl.endpoints.kepler.ai.cloud.ovh.net/api/text2image";
+const OVH_GAP_MS = 31_000;
+let ovhNextSlot = 0;
+let ovhChain = Promise.resolve();
+
+const sleep = (ms, signal) =>
+  new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error("halted"));
+    const t = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      "abort",
+      () => {
+        clearTimeout(t);
+        reject(new Error("halted"));
+      },
+      { once: true }
+    );
+  });
+
+/** Wait for this caller's turn. Serialised, so parallel lanes cannot bunch up. */
+function ovhTurn(signal) {
+  const turn = ovhChain.then(async () => {
+    const wait = ovhNextSlot - Date.now();
+    if (wait > 0) await sleep(wait, signal);
+    ovhNextSlot = Date.now() + OVH_GAP_MS;
+  });
+  ovhChain = turn.catch(() => {});
+  return turn;
+}
+
+async function ovh(row, s, signal) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await ovhTurn(signal);
+    const res = await fetchWithTimeout(
+      OVH_URL,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/octet-stream" },
+        body: JSON.stringify({ prompt: row.prompt, negative_prompt: row.negative_prompt || "" }),
+      },
+      180000,
+      signal
+    );
+    if (res.status === 429) {
+      const reset = Number(res.headers.get("RateLimit-Reset")) || 30;
+      ovhNextSlot = Date.now() + (reset + 1) * 1000;
+      continue;
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(explainFailure(res.status, body, "ovh"));
+    }
+    const mime = res.headers.get("content-type") || "";
+    if (!mime.startsWith("image")) throw new Error("OVHcloud sent something that was not an image.");
+    return { bytes: new Uint8Array(await res.arrayBuffer()), mime };
+  }
+  throw new RateLimitError("OVHcloud is still busy after three tries — it allows two pictures a minute.", Date.now() + 60e3, "ovh");
+}
 
 async function pollinations(row, apiModel, s, signal) {
   const { w, h } = dimsFor(row.aspect_ratio);
@@ -744,6 +841,7 @@ export async function generateBytes(rawRow, s, signal, exhaust, cooldownMs, opts
   }
   if (engine === "local") return local(row, apiModel, s, signal, refImages);
   if (engine === "pollinations") return pollinations(row, apiModel, s, signal);
+  if (engine === "ovh") return ovh(row, s, signal);
   if (engine === "gemini") return gemini(row, apiModel, s, signal, exhaust, cooldownMs, refImages);
   if (engine === "cloudflare") return cloudflare(row, apiModel, s, signal, exhaust, cooldownMs);
   if (engine === "openai") return openaiCompat(row, apiModel, s, signal, exhaust, cooldownMs);

@@ -141,6 +141,12 @@ function ModelSelector({
       ok: Boolean(settings.pollinationsToken.trim()),
     },
     {
+      id: "ovh",
+      label: "OVHcloud · SDXL",
+      sub: "free · no key · two a minute",
+      ok: true,
+    },
+    {
       id: "gemini",
       label: "Google · Nano Banana",
       sub:

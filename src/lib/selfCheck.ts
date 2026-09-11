@@ -177,7 +177,9 @@ export function checkForge(settings: ForgeSettings, rows: ManifestRow[]): Findin
   }
 
   /* --- no engine that can actually make a picture --- */
+  // OVHcloud needs no setup, so it counts unless it has been paused.
   const freeReady =
+    !(s.pausedEngines ?? []).includes("ovh") ||
     Boolean(s.localBase.trim()) ||
     Boolean(s.cloudflare.accountId.trim() && s.cloudflare.token.trim()) ||
     Boolean(s.pollinationsToken.trim());

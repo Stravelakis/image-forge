@@ -684,6 +684,26 @@ export default function SettingsView({
               <TestButton target="pollinations" settings={settings} label="Check the token" />
             </div>
 
+            {/* ---- OVHcloud: free, nothing to set up ---- */}
+            <div className="rounded-xl border border-line bg-panel/50 p-4">
+              <p className="font-display text-[15px] tracking-wide text-cream">OVHcloud SDXL</p>
+              <p className="mt-1 text-[12px] text-dust">
+                Stable Diffusion XL, hosted free by OVHcloud. No key, no signup, nothing to fill in. Paced to two
+                pictures a minute, so the queue waits its turn rather than failing. Always 1024×1024, and it takes no
+                seed — the same prompt twice gives two different pictures. Put{" "}
+                <span className="font-mono text-cream">ovh-sdxl</span> in a row's model column, or pick it as the engine.
+              </p>
+              <TestButton target="ovh" settings={settings} label="Check it is up" />
+            </div>
+
+            <PauseSwitch
+              engine="ovh"
+              label="OVHcloud"
+              settings={settings}
+              patchSettings={patchSettings}
+              note="Paused means OVHcloud stops being offered as a free fallback and rows routed to it stop immediately."
+            />
+
             <PauseSwitch
               engine="gemini"
               label="Google"

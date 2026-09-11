@@ -1,6 +1,6 @@
 /** Type surface for the shared, DOM-free engine module (engines.mjs). */
 
-export type ProviderId = "simulated" | "local" | "pollinations" | "gemini" | "cloudflare" | "openai";
+export type ProviderId = "simulated" | "local" | "pollinations" | "ovh" | "gemini" | "cloudflare" | "openai";
 
 export interface ApiKey {
   id: string;
@@ -144,3 +144,5 @@ export declare function generateBytes(
   cooldownMs: number,
   opts?: GenerateOptions
 ): Promise<EngineBytes>;
+
+export const OVH_URL: string;
