@@ -179,3 +179,72 @@ describe("which credit gets named", () => {
     expect(c.credit?.label).toBe("awake");
   });
 });
+
+/**
+ * A queue that mixes free and paid rows.
+ *
+ * The `model` column routes every row on its own — that is the feature that
+ * lets one batch run some pictures on Google and the rest on your own machine.
+ * The dialog has to count the same way.
+ *
+ * It did not. The route came from rows[0] and was then applied to rows.length,
+ * so a queue of two Google rows and twenty free ones announced "22 pictures on
+ * Nano Banana 2 Lite" — eleven times the real number — while the total printed
+ * underneath was correct. Overstating a bill is as corrosive as understating
+ * one: the point of this dialog is that its number can be trusted.
+ */
+describe("a queue that mixes free and paid rows", () => {
+  const mixed = (): ManifestRow[] => [
+    ...rows(2, "nano-banana-2-lite"),
+    // blank routes to whatever engine is selected; here that is the local one
+    ...rows(20, "").map((r, i) => ({ ...r, id: 100 + i })),
+  ];
+
+  it("counts only the rows that are actually billed", () => {
+    const c = checkPaidRun(mixed(), settings({ provider: "local" }));
+    expect(c.costs).toBe(true);
+    expect(c.rows).toBe(2);
+    expect(c.headline).toContain("2 pictures");
+    expect(c.headline).not.toContain("22 pictures");
+  });
+
+  it("charges for exactly those two and nothing else", () => {
+    const c = checkPaidRun(mixed(), settings({ provider: "local" }));
+    expect(c.totalUsd).toBeCloseTo(0.0336 * 2, 4);
+  });
+
+  it("says out loud that the rest are free", () => {
+    const c = checkPaidRun(mixed(), settings({ provider: "local" }));
+    expect(c.headline).toMatch(/other 20 are free/);
+  });
+
+  it("names the paid engine even when a free row sorts first", () => {
+    // The bug in its purest form: row 0 is free, so the old code described the
+    // whole run as free-engine work and priced it anyway.
+    const freeFirst = [...rows(3, "").map((r, i) => ({ ...r, id: 200 + i })), ...rows(1, "nano-banana-2-lite")];
+    const c = checkPaidRun(freeFirst, settings({ provider: "local" }));
+    expect(c.costs).toBe(true);
+    expect(c.model).toMatch(/Nano Banana 2 Lite/i);
+    expect(c.rows).toBe(1);
+  });
+
+  it("still says a wholly free run is free", () => {
+    const c = checkPaidRun(rows(22, ""), settings({ provider: "local" }));
+    expect(c.costs).toBe(false);
+    expect(c.rows).toBe(0);
+    expect(c.headline).toMatch(/free/i);
+  });
+
+  it("does not mention free rows when every row is paid", () => {
+    const c = checkPaidRun(rows(4, "nano-banana-2"), settings());
+    expect(c.headline).not.toMatch(/are free/);
+  });
+
+  it("prices each picture at what a paid picture costs, not the queue average", () => {
+    // $0.034 each is true of the two that bill. Averaging the same total over
+    // all 22 rows printed "$0.0031 each" — a price no picture is ever charged.
+    const c = checkPaidRun(mixed(), settings({ provider: "local" }));
+    expect(c.headline).toContain("$0.034 each");
+    expect(c.headline).not.toContain("$0.003 each");
+  });
+});

@@ -54,6 +54,7 @@ export interface PaidRunCheck {
   /** the engine that would be used */
   engine: string;
   model: string;
+  /** how many rows would actually be billed — NOT the size of the queue */
   rows: number;
   totalUsd: number;
   /** the credit it would come out of, when we know */
@@ -80,9 +81,31 @@ export function freeAlternativesFor(s: ForgeSettings): { id: string; label: stri
  * Would running these rows spend money, and if so what should we say about it?
  */
 export function checkPaidRun(rows: ManifestRow[], s: ForgeSettings, opts: { batch?: boolean } = {}): PaidRunCheck {
-  const route = resolveRoute((rows[0] ?? { prompt: "", aspect_ratio: "1:1", seed: 1, model: "" }) as never, s);
+  /*
+   * Which rows actually cost money — one route per row, not one for the batch.
+   *
+   * This used to resolve the route from rows[0] and then describe rows.length
+   * of them. A queue holding two Google rows and twenty free ones was
+   * announced as "22 pictures on Nano Banana 2 Lite", eleven times the real
+   * number, while the total underneath was correct. Overstating a bill is as
+   * corrosive as understating one: the whole point of this dialog is that the
+   * number in it can be trusted, and a run that is mostly free should say so.
+   *
+   * The `model` column routes each row on its own, which is the feature that
+   * lets one batch mix free and paid — so the check has to work the same way.
+   */
+  const paidRows = rows.filter((r) => {
+    const route = resolveRoute(r as never, s);
+    if (FREE_ENGINES.has(String(route.engine))) return false;
+    return estimateCost([r] as never, s, opts).total > 0;
+  });
+
   const { total } = estimateCost(rows as never, s, opts);
-  const costs = total > 0 && !FREE_ENGINES.has(String(route.engine));
+  const costs = paidRows.length > 0 && total > 0;
+
+  // Describe the engine that will actually be billed, not whichever row
+  // happened to sort first.
+  const route = resolveRoute((paidRows[0] ?? rows[0] ?? { prompt: "", aspect_ratio: "1:1", seed: 1, model: "" }) as never, s);
 
   /*
    * Which credit to warn about.
@@ -101,12 +124,22 @@ export function checkPaidRun(rows: ManifestRow[], s: ForgeSettings, opts: { batc
     .sort((a, b) => (a.daysLeft ?? 0) - (b.daysLeft ?? 0));
   const credit = route.engine === "gemini" ? (dated[0] ?? (usable[0] ? creditNoteFor(usable[0]) : null)) : null;
 
-  const per = rows.length ? total / rows.length : 0;
-  const headline = costs
-    ? `${rows.length} picture${rows.length === 1 ? "" : "s"} on ${route.def?.label ?? route.apiModel} — ` +
-      `about ${formatUsd(total)}${rows.length > 1 ? ` (${formatUsd(per)} each)` : ""}` +
-      `${opts.batch ? ", at the half-price batch rate" : ""}.`
-    : "This run is free.";
+  // Per-picture is the price of a PAID picture. Averaging over the free ones
+  // too would print a number no row will ever be charged.
+  const per = paidRows.length ? total / paidRows.length : 0;
+  const free = rows.length - paidRows.length;
+  const label = route.def?.label ?? route.apiModel;
+  const n = paidRows.length;
+
+  let headline: string;
+  if (!costs) {
+    headline = "This run is free.";
+  } else {
+    const priced =
+      `${n} picture${n === 1 ? "" : "s"} on ${label} — about ${formatUsd(total)}` +
+      `${n > 1 ? ` (${formatUsd(per)} each)` : ""}${opts.batch ? ", at the half-price batch rate" : ""}.`;
+    headline = free > 0 ? `${priced} The other ${free} ${free === 1 ? "is" : "are"} free.` : priced;
+  }
 
   let creditWarning: string | null = null;
   if (credit?.expired) {
@@ -122,8 +155,10 @@ export function checkPaidRun(rows: ManifestRow[], s: ForgeSettings, opts: { batc
   return {
     costs,
     engine: String(route.engine),
-    model: route.def?.label ?? route.apiModel,
-    rows: rows.length,
+    model: label,
+    // The rows that would be BILLED. The dialog counts what you are paying
+    // for; the free rows in the same queue are named in the headline.
+    rows: paidRows.length,
     totalUsd: total,
     credit,
     freeAlternatives: freeAlternativesFor(s),
