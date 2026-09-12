@@ -167,7 +167,11 @@ async function testOvh(): Promise<TestResult> {
  * it can really be used. Those tokens cost a tiny fraction of a cent, and cost
  * nothing at all when the key has no credit, because the call is refused.
  */
-async function testGeminiKey(key: string, model: string): Promise<TestResult> {
+/**
+ * @param tier which pool the key came from. A free key and a paid key can
+ *   fail identically and need opposite advice, so the check has to know.
+ */
+async function testGeminiKey(key: string, model: string, tier: "free" | "paid" = "free"): Promise<TestResult> {
   if (!key.trim()) return bad("No key in this box yet.");
 
   let names: string[] = [];
@@ -198,10 +202,19 @@ async function testGeminiKey(key: string, model: string): Promise<TestResult> {
     const body = await res.text().catch(() => "");
     if (!res.ok) {
       if (/prepayment credits are depleted|billing/i.test(body)) {
-        return bad(
-          "This key's project is linked to Cloud billing, which switched off its free tier.",
-          "Counter-intuitive but confirmed on a real account: linking a project to Google Cloud billing marks it PAID TIER, and paid tier bills against an 'AI Studio Prepay' balance — which ordinary Google Cloud credit does NOT pay for. So a project with hundreds of euros of Cloud credit gets a balance of zero and refuses everything. To get the free tier back: unlink this project from its billing account at console.cloud.google.com/billing. To keep it paid: add a Prepay balance at ai.studio/projects. Either works; linked-with-Cloud-credit-only does not."
-        );
+        // The SAME Google response means two opposite things depending on
+        // which pool the key is in, so the advice has to differ. Telling a
+        // paid key to unlink its billing would destroy exactly the thing it
+        // is there for.
+        return tier === "paid"
+          ? bad(
+              "Paid tier is on, but the AI Studio prepay balance is empty.",
+              "This is the right state for a paid key — billing is linked, so the project is on paid tier. What is missing is money in the one balance Google actually bills: 'AI Studio Prepay', topped up at ai.studio/projects. Ordinary Google Cloud credit does NOT pay for it, however much is sitting in the account. Do NOT unlink the billing account: that would move this project back to the free tier, which has no image allowance at all any more."
+            )
+          : bad(
+              "This key's project is linked to Cloud billing, which switched off its free tier.",
+              "Counter-intuitive but confirmed on a real account: linking a project to Google Cloud billing marks it PAID TIER, and paid tier bills against an 'AI Studio Prepay' balance — which ordinary Google Cloud credit does NOT pay for. So a project with hundreds of euros of Cloud credit gets a balance of zero and refuses everything. To get the free tier back: unlink this project from its billing account at console.cloud.google.com/billing. To keep it paid: add a Prepay balance at ai.studio/projects. Either works; linked-with-Cloud-credit-only does not."
+            );
       }
       if (res.status === 403 && /denied access/i.test(body)) {
         return bad(
@@ -212,6 +225,27 @@ async function testGeminiKey(key: string, model: string): Promise<TestResult> {
       return bad(`The key lists models but cannot be used.`, explain(res.status, body));
     }
     const has = model && names.some((n) => n.startsWith(model));
+    if (tier === "paid") {
+      /*
+       * A passing text call does NOT prove a paid key can make a picture.
+       *
+       * Text has a free allowance; images have none at all since Google ended
+       * the Imagen free tier. So a key with an empty prepay balance answers
+       * this check perfectly and then refuses every picture. Saying "working"
+       * there would be the check lying.
+       *
+       * The only proof is generating one, and that costs real money, so it is
+       * never done behind your back — run one row when you want to know.
+       */
+      return {
+        ok: true,
+        message: "The key works. Whether it has picture money, this cannot tell you.",
+        detail:
+          (has ? `"${model}" is available to this key. ` : model ? `It did not list "${model}". ` : "") +
+          "Text has a free allowance, pictures do not — so a key with an empty AI Studio prepay balance passes this check and still refuses every picture. The only honest proof costs one picture, which the forge will not spend without being asked. Balance: ai.studio/projects.",
+        free: true,
+      };
+    }
     return ok(
       "Working — and it can actually be used.",
       has ? `"${model}" is available to this key.` : model ? `It did not list "${model}", so pictures may fail.` : undefined,
@@ -379,7 +413,7 @@ export async function testConnection(target: TestTarget, s: ForgeSettings): Prom
     case "gemini-free":
       return testGeminiKey(s.geminiKeys.find((k) => k.key.trim())?.key ?? "", s.geminiModel);
     case "gemini-paid":
-      return testGeminiKey(s.geminiPaidKeys.find((k) => k.key.trim())?.key ?? "", s.geminiModel);
+      return testGeminiKey(s.geminiPaidKeys.find((k) => k.key.trim())?.key ?? "", s.geminiModel, "paid");
     case "openai":
       return testOpenAiLike(s.openaiBase, s.openaiKeys.find((k) => k.key.trim())?.key ?? "", s.openaiModel, "The endpoint");
     case "scribe":
@@ -405,7 +439,8 @@ export async function testPool(
   model: string,
   kind: "gemini" | "openai" = "gemini",
   base = "",
-  onEach?: (done: number, total: number) => void
+  onEach?: (done: number, total: number) => void,
+  tier: "free" | "paid" = "free"
 ): Promise<{ id: string; label: string; result: TestResult }[]> {
   const withKeys = pool.filter((k) => k.key.trim());
   const out: { id: string; label: string; result: TestResult }[] = [];
@@ -413,7 +448,7 @@ export async function testPool(
     const k = withKeys[i];
     const result =
       kind === "gemini"
-        ? await testGeminiKey(k.key, model)
+        ? await testGeminiKey(k.key, model, tier)
         : await testOpenAiLike(base, k.key, model, "The endpoint");
     out.push({ id: k.id, label: k.label, result });
     onEach?.(i + 1, withKeys.length);

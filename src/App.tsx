@@ -53,6 +53,7 @@ import {
 import type { Batch, BatchSetup, FactoryItem, SavedSetup } from "./lib/batches";
 import { factoryToRows, loadBatches, loadSetups, saveBatches, saveSetups, uid } from "./lib/batches";
 import { measureStorage, safeSet, storageWarning, type SaveResult } from "./lib/storage";
+import { saveSettingsVerified, type SaveProof } from "./lib/settingsBackup";
 import { tailorPrompt } from "./lib/promptTailor";
 import { styleById } from "./lib/styleCatalogue";
 import { checkPaidRun, type PaidRunCheck } from "./lib/paidGuard";
@@ -98,36 +99,80 @@ const LS_SETTINGS = "image-forge-settings-v1";
 const withPreview = (r: ManifestRow): ManifestRow =>
   r.status === "done" || r.status === "imported" ? { ...r, preview: renderPreview(r) } : { ...r, preview: undefined };
 
-function loadInitial(): ManifestRow[] {
+/**
+ * How a load ended, because "I got defaults" has two very different causes.
+ *
+ *   "stored"  we read what was there
+ *   "empty"   there was genuinely nothing — a first run
+ *   "rescued" something WAS there and could not be used
+ *
+ * The third is the dangerous one. Falling back to defaults is right; writing
+ * those defaults back 350ms later over the data we failed to read is not, and
+ * that is exactly what used to happen. One unreadable read — a browser
+ * hiccup, a half-written value, a JSON error — and the real manifest and every
+ * API key were overwritten by seeds, permanently, with nothing said.
+ *
+ * So a rescued load keeps the original bytes under a ".rescue" key and blocks
+ * autosave for that store until you decide. Nothing is destroyed while you are
+ * being asked.
+ */
+type LoadOutcome = "stored" | "empty" | "rescued";
+
+const RESCUE_SUFFIX = ".rescue";
+
+/** Put the unreadable original somewhere safe before anything overwrites it. */
+function stashRescue(key: string, raw: string): void {
   try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as { rows?: ManifestRow[] };
-      if (Array.isArray(parsed.rows)) {
-        return parsed.rows
+    localStorage.setItem(key + RESCUE_SUFFIX, raw);
+  } catch {
+    /* if even this fails the box is full; the warning below still fires */
+  }
+}
+
+function loadInitial(): { rows: ManifestRow[]; outcome: LoadOutcome } {
+  let raw: string | null = null;
+  try {
+    raw = localStorage.getItem(LS_KEY);
+  } catch {
+    return { rows: SEED_ROWS.map(withPreview), outcome: "rescued" };
+  }
+  if (!raw) return { rows: SEED_ROWS.map(withPreview), outcome: "empty" };
+  try {
+    const parsed = JSON.parse(raw) as { rows?: ManifestRow[] };
+    if (Array.isArray(parsed.rows)) {
+      return {
+        rows: parsed.rows
           .map((r) => (r.status === "generating" ? { ...r, status: "pending" as Status } : r))
           // Rows saved before the categories became asset types still say
           // shop / item / event / npc. Changing the type is a compile-time
           // move; the data on disk does not migrate itself, and an unmigrated
           // value used to reach CATEGORY_META and blank the whole app.
           .map((r) => ({ ...r, category: migrateCategory(String(r.category ?? "")) }))
-          .map(withPreview);
-      }
+          .map(withPreview),
+        outcome: "stored",
+      };
     }
   } catch {
-    /* fall through to seed */
+    /* fall through */
   }
-  return SEED_ROWS.map(withPreview);
+  stashRescue(LS_KEY, raw);
+  return { rows: SEED_ROWS.map(withPreview), outcome: "rescued" };
 }
 
-function loadSettings(): ForgeSettings {
+function loadSettings(): { settings: ForgeSettings; outcome: LoadOutcome } {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(LS_SETTINGS);
-    if (raw) return normalizeSettings(JSON.parse(raw) as Partial<ForgeSettings>);
+    raw = localStorage.getItem(LS_SETTINGS);
   } catch {
-    /* defaults */
+    return { settings: normalizeSettings({}), outcome: "rescued" };
   }
-  return normalizeSettings({});
+  if (!raw) return { settings: normalizeSettings({}), outcome: "empty" };
+  try {
+    return { settings: normalizeSettings(JSON.parse(raw) as Partial<ForgeSettings>), outcome: "stored" };
+  } catch {
+    stashRescue(LS_SETTINGS, raw);
+    return { settings: normalizeSettings({}), outcome: "rescued" };
+  }
 }
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
@@ -142,7 +187,11 @@ export default function App() {
 }
 
 function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
-  const [rows, setRows] = useState<ManifestRow[]>(loadInitial);
+  // Loaded once, outcome kept: a rescued load must never be autosaved over
+  // the data it failed to read.
+  const firstLoad = useRef<{ rows: ReturnType<typeof loadInitial>; settings: ReturnType<typeof loadSettings> }>(null!);
+  if (!firstLoad.current) firstLoad.current = { rows: loadInitial(), settings: loadSettings() };
+  const [rows, setRows] = useState<ManifestRow[]>(() => firstLoad.current.rows.rows);
   const [view, setView] = useState<View>("workbench");
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("engines");
   const [batchFilter, setBatchFilter] = useState<string | null>(null);
@@ -156,7 +205,14 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [log, setLog] = useState<LogEntry[]>([]);
   const [isRunning, setIsRunning] = useState(false);
-  const [settings, setSettings] = useState<ForgeSettings>(loadSettings);
+  const [settings, setSettings] = useState<ForgeSettings>(() => firstLoad.current.settings.settings);
+  const rowsRescued = firstLoad.current.rows.outcome === "rescued";
+  const settingsRescued = firstLoad.current.settings.outcome === "rescued";
+  /** Stores whose autosave is held back until the user decides. */
+  const [heldBack, setHeldBack] = useState<{ rows: boolean; settings: boolean }>(() => ({
+    rows: firstLoad.current.rows.outcome === "rescued",
+    settings: firstLoad.current.settings.outcome === "rescued",
+  }));
   /**
    * A request handed to the chat from somewhere else in the app.
    *
@@ -260,17 +316,42 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   );
 
   useEffect(() => {
+    // Held back after a rescued load: writing seeds over a manifest we merely
+    // failed to READ is how work disappears for good.
+    if (heldBack.rows) return;
     const t = setTimeout(() => {
       announceSave(
         safeSet(LS_KEY, JSON.stringify({ rows: rows.map(({ preview: _p, ...r }) => r), styleLock, appendStyle }))
       );
     }, 350);
     return () => clearTimeout(t);
-  }, [rows, styleLock, appendStyle, announceSave]);
+  }, [rows, styleLock, appendStyle, announceSave, heldBack.rows]);
+
+  /*
+   * Settings are saved on every change AND read straight back.
+   *
+   * They always were saved; what was missing was any way to tell. The desktop
+   * build used to serve itself on a random port, and the browser keys storage
+   * by origin — port included — so every launch opened a different empty box.
+   * Keys typed yesterday were still on disk under a port nothing would visit
+   * again. Reading back after the write is what turns that from a mystery into
+   * a message, and it is what the "saved" line in Settings is showing.
+   */
+  const [saveProof, setSaveProof] = useState<SaveProof | null>(null);
+  const saveSettingsNow = useCallback((next?: ForgeSettings) => {
+    const proof = saveSettingsVerified(LS_SETTINGS, next ?? settingsRef.current);
+    setSaveProof(proof);
+    if (!proof.ok && proof.problem) {
+      pushToast("err", proof.problem);
+      pushLog(`⚠ settings not saved — ${proof.problem}`, "err");
+    }
+    return proof;
+  }, [pushLog, pushToast]);
 
   useEffect(() => {
-    announceSave(safeSet(LS_SETTINGS, JSON.stringify(settings)));
-  }, [settings, announceSave]);
+    if (heldBack.settings) return;
+    saveSettingsNow(settings);
+  }, [settings, saveSettingsNow, heldBack.settings]);
 
   /* Once on load: say if the storage box is filling, and if any row is aimed at
      a model the provider has since switched off. Both bite silently otherwise. */
@@ -280,6 +361,21 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       pushToast("info", warning);
       pushLog(`· ${warning}`, "info");
     }
+    /* A rescued load is the loudest thing that can happen at startup: there WAS
+       data and we could not read it. Nothing has been overwritten — saving is
+       held back until this is answered — but it has to be answered. */
+    if (rowsRescued || settingsRescued) {
+      const what = [rowsRescued && "your manifest", settingsRescued && "your settings and keys"]
+        .filter(Boolean)
+        .join(" and ");
+      const msg = `Could not read ${what}. The original is kept safe and nothing has been overwritten.`;
+      pushLog(`⚠ ${msg} Saving is paused until you choose.`, "err");
+      pushToast("err", msg, {
+        label: "Try again",
+        run: () => window.location.reload(),
+      });
+    }
+
     const stale = rowsRef.current.filter((r) => RETIRED_MODELS[(r.model || "").trim()]);
     if (stale.length) {
       const msg =
@@ -1887,6 +1983,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               onCheckUpdate={checkForUpdate}
               appVersion={APP_VERSION}
               pushToast={pushToast}
+              saveProof={saveProof}
+              onSaveNow={() => saveSettingsNow()}
+              onRestoreSettings={(partial) => setSettings((prev) => normalizeSettings({ ...prev, ...partial }))}
               styleLock={styleLock}
               onLockStyle={setStyleLock}
             />

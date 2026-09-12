@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import type { ManifestRow, Toast } from "../types";
 import { ACCENTS, STYLES } from "../types";
 import type { ApiKey, ForgeSettings, ProviderId } from "../lib/providers";
@@ -14,6 +14,8 @@ import {
   type TestTarget,
 } from "../lib/testConnection";
 import { WHY_MANUAL_DATE, creditNoteFor } from "../lib/paidGuard";
+import { backupFilename, buildBackup, censusOf, describeCensus, readBackup, type SaveProof } from "../lib/settingsBackup";
+import { downloadCsv } from "../lib/csv";
 import { VISION_PRESETS, listChatModels } from "../lib/visionEngine";
 import { checkForge, fixableOf, summarise, type Finding } from "../lib/selfCheck";
 import { Spotlight, Stagger } from "./motion";
@@ -27,7 +29,7 @@ import {
 } from "../lib/styleCatalogue";
 import type { FolderState } from "./SettingsDrawer";
 import { BorderGlow } from "./effects";
-import { Btn, IAlert, ICheck, IDownload, IFolder, IRetry, ISparkle, ITrash, IX } from "./ui";
+import { Btn, IAlert, ICheck, IDownload, IFolder, IRetry, IUpload, ISparkle, ITrash, IX } from "./ui";
 
 export type SettingsSection =
   | "engines"
@@ -226,7 +228,8 @@ function KeyPoolEditor({
                   test === "openai" ? settings.openaiModel : settings.geminiModel,
                   test === "openai" ? "openai" : "gemini",
                   settings.openaiBase,
-                  (done, total) => setPoolBusy(`checking ${done} of ${total}…`)
+                  (done, total) => setPoolBusy(`checking ${done} of ${total}…`),
+                  test === "gemini-paid" ? "paid" : "free"
                 );
                 setPoolResults(results);
                 setPoolNote(
@@ -394,6 +397,89 @@ function PauseSwitch({
   );
 }
 
+
+/**
+ * Proof that what you typed is actually stored.
+ *
+ * Autosave was already happening on every keystroke; the problem was that it
+ * was invisible, so "saved" and "written into a box this app will never open
+ * again" looked exactly the same. That is not hypothetical — the desktop build
+ * served itself on a random port, and storage is keyed by origin, so each
+ * launch got a fresh empty box and yesterday's keys stayed stranded under
+ * yesterday's port.
+ *
+ * So this says the time of the last verified save, counts what is stored
+ * without ever showing it, and offers a backup file — because a browser
+ * storage box is not a safe place for the only copy of anything.
+ */
+function SaveBar({
+  settings,
+  saveProof,
+  onSaveNow,
+  onRestoreSettings,
+  pushToast,
+}: {
+  settings: ForgeSettings;
+  saveProof?: SaveProof | null;
+  onSaveNow?: () => void;
+  onRestoreSettings?: (s: Partial<ForgeSettings>) => void;
+  pushToast: (kind: Toast["kind"], msg: string) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const census = censusOf(settings);
+  const at = saveProof ? new Date(saveProof.at).toLocaleTimeString("en-GB", { hour12: false }) : null;
+  const good = saveProof?.ok !== false;
+
+  return (
+    <div
+      className={`mb-5 rounded-xl border p-3.5 ${good ? "border-line bg-panel/50" : "border-blood/50 bg-blood/10"}`}
+    >
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <span className={`flex items-center gap-1.5 text-[12.5px] ${good ? "text-moss" : "text-blood"}`}>
+          {good ? <ICheck size={14} /> : <IAlert size={14} />}
+          {good ? (at ? `Saved and checked at ${at}` : "Saved automatically") : "NOT saved"}
+        </span>
+        <span className="font-mono text-[10.5px] text-dust">{describeCensus(census)}</span>
+        <span className="ml-auto flex flex-wrap gap-2">
+          <Btn onClick={() => onSaveNow?.()}>Save now</Btn>
+          <Btn
+            onClick={() => {
+              // The file holds the keys in plain text, so it is never written
+              // without a deliberate click and never written anywhere on its own.
+              downloadCsv(backupFilename(), buildBackup(settings));
+              pushToast("ok", "Backup saved. It holds your keys in plain text — keep it somewhere private.");
+            }}
+          >
+            <IDownload size={13} /> Back up to a file
+          </Btn>
+          <Btn onClick={() => fileRef.current?.click()}>
+            <IUpload size={13} /> Restore
+          </Btn>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (!f) return;
+              const parsed = readBackup(await f.text());
+              if (!parsed.ok) {
+                pushToast("err", parsed.problem);
+                return;
+              }
+              onRestoreSettings?.(parsed.settings);
+              pushToast("ok", `Restored the backup from ${parsed.savedAt.slice(0, 10) || "an earlier day"}.`);
+            }}
+          />
+        </span>
+      </div>
+      {saveProof?.problem && <p className="mt-2 text-[12px] leading-relaxed text-blood">{saveProof.problem}</p>}
+    </div>
+  );
+}
+
 export default function SettingsView({
   section,
   onSection,
@@ -412,6 +498,9 @@ export default function SettingsView({
   onCheckUpdate,
   appVersion,
   pushToast,
+  saveProof,
+  onSaveNow,
+  onRestoreSettings,
   styleLock,
   onLockStyle,
 }: {
@@ -433,6 +522,10 @@ export default function SettingsView({
   onCheckUpdate: () => void;
   appVersion: string;
   pushToast: (kind: Toast["kind"], msg: string) => void;
+  /** whether the last settings write was read back successfully */
+  saveProof?: SaveProof | null;
+  onSaveNow?: () => void;
+  onRestoreSettings?: (s: Partial<ForgeSettings>) => void;
   /** the look every new row starts with */
   styleLock?: string;
   onLockStyle?: (id: string) => void;
@@ -485,6 +578,14 @@ export default function SettingsView({
       </nav>
 
       <div className="min-w-0 flex-1 space-y-5">
+        <SaveBar
+          settings={settings}
+          saveProof={saveProof}
+          onSaveNow={onSaveNow}
+          onRestoreSettings={onRestoreSettings}
+          pushToast={pushToast}
+        />
+
         {/* mobile rail */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:hidden">
           {SECTIONS.map((s) => (
