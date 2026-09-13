@@ -5,8 +5,13 @@ nav_order: 5
 
 # If you're a developer
 
-React 18 + Vite + TypeScript. No backend, no state library, no build magic.
-About 16,000 lines. Everything durable is a CSV or a `localStorage` key.
+React 18 + Vite + TypeScript, with an Electron shell for Windows. No backend,
+no state library. About 20,000 lines of source. Everything durable is a CSV or
+a `localStorage` key.
+
+The full engineering map is
+[HANDOFF.md](https://github.com/Stravelakis/image-forge/blob/master/HANDOFF.md).
+This page is the short version.
 
 ---
 
@@ -15,19 +20,21 @@ About 16,000 lines. Everything durable is a CSV or a `localStorage` key.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # vitest, 349 tests
+npm test           # vitest, 606 tests across 30 files
 npm run typecheck  # tsc --noEmit
 npm run build      # vite build
 ```
 
-All three of the last ones run in CI on every push and pull request.
+The last three run in CI on every push and pull request.
 
-Package it:
+Package it for Windows:
 
 ```bash
-node scripts/build-exe.js   # Electron installer + portable, into release/
-npm run tauri:build         # Tauri, ~10 MB
+node scripts/build-exe.js   # installer + portable, into release/
 ```
+
+There is also a `src-tauri/` folder. The Tauri build is not part of CI or the
+release and has not been verified recently.
 
 ---
 
@@ -36,13 +43,11 @@ npm run tauri:build         # Tauri, ~10 MB
 **`src/lib/engines.mjs` is the single source of truth for routing, prices and
 network calls, and it must stay DOM-free.**
 
-It is plain ESM with no imports from React, no `window`, no `document`. That
-is what lets the browser app and the MCP server run *literally the same code*
-rather than two implementations that drift apart. Every time this rule was
-bent, the two behaved differently and a user found it before a test did.
+No React, no `window`, no `document`. That is what lets the browser app, the
+desktop app and the MCP server run *literally the same code*. Every time this
+rule was bent, they behaved differently and a user found it before a test did.
 
-If you need something browser-only, it goes in `src/lib/providers.ts`, which
-wraps `engines.mjs` and adds key pools, cooldowns and settings migration.
+Browser-only concerns go in `src/lib/providers.ts`, which wraps it.
 
 ---
 
@@ -50,114 +55,118 @@ wraps `engines.mjs` and adds key pools, cooldowns and settings migration.
 
 ```
 src/
-├─ App.tsx              orchestrator: the queue runner, folder doors,
-│                       batches, wizard wiring
-├─ types.ts             statuses, categories, kinds, aspects
-├─ index.css            the whole design system
+├─ App.tsx               orchestrator: queue runner, folder doors, saving
+├─ types.ts              statuses, categories (image/svg/lottie/sheet/gif)
 ├─ lib/
-│  ├─ engines.mjs       ← model registry, routing, generateBytes, 429
-│  │                      rotation. DOM-free. Types in engines.d.mts
-│  ├─ providers.ts      browser wrapper: key pools, cooldowns, usage,
-│  │                      settings shape and migration
-│  ├─ paidGuard.ts      what a run will cost, and which credit pays for it
-│  ├─ testConnection.ts per-engine "does this actually work?" checks
-│  ├─ styleCatalogue.ts 34 styles, and which engines can do each
-│  ├─ csv.ts            RFC 4180 parser + full-schema read/write
-│  ├─ validate.ts       the seven filename rules, and their auto-fixes
-│  ├─ warp.ts           homography maths for the four-corner text warp
-│  ├─ textLayer.ts      text layers, auto-shrink to fit
-│  ├─ sheets.ts         sprite / turnaround / viseme sheet planning
-│  ├─ vectorAssets.ts   SVG + Lottie via a code model, with sanitising
-│  ├─ preview.ts        seeded procedural plates (the practice forge)
-│  ├─ output.ts         folder linking, ZIP, blob helpers
-│  └─ batches.ts        wizard setups, recipes, batch registry
-├─ components/          one file per view; ui.tsx is the primitives
-└─ market/              Emberfair, the storefront this was built for
+│  ├─ engines.mjs        ← model registry, routing, generateBytes, 429
+│  │                       rotation, OVH pacing. DOM-free
+│  ├─ providers.ts       settings shape and migration, key pools, text chat
+│  ├─ paidGuard.ts       what a run costs, per row
+│  ├─ testConnection.ts  "does this key actually work?" — real calls
+│  ├─ visionEngine.ts    model lists with provider metadata; NVIDIA routing
+│  ├─ settingsBackup.ts  verified saves, key counts, backup files
+│  ├─ chatPlan.ts        the chat's FORGE / ROWS / EDIT reply protocol
+│  ├─ appFacts.ts        the only facts the chat may state about the app
+│  ├─ styleCatalogue.ts  36 styles, and which engines can do each
+│  ├─ csv.ts             RFC 4180 parser + full-schema read/write
+│  ├─ validate.ts        filename rules; extension follows the real bytes
+│  ├─ sheets.ts          sprite / turnaround / viseme / expression sheets
+│  ├─ warp.ts            homography maths for the four-corner text warp
+│  ├─ vectorAssets.ts    SVG + Lottie via a code model, sanitised
+│  ├─ theme.ts           the palette derived from the accent colour
+│  └─ output.ts          folder linking, ZIP, blob helpers
+├─ components/           one file per view; ui.tsx is the primitives
 scripts/
-├─ mcp-server.js        the agent API — 8 tools over stdio
-└─ build-exe.js         vite → icons → electron-builder
-electron/main.js        desktop shell
+├─ mcp-server.js         the agent API — 8 tools over stdio
+└─ build-exe.js          vite → electron-builder
+electron/main.js         desktop shell (ESM — never require())
 ```
 
 ---
 
 ## How a picture gets made
 
-1. **`resolveRoute(row, settings)`** in `engines.mjs` turns a row into
-   `{ engine, apiModel, def }`. The row's `model` column wins; the settings
-   default is the fallback.
-2. **A key is chosen** from the healthy pool for that engine. Free Gemini keys
-   are ordered before paid ones, always.
-3. **`generateBytes()`** makes the request and returns bytes.
-4. On **`429`**, that key is benched until `exhaustedUntil` and the *same row*
-   retries immediately with the next key. Only when the whole pool is resting
-   does the row park with a `retry_at`.
-5. Success caches the blob in memory, writes it to the linked folder, and
-   updates the row.
+1. **`resolveRoute(row, settings)`** turns a row into
+   `{ engine, apiModel, def }`. The row's `model` column wins; the engine
+   picked in the toolbar is the fallback.
+2. **A key is chosen** from the healthy pool. Free Gemini keys before paid.
+3. **`generateBytes()`** makes the request and returns bytes and a MIME type.
+4. On **`429`**, that key is benched and the *same row* retries with the next.
+   Only when the whole pool rests does the row park with a `retry_at`.
+5. The filename's extension is corrected to match the MIME type, the picture
+   is written to the linked folder, and the row is updated.
 
-The queue runner in `App.tsx` hands rows out one at a time to N lanes
-(1–6, your choice). A slow picture never blocks the others, and Stop lands
-within one request.
+The queue runner in `App.tsx` hands rows to 1–6 lanes. A slow picture never
+blocks the others, and Stop lands within one request.
 
 ---
 
 ## Adding an engine
 
-1. Add an entry to `MODELS` in `engines.mjs` — id, label, engine, price,
-   free allowance, and traits (can it spell? can it do an infographic?).
-2. Add a branch to `generateBytes()`.
-3. Teach `explainFailure()` what that provider's errors actually mean. This
-   matters more than it sounds: providers routinely return `429` for "you have
-   no money", which tells the user to wait for a reset that will never come.
-4. Add a check in `testConnection.ts`. **It must make a real generation
-   call.** Listing models is free and proves nothing — a credit-less Google
-   key lists all fifty models and then refuses every request.
-5. If it is free, add it to `FREE_ENGINES` in `paidGuard.ts` so it is never
-   gated.
-6. Write a test.
+1. A `MODELS` entry in `engines.mjs`, with a dated note of what you verified.
+2. A branch in `generateBytes()`.
+3. Teach `explainFailure()` what its errors really mean. Providers return `429`
+   for "you have no money", which tells a user to wait for a reset that never
+   comes.
+4. A check in `testConnection.ts` that makes a **real** call.
+5. If free, add it to `FREE_ENGINES` in **both** `engines.mjs` and
+   `paidGuard.ts`.
+6. A `ProviderId` in `engines.d.mts`, `PROVIDER_META`, and a toolbar option.
+7. A test.
 
 ---
 
-## The CORS trap
+## Providers that refuse browsers
 
-Cloudflare's API sends **no CORS headers at all**, so the browser cannot call
-it directly. There is a proxy in two places that must stay in step:
+Cloudflare sends **no CORS headers**, and NVIDIA answers a preflight without
+`Access-Control-Allow-Origin`. Both are forwarded in two places that must stay
+in step:
 
-- `vite.config.js` — `/cf-api` → `https://api.cloudflare.com` for `npm run dev`
-- `electron/main.js` — `proxyToCloudflare()` for the desktop build
+- `vite.config.js` — `/cf-api` and `/nv-api` for `npm run dev`
+- `electron/main.js` — the same prefixes for the desktop app
 
-`cloudflareUrl()` in `engines.mjs` picks between the proxy path and the direct
-URL based on `inBrowser()`. If you add a provider and "could not reach it"
-appears only in the browser, this is why — it is not the user's internet.
+Node has no CORS, so the MCP server calls them directly. If "could not reach
+it" appears only in the browser, this is why.
+
+---
+
+## The desktop app
+
+- Fixed ports 47821–47825. Never `listen(0)`: storage is per origin, and a
+  random port was a new empty store every launch.
+- Data lives in `%APPDATA%\image-forge`, named after `package.json` `name`.
+  Adding a `productName` would move every user's data. A test forbids it.
+- `main.js` is ESM. `require()` there crashed the Cloudflare and NVIDIA
+  proxies in 1.0.0.
+
+`tests/desktopApp.test.ts` pins all of this.
 
 ---
 
 ## Tests
 
-`vitest`, in `tests/`. 349 of them across 18 files.
+`vitest`, in `tests/`.
 
 Anything touching **the CSV, filenames, money, or the engines** needs a test.
-Those four are where a bug is silent and expensive rather than loud and
-obvious.
+Those four fail silently and expensively.
 
-`csv-parity.test.ts` is worth knowing about: it pins that the app and the MCP
-server read and write the manifest identically. When they drift, an agent and
-a human working on the same file corrupt each other's rows.
+Worth knowing:
+- `csv-parity.test.ts` — the app and the MCP server read and write the
+  manifest identically.
+- `version.test.ts` — the version is the same in `package.json`, the app and
+  the MCP server.
+- `sourceHygiene.test.ts` — no invisible or control characters in source.
 
 ---
 
 ## Conventions
 
-- **No `console.log` in shipped code.** Feedback goes through toasts and the
-  forge console.
-- **No `alert` / `confirm`.** Ever.
-- **Comments explain *why*, never *what*.** A comment saying what the line
-  does is noise; a comment saying that Cloudflare rejects `seed` and here is
-  the date it was confirmed against a live account saves the next person two
-  hours.
-- **Plain English in the UI.** No jargon in anything a user reads. "The key is
-  valid, but its project has no credit" beats "429 RESOURCE_EXHAUSTED".
-- **Free first.** Every paid engine needs a keyless fallback path.
+- **No `console.log`, `alert` or `confirm` in shipped code.** Feedback goes
+  through toasts and the forge console.
+- **Comments explain *why*, never *what*** — with the date a provider fact was
+  confirmed.
+- **Plain English in the UI.**
+- **Free first.** Every paid engine needs a keyless fallback.
 
 Full version: [STANDARDS.md](https://github.com/Stravelakis/image-forge/blob/master/STANDARDS.md).
 

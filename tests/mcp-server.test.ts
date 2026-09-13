@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "node:fs/promises";
-import { SCHEMAS, TOOLS, safeFilename } from "../scripts/mcp-server.js";
+import { SCHEMAS, TOOLS, folderFor, pickProvider, safeFilename, unwrapSettingsFile } from "../scripts/mcp-server.js";
 
 describe("safeFilename", () => {
   it("accepts the app's own naming convention", () => {
@@ -57,7 +57,7 @@ describe("tool declarations", () => {
 
   it("applies the documented defaults", () => {
     const parsed = SCHEMAS.forge_add_row.parse({ filename: "shop_a.png", prompt: "a shop" });
-    expect(parsed.category).toBe("item");
+    expect(parsed.category).toBe("image");
     expect(parsed.aspect_ratio).toBe("1:1");
   });
 
@@ -91,5 +91,91 @@ describe("what an agent inherits by default", () => {
   it("never calls a picture on your own machine 'price unknown'", async () => {
     const src = await readFile(new URL("../scripts/mcp-server.js", import.meta.url), "utf8");
     expect(src).toMatch(/engine === "local" \|\| engine === "simulated"/);
+  });
+});
+
+/**
+ * An agent with nothing configured must still be able to make a picture.
+ *
+ * The fallback used to be Pollinations, which now refuses anonymous requests,
+ * so a keyless agent got an engine that failed every time. OVHcloud needs no
+ * key. STANDARDS #4.
+ */
+describe("the engine an agent gets", () => {
+  const none = { cloudflare: { accountId: "", token: "" }, pollinationsToken: "", geminiKeys: [], openaiKeys: [] };
+
+  it("is OVHcloud when nothing at all is set up", () => {
+    expect(pickProvider(none)).toBe("ovh");
+  });
+
+  it("never falls back to Pollinations without a token", () => {
+    expect(pickProvider(none)).not.toBe("pollinations");
+  });
+
+  it("prefers a free engine that is set up, cheapest first", () => {
+    expect(pickProvider({ ...none, cloudflare: { accountId: "a", token: "t" }, geminiKeys: [{}] })).toBe("cloudflare");
+    expect(pickProvider({ ...none, pollinationsToken: "t", geminiKeys: [{}] })).toBe("pollinations");
+  });
+
+  it("uses paid keys only when no free engine is set up", () => {
+    expect(pickProvider({ ...none, geminiKeys: [{}] })).toBe("gemini");
+    expect(pickProvider({ ...none, openaiKeys: [{}] })).toBe("openai");
+  });
+
+  it("lets FORGE_PROVIDER and the backup's own choice win", () => {
+    expect(pickProvider({ ...none, forced: "cloudflare" })).toBe("cloudflare");
+    expect(pickProvider({ ...none, saved: "gemini" })).toBe("gemini");
+  });
+
+  it("ignores a backup that had the practice forge selected", () => {
+    // An agent writing real files must not quietly produce practice drawings.
+    expect(pickProvider({ ...none, saved: "simulated" })).toBe("ovh");
+  });
+});
+
+describe("where an agent's files land", () => {
+  it("uses the same folders as the app", () => {
+    expect(folderFor("image")).toBe("images");
+    expect(folderFor("svg")).toBe("vectors");
+    expect(folderFor("lottie")).toBe("lottie");
+    expect(folderFor("sheet")).toBe("sheets");
+    expect(folderFor("gif")).toBe("gifs");
+  });
+
+  it("reads old category names as pictures, as the app does", () => {
+    for (const old of ["shop", "item", "event", "npc"]) expect(folderFor(old)).toBe("images");
+  });
+
+  it("puts anything unrecognised with the pictures, never in a stray folder", () => {
+    expect(folderFor("")).toBe("images");
+    expect(folderFor(undefined)).toBe("images");
+    expect(folderFor("dragon")).toBe("images");
+  });
+
+  it("accepts the new categories from an agent", () => {
+    for (const c of ["image", "svg", "lottie", "sheet", "gif"]) {
+      expect(SCHEMAS.forge_add_row.safeParse({ filename: "image_a.png", prompt: "a", category: c }).success, c).toBe(true);
+    }
+  });
+});
+
+describe("reading a settings file from the app", () => {
+  const keys = { geminiKeys: [{ id: "a", key: "k" }] };
+
+  it("reads Settings → Back up to a file", () => {
+    expect(unwrapSettingsFile({ kind: "image-forge-settings", version: 1, settings: keys })).toEqual(keys);
+  });
+
+  it("reads Settings → Advanced → Backup", () => {
+    expect(unwrapSettingsFile({ exportedAt: "x", "image-forge-settings-v1": keys })).toEqual(keys);
+  });
+
+  it("reads a bare settings object", () => {
+    expect(unwrapSettingsFile(keys)).toEqual(keys);
+  });
+
+  it("gives an empty object for nothing usable, rather than crashing", () => {
+    expect(unwrapSettingsFile(null)).toEqual({});
+    expect(unwrapSettingsFile("nope")).toEqual({});
   });
 });

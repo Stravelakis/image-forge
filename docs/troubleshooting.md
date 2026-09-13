@@ -10,6 +10,36 @@ actually found — not a guess at what might go wrong.
 
 ---
 
+## Your settings and keys
+
+### My keys and settings disappeared after restarting the app
+
+**If you were on the 1.0.0 desktop app, that was the app.** It served itself
+on a different local port every launch, and the browser engine inside keeps
+saved data per port — so every restart opened a new, empty store. Nothing had
+failed to save; each launch looked somewhere different.
+
+**1.0.1 fixes it.** Keys you typed into 1.0.0 are stranded under the old
+ports and are not recovered, so enter them once more. Then press **Back up to
+a file** in Settings.
+
+### "Could not read your manifest" or "…your settings and keys"
+
+The app found stored data it could not read. It has **not** overwritten it:
+the original is kept under a `.rescue` copy, and saving is paused until you
+act. Press **Try again** first. If you have a backup file, **Restore** it.
+
+This exists because older versions, on an unreadable read, fell back to
+defaults and then saved those defaults over your data a moment later.
+
+### Settings say "NOT saved"
+
+Every save is read straight back to check it stuck. If it did not — storage
+full, a private window, something blocking site data — you see this instead
+of a green "Saved and checked". Press **Back up to a file** before closing.
+
+---
+
 ## Google
 
 ### "Your prepayment credits are depleted" — but there is money in the account
@@ -28,9 +58,6 @@ In order:
    trial credit, and nor do most vouchers.
 6. The balance is therefore zero, and every request is refused with a `429`.
 
-The result is a project holding hundreds of euros of Cloud credit that cannot
-make a single call — *because* of the money.
-
 **Two fixes, and you have to pick one:**
 
 | You want | Do this |
@@ -38,71 +65,99 @@ make a single call — *because* of the money.
 | The free tier back | **Unlink the project** from its billing account at [console.cloud.google.com/billing](https://console.cloud.google.com/billing) |
 | To actually pay | Add a **Prepay – AI Studio** balance at [ai.studio/projects](https://ai.studio/projects) |
 
-What does *not* work is being linked to billing with only Cloud credit. That
-is the trap.
+What does *not* work is being linked to billing with only Cloud credit.
 
 > Confirmed on a real account: a project with €262 of Cloud credit refused
-> every call on every model, on both `v1` and `v1beta`, and on the
-> OpenAI-compatible endpoint. Unlinking restored it.
+> every call on every model. Unlinking restored it.
+
+**Which advice you get depends on the pool.** A key in the **free** pool is
+told how to get the free tier back. A key in the **paid** pool is told
+*"Paid tier is on, but the AI Studio prepay balance is empty"* — and not to
+unlink, because the free tier has no picture allowance at all.
+
+### A paid key "works" but no picture is ever made
+
+The key check says *"The key works. Whether it has picture money, this cannot
+tell you."* That is deliberate. Text has a free allowance and pictures do not,
+so a key with an empty prepay balance passes a text check and still refuses
+every picture. The only real proof costs one picture, and the app never spends
+that behind your back — run one row when you want to know.
 
 ### "Your project has been denied access. Please contact support." (403)
 
-A different problem that looks the same from the outside. This is a
-**project-level block**, not a billing state. More credit will not fix it, and
-neither will unlinking.
-
-Verified **not** to be a browser or CORS problem: the same key fails
-identically through a server-side proxy, so it is not about where the request
-came from.
-
-**What to do:** make a key in a fresh project, or take it up with Google.
-There is nothing to change on your side.
+A **project-level block**, not a billing state. More credit will not fix it,
+and neither will unlinking. Verified not to be a browser problem: the same key
+fails identically through a server-side proxy. Make a key in a fresh project,
+or take it up with Google.
 
 ### A key lists 50 models and then refuses everything
 
-Expected, and the reason the app's key check makes a **real generation call**
-rather than listing models. Listing is free and unauthenticated enough to
-succeed on a key that can do nothing else. Any tool that "validates" your key
-by listing models is telling you nothing.
+Expected, and why the key check makes a real call. Listing models succeeds on
+a key that can do nothing else.
 
 ### Model names that a chatbot suggested do not exist
 
-Be careful taking model names from an AI's memory — including Google's own.
-On a live account today, `gemini-1.5-flash`, `gemini-1.5-pro` and
-`gemini-2.5-flash` all return:
-
-> `404 — This model is no longer available to new users.`
-
-Press **Load models** in Settings and use what your key actually lists. That
-list is generated from your key, so it cannot be out of date.
+On a live account, `gemini-1.5-flash`, `gemini-1.5-pro` and `gemini-2.5-flash`
+return `404 — This model is no longer available to new users.` Press **Load
+models** and use what your key actually lists.
 
 ---
 
 ## Cloudflare
 
+### Cloudflare did not work in the 1.0.0 desktop app
+
+The part of the desktop app that forwards requests to Cloudflare crashed on
+the first one. It only worked when running from source. **Fixed in 1.0.1**,
+checked on a real install.
+
 ### "Could not reach Cloudflare"
 
-Almost never your internet. Cloudflare's API sends **no CORS headers at all**,
-so a browser refuses the request before it leaves the page — with or without a
-key, even unauthenticated.
-
-The app proxies around this in both the dev server and the desktop build. If
-you are seeing this, the proxy is not running: use `npm run dev` rather than
-opening the built HTML directly, or use the desktop build.
+Cloudflare's API sends **no CORS headers**, so a browser page cannot call it.
+The app forwards the request in both the dev server and the desktop app. If
+you see this, you have opened the built HTML file directly — use `npm run dev`
+or the desktop app.
 
 ### Every Cloudflare image fails at once
 
-If a request includes `seed`, `flux-1-schnell` rejects the **whole request**:
-
-> `Additional or unevaluated properties 'seed' at '/' not allowed`
-
-Cloudflare's own model page lists `seed` as a parameter. It does not work.
-The app does not send it. Confirmed against a live account on 2026-09-02.
+If a request includes `seed`, `flux-1-schnell` rejects the **whole request**.
+Cloudflare's own model page lists `seed`. It does not work. The app does not
+send it. Confirmed on a live account, 2 September 2026.
 
 ### 403 on a Cloudflare token
 
-The token needs **Account → Workers AI → Read**. A token with other
-permissions authenticates fine and then refuses to run models.
+The token needs **Account → Workers AI → Read**.
+
+---
+
+## OVHcloud
+
+### "OVHcloud is still busy after three tries"
+
+It allows two pictures a minute without a key. The app already paces itself
+to that — one every 31 seconds, however many run at once — so this only
+appears when it stayed busy anyway. Wait a minute and run again.
+
+### My OVHcloud pictures are all square, and the seed does nothing
+
+Correct. It accepts only a prompt and a negative prompt. Every picture is
+1024×1024, and the same prompt twice gives two different pictures.
+
+---
+
+## NVIDIA and other text providers
+
+### NVIDIA says "Failed to fetch"
+
+NVIDIA answers a browser's permission check without the header that allows
+it, so the browser refuses — not your key, not the address. The app forwards
+NVIDIA requests the same way it does Cloudflare. Checked 4 September 2026.
+
+### "Only show models that are free" does nothing for NVIDIA or Google
+
+They do not publish a price per model, so there is nothing true to filter on.
+The app says so rather than guessing from model names. OpenRouter does publish
+prices, and there the filter is exact.
 
 ---
 
@@ -111,7 +166,7 @@ permissions authenticates fine and then refuses to run models.
 ### "Missing Turnstile token"
 
 Pollinations stopped serving anonymous requests. A free token from
-`auth.pollinations.ai` fixes it, and removes the watermark as a bonus.
+`auth.pollinations.ai` fixes it.
 
 ---
 
@@ -119,23 +174,29 @@ Pollinations stopped serving anonymous requests. A free token from
 
 ### "That model cannot look at pictures"
 
-The model answered but is text-only. Press **Load models** and pick one that
-can see. The app's vision check sends a real image — a solid red square — and
-asks what colour it is, because a model that cannot read that will not find a
-signboard either.
+The model is text-only. Pick one that can see. The vision check sends a real
+image — a solid red square — and asks what colour it is.
 
 ### Pixtral returns 404
 
 `pixtral-large-latest` is not on Mistral's model list any more (checked
-2026-09-02). Use **`mistral-medium-latest`**, which is multimodal and free on
-Mistral's tier. This is exactly why the model field is free text with a
-**Load models** button rather than a fixed dropdown.
+2 September 2026). Use **`mistral-medium-latest`**, which can see and is free
+on Mistral's tier.
 
 ### The lettering lands in the wrong place
 
-It is meant to be corrected. The model proposes, you drag. If there is no
-vision model configured, the free **Find a quiet spot** finder places the box
-in the calmest part of the image and you take it from there.
+The model proposes, you drag. With no vision model set up, the free **Find a
+quiet spot** places the box in the calmest part of the picture.
+
+---
+
+## Files
+
+### My file ends in .jpg, not .png
+
+That is the real format. Google and Cloudflare send JPEG, and the app names a
+file for what it is. Older versions wrote `.png` on JPEG data, which confuses
+WordPress uploads and strict tools.
 
 ---
 
@@ -146,48 +207,43 @@ in the calmest part of the image and you take it from there.
 Expected. The app is not signed with a paid code-signing certificate. Click
 **More info**, then **Run anyway**. Once only.
 
-If you would rather not run unsigned software — a reasonable position — run it
-from source instead.
+### "Image Forge could not start"
+
+It could not open its local port (47821–47825). Close any other copy of Image
+Forge, or whatever else is using those ports.
+
+### "Remove your Image Forge data as well?" — did it remove anything?
+
+In 1.0.0, no: it pointed at a folder that never existed, whatever you
+answered. From 1.0.1 it removes `%APPDATA%\image-forge` when you say Yes, and
+a silent uninstall always keeps your data.
 
 ### A picture was made but the row says failed
 
-Fixed. This used to happen when the image generated fine but writing it to
-your linked folder failed — disk full, folder moved, permission withdrawn.
-The row now stays **done** and a separate message says the writing is what
-went wrong, because on a paid engine "failed" invites paying for it twice.
+Fixed. The row now stays **done** and a separate message says writing to your
+folder is what failed, because on a paid engine "failed" invites paying twice.
 
-### The app is stuck on "forging" with only a Stop button
+### The paid dialog said far more pictures than I was paying for
 
-Fixed. An error thrown outside the per-picture handler used to leave the run
-flag set forever, with a reload the only way out. The flag is now cleared in a
-`finally`, and the error is reported.
+Fixed in 1.0.1. A queue mixing paid and free rows was described as if every
+row were paid. It now counts only billed rows and says how many are free.
 
 ### Text in a picture is gibberish
 
-Most image models cannot spell. Either use a Nano Banana model, or add the
-words with the **Letterer**, which uses real fonts and is therefore always
-spelled correctly.
-
-The app suppresses text instructions on models known to produce gibberish, so
-you get a clean picture rather than invented lettering.
+Most image models cannot spell. Use a Nano Banana model, or add the words with
+the **Letterer**, which uses real fonts.
 
 ### "Every key is resting"
 
-The whole pool hit its limit. Rows park themselves and re-queue automatically
-when the cooldown expires. Or switch engines and press Forge again.
-
-### One of my keys is a duplicate
-
-The key check fingerprints each key and names any that appear twice. Easy
-mistake, and it quietly halves an allowance you thought you had.
+The whole pool hit its limit. Rows re-queue automatically when the cooldown
+expires. Or switch engines and run again.
 
 ---
 
 ## Still stuck
 
 [Open an issue](https://github.com/Stravelakis/image-forge/issues).
-Include what you pressed and what it said. "The button did nothing" is a
-perfectly good bug report.
+Include what you pressed and what it said.
 
-**Never paste an API key into an issue.** If a key seems to be the problem,
-the key check in Settings will describe it without revealing it.
+**Never paste an API key into an issue.** The key check in Settings describes
+a key without revealing it.

@@ -18,20 +18,20 @@ folder with tidy names.
 
 That is the whole idea. Everything else is a convenience on top of it.
 
-**It is not a chatbot.** You are not having a conversation. You are filling in
-a list and pressing go.
+If you would rather just describe one picture in a sentence, there is a
+**Chat** for that too — and it can write a whole list of rows for you.
 
 ---
 
 ## Words you will meet
 
 **API key** — a long password that lets this app use somebody else's picture
-machine on your behalf. You get one from the company that runs the machine. It
-is free to get one from several of them. Treat it like a password: anyone who
-has it can spend your allowance.
+machine on your behalf. You get one from the company that runs the machine.
+Treat it like a password: anyone who has it can spend your allowance.
 
 **Engine** — the company or program that actually draws the picture.
-Cloudflare, Google and Pollinations are engines. So is your own computer.
+OVHcloud, Cloudflare, Google and Pollinations are engines. So is your own
+computer.
 
 **Model** — a specific painter inside an engine. Different models have
 different strengths and prices.
@@ -41,30 +41,30 @@ different strengths and prices.
 **Prompt** — the sentence describing what you want drawn.
 
 **Seed** — a number that makes randomness repeatable. Same prompt plus same
-seed gives you the same picture again. Change the seed to get a different take
-on the same idea.
+seed gives you the same picture again, on engines that accept a seed.
 
 ---
 
-## Try it with nothing at all
+## Make a picture with nothing set up
 
-Before signing up for anything, use the **practice forge**.
+1. In the toolbar at the top, click the **engine** button.
+2. Choose **OVHcloud · SDXL**. It needs no key and no account.
+3. Click **Add a picture**, type a description in **prompt**, and press
+   **Run queue**.
 
-1. **⚙ Settings → Image engines**
-2. Set the engine to **practice forge**
-3. Close settings, add a few rows, press **Forge**
+It makes two pictures a minute and they are always square. That is enough to
+learn the app and to make real pictures.
 
-It draws small scenes on your own computer, instantly, free, forever. They are
-not AI pictures — they are simple generated illustrations — but everything
-else in the app behaves exactly as it will with a real engine. It is the
-safest way to learn where the buttons are.
+Just want to see where the buttons are? Choose **Simulated Forge** instead. It
+draws simple scenes on your own computer, instantly — not AI pictures, but
+everything else behaves exactly as it will with a real engine.
 
 ---
 
-## Getting a free engine {#cloudflare}
+## A faster free engine: Cloudflare {#cloudflare}
 
-**Cloudflare Workers AI** is the best free starting point: about **690 images
-a day**, no credit card, and reasonably fast.
+**Cloudflare Workers AI** gives about **690 images a day**, no credit card,
+and is quicker than OVHcloud.
 
 ### Step 1 — make a Cloudflare account
 
@@ -83,9 +83,6 @@ https://dash.cloudflare.com/abc123def456.../home
 That long string of letters and numbers after `.com/` **is your Account ID**.
 Copy it.
 
-You can also find it under **Workers & Pages** in the left menu — it is
-displayed on the right-hand side.
-
 ### Step 3 — make an API token
 
 1. Click your profile icon (top right) → **Profile**
@@ -97,35 +94,38 @@ displayed on the right-hand side.
    **Account** · **Workers AI** · **Read**
 7. **Continue to summary** → **Create Token**
 
-The token appears **once**. Copy it now — Cloudflare will not show it again.
-If you lose it, delete that token and make another; nothing bad happens.
+The token appears **once**. Copy it now. If you lose it, delete that token and
+make another; nothing bad happens.
 
 ### Step 4 — put both into the app
 
-**⚙ Settings → Image engines → Cloudflare Workers AI.** Paste the Account ID
-into the first box and the token into the second.
+**Settings → Image engines → Cloudflare.** Paste the Account ID into the first
+box and the token into the second, then press **Check the account and token**.
+If it does not work, the message tells you which of the two is wrong.
 
-Then press **Test**. You want it to say it worked. If it does not, the message
-tells you which of the two is wrong.
+Then pick **Cloudflare · FLUX** in the toolbar's engine button.
 
 ---
 
 ## Your first real batch
 
-1. **Manifest** tab → **Add row**
-2. In **filename**, type something like `shop_bakery.png`
+1. Click **Add a picture**.
+2. In **filename**, type something like `image_bakery.png`
 
-   The app enforces naming rules as you type — lowercase, underscores instead
-   of spaces, a category at the front, ending in `.png`. If you get it wrong
-   it tells you and offers a **Fix** button. Let it fix things; the rules exist
-   so a hundred files stay findable.
+   The app checks your filenames as you type — lowercase, underscores instead
+   of spaces, starting with what the row makes (`image_`). If one breaks a
+   rule it says which, and **auto-fix** repairs it. You can switch most rules
+   off in **Settings → Filenames** if your project names things differently.
 
 3. In **prompt**, describe the picture: *"a warm village bakery at dawn,
    bread in the window, soft morning light"*
-4. Set **model** to `cloudflare-flux`
-5. Press **Forge**
+4. Press **Run queue**.
 
-The row goes yellow, then shows a thumbnail. Click it to see it full size.
+The row shows a thumbnail when it is done. Click the row, then the picture, to
+see it full size.
+
+> The file may end in `.jpg` rather than `.png`. Some engines send JPEG, and
+> the app names the file for what it really is.
 
 ---
 
@@ -133,17 +133,22 @@ The row goes yellow, then shows a thumbnail. Click it to see it full size.
 
 By default they live inside the app. To get them onto your disk, pick one:
 
-**Link folder** *(best)* — **Link folder** button, choose a folder, and every
-picture from then on is written there automatically as it finishes, sorted into
-`shops/ items/ events/ npcs/`.
+**Link folder** *(best)* — choose a folder, and every picture from then on is
+written there as it finishes, sorted into `images/`, `vectors/`, `lottie/`,
+`sheets/` and `gifs/`.
 
 > **Free cloud backup:** point it at your OneDrive or Google Drive folder.
 > Everything syncs itself with no extra work.
 
-**Download ZIP** — one file with all the pictures, the folder structure, and
-the CSV inside.
+**Download** — a ZIP with all the pictures, the folders and the CSV inside.
 
-**Save PNG** — one picture at a time, from the row menu.
+**Save** — one picture at a time, from the row.
+
+## Keeping your keys
+
+**Settings** shows *Saved and checked at…* and how many keys are stored. Press
+**Back up to a file** once your keys are in, and keep that file somewhere
+private — it holds them in plain text. **Restore** reads it back.
 
 ---
 
@@ -151,29 +156,33 @@ the CSV inside.
 
 **You cannot spend money by accident.** Free engines never ask, because there
 is nothing to ask about. A paid engine always stops and shows you a dialog
-first:
+first, like:
 
-> *12 pictures on Nano Banana 2 Lite — about $0.41 (about $0.034 each)*
-> *Coming out of "tier 1 voucher", which lasts until 2026-09-21 (19 days).*
+> *2 pictures on Nano Banana 2 Lite — about $0.067 ($0.034 each). The other 7
+> are free.*
 
-You press **OK, spend it** or **Use a free engine instead**. Nothing is spent
-until you press the first one.
+You press **Spend it — go ahead**, or pick one of the free engines listed
+underneath. Nothing is spent until you press the first one.
 
 ---
 
 ## When it goes wrong
 
-**"Every key is resting"** — you used up the daily allowance. The rows park
-themselves and try again automatically when the allowance resets. Or switch to
-a different engine and press Forge again.
+**"Every key is resting"** — you used up the allowance. The rows park
+themselves and try again automatically when it resets. Or switch to a
+different engine and press **Run queue** again.
 
-**"The key is valid, but its project has no credit"** — the key is fine; the
-account behind it has no money on it. This is very common with Google.
-[The full explanation is here](troubleshooting.md).
+**"OVHcloud is still busy"** — it allows two pictures a minute. The app waits
+its turn automatically; this only appears if it stayed busy anyway. Try again
+shortly.
 
-**A picture came out wrong** — open the row menu and press **Redo with a
-note**. Type what was wrong in plain words — *"too dark, and she should be
-facing left"* — and the app folds your note into a new prompt.
+**Google says "prepayment credits are depleted"** — the key is fine; the
+account behind it has no picture balance. This is very common and
+counter-intuitive. [The full explanation is here](troubleshooting.md).
+
+**A picture came out wrong** — open the row, write what was wrong in the
+**Note** field in plain words — *"too dark, and she should be facing left"* —
+and press **Generate** again. Your note is folded into the prompt.
 
 **Text in the picture is gibberish** — most image models cannot spell. Use a
 Nano Banana model for anything with real words in it, or add the text yourself

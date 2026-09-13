@@ -1,26 +1,31 @@
 # ⚒ Image Forge — Engineering Handoff
 
 > **Read this before touching anything.** It maps every subsystem, explains the
-> non-obvious decisions, and ends with copy-paste recipes for the changes you're
-> most likely to make. Everything here is true as of **2 September 2026**.
+> non-obvious decisions, and ends with recipes for the changes you are most
+> likely to make. True as of **13 September 2026, version 1.0.1**. If this file
+> and the code disagree, the code wins — then fix this file.
+
+Also read: **[STANDARDS.md](STANDARDS.md)** (what "done" means),
+**[CHANGELOG.md](CHANGELOG.md)** (what changed and why),
+**[docs/troubleshooting.md](docs/troubleshooting.md)** (provider behaviour that
+contradicts provider documentation).
 
 ---
 
 ## 1. Orientation (60 seconds)
 
-Image Forge is a **standalone, manifest-driven image pipeline**. A CSV
-(`marketplace-images.csv`) is the single source of truth: rows describe
-pictures, a queue runner turns them into PNGs, files land organized on disk,
-and a separate (optional) step hands them to WordPress/Imagify.
-
-It was built *for* a D&D marketplace (Emberfair, included as an alternate
-entry point) and is deliberately decoupled *from* it: **no WordPress, no SQL,
-no framework required to run the forge.**
+Image Forge is a **manifest-driven image pipeline**. A CSV is the single
+source of truth: rows describe pictures, a queue runner turns them into files,
+files land sorted on disk.
 
 **Design philosophy, in three lines:**
 1. The manifest is the API — anything that reads/writes the CSV is a citizen.
 2. Free first — every paid path has a keyless fallback.
 3. One decision per step, plain English — a ten-year-old runs a batch.
+
+It runs three ways from one codebase: the browser (`npm run dev`), the Windows
+desktop app (Electron), and an agent API (MCP over stdio). The first two share
+the UI; all three share `src/lib/engines.mjs`.
 
 ---
 
@@ -29,302 +34,266 @@ no framework required to run the forge.**
 ```bash
 npm install
 npm run dev                 # browser app → http://localhost:3000
-npm run typecheck           # tsc --noEmit (build does NOT typecheck!)
+npm test                    # vitest — 606 tests across 30 files
+npm run typecheck           # tsc --noEmit (vite build does NOT typecheck)
 npm run build               # vite build → dist/
-node scripts/build-exe.js   # Electron → release/ (installer + portable)
-npm run tauri:icons         # once — derives src-tauri/icons/*
-npm run tauri:build         # Tauri → src-tauri/target/release/bundle/
+node scripts/build-exe.js   # Electron installer + portable → release/
 node scripts/mcp-server.js  # the agent API (stdio)
 ```
 
-⚠️ `vite build` **does not run tsc**. Always `npm run typecheck` before
-committing — CI isn't set up yet (good first PR: GitHub Actions running
-`typecheck` + `build`).
+CI (`.github/workflows/ci.yml`) runs typecheck, tests and build on every push
+and pull request. A red CI is not "probably fine".
+
+`src-tauri/` also exists. The Tauri build is **not** part of CI or the release
+and has not been verified recently — treat it as unmaintained.
 
 ---
 
 ## 3. Architecture at a glance
 
 ```
-                        ┌────────────────────────────────────────────┐
-                        │                  App.tsx                   │
-                        │  rows (manifest) · settings · batches ·    │
-                        │  strike loop · folder doors · toasts/log   │
-                        └───────┬───────────────┬───────────────┬────┘
-                                │               │               │
-              ┌─────────────────▼──┐   ┌────────▼────────┐  ┌───▼──────────┐
-              │   providers.ts     │   │    output.ts    │  │  tauriFs.ts  │
-              │ resolveRoute ·     │   │ FS Access ·     │  │ Tauri dialog │
-              │ key pools · 429    │   │ subfolders ·    │  │ + fs plugin  │
-              │ rotation · cooldown│   │ ZIP · rasterize │  │ (fallback →  │
-              │ scribe/factory chat│   │                 │  │  output.ts)  │
-              └─────────┬──────────┘   └─────────────────┘  └──────────────┘
-                        │
-          ┌─────────────┼──────────────┬───────────────┐
-          ▼             ▼              ▼               ▼
-  simulated  pollinations  cloudflare   google      openai-compatible
- (preview)  (needs token)  (via proxy) (nano-banana) (/images/generations)
-                                        + LocalAI on your own machine
+                     ┌──────────────────────────────────────────────┐
+                     │                    App.tsx                   │
+                     │ rows · settings · strike loop · save/rescue  │
+                     │ folder doors · toasts · log                  │
+                     └───────┬──────────────────┬────────────────┬──┘
+                             │                  │                │
+                ┌────────────▼─────┐   ┌────────▼───────┐  ┌─────▼────────┐
+                │  providers.ts    │   │   output.ts    │  │ settings-    │
+                │ settings shape · │   │ folder · ZIP · │  │ Backup.ts    │
+                │ migration · text │   │ blob helpers   │  │ verified save│
+                │ chat · wraps ▼   │   └────────────────┘  └──────────────┘
+                └────────┬─────────┘
+                         │
+              ┌──────────▼──────────┐   the same file is imported by
+              │    engines.mjs      │◀── scripts/mcp-server.js
+              │ MODELS · routing ·  │    (DOM-free on purpose)
+              │ generateBytes · 429 │
+              └──────────┬──────────┘
+      ┌──────────┬───────┼─────────┬──────────┬───────────┬──────────┐
+      ▼          ▼       ▼         ▼          ▼           ▼          ▼
+  simulated    local    ovh   cloudflare pollinations  gemini   openai-compat
+  (practice) (LocalAI) (no key) (proxied)  (token)    (paid)    (paid)
 ```
 
-The UI is a **view switch** (`TopMenu.View`) rendered by `App.tsx`:
-`workbench · wizard · factory · lib-images · lib-styles · lib-templates ·
-lib-batches · settings · docs · agents`. Settings has 9 sub-sections; the
-whole thing sits on `Sidebar` (workbench only). `market/MarketApp.tsx` is a
-parallel entry point toggled by `App`'s `mode` state — it shares **the same
-procedural plates and entity IDs** as the manifest (see §9).
+The UI is a view switch rendered by `App.tsx`, with a top menu
+(`TopMenu.tsx`): Forge, Chat, Wizards, Gallery, Docs, Settings.
 
 ---
 
 ## 4. Module map
 
-| file | owns | key exports |
+| file | owns | worth knowing |
 |---|---|---|
-| `types.ts` | vocabulary | `Status`, `Category`, `KindDef`/`KINDS` (12 worlds), `AspectKey`, `STYLES`, `STATUS_META`, `CATEGORY_META` |
-| `lib/csv.ts` | the contract | `parseCsv` (RFC-4180 state machine), `rowsToCsv`/`rowsFromCsv` (forgiving: missing cols, `generating→pending`), `FULL_COLUMNS` |
-| `lib/validate.ts` | the law | `validateFilename` (7 rules), `autoFixFilename`, `styleDriftCount`, `violationCount` |
-| `lib/providers.ts` | engines & brains | `ForgeSettings`, `DEFAULT_SETTINGS`, `normalizeSettings` (migration), `MODELS`, `resolveRoute`, `generateReal`, `RateLimitError`, `cooldownHoursFor`, `bumpUsage`, `SCRIBE_SYSTEMS`, `scribeChat` |
-| `lib/preview.ts` | practice forge | `renderPreview(row) → raw SVG string`, seeded per filename+seed; per-category scenes (shopfronts, item icons, street events, portraits) |
-| `lib/output.ts` | bytes out | `pickOutputFolder`, `ensureSubfolders`, `writeImageFile`, `buildZipBlob`, `svgToPngBlob`, IndexedDB handle persistence |
-| `lib/tauriFs.ts` | native door | `isTauri`, `tauriPickFolder`, `tauriWriteImage/Text`, localStorage path persistence |
-| `lib/batches.ts` | the wizard's memory | `BatchSetup`, `SavedSetup`, `Batch`, `factoryToRows`, offline `generateIdeas`, load/save for setups+batches |
-| `lib/seed.ts` | first-run demo | 8 rows, all `kind: "dnd"` |
-| `lib/version.ts` | identity | `APP_VERSION` (keep in sync with `package.json`!) |
-| `components/ui.tsx` | kit | ~30 inline SVG icons (no icon lib), `Btn`, chips, `CodeBlock`, `CopyBtn`, `ToastHost` (supports action buttons), `useRevealObserver` |
-| `components/effects.tsx` | atmosphere | `DotField`, `EmberField`, `StarField` (canvases), `BorderGlow` (mask-composite trick), `CursorFX` — all honor `prefers-reduced-motion` |
-| `App.tsx` | everything stateful | the strike loop lives here (~line 230) |
-| `market/*` | Emberfair | `MarketApp` + `data.ts` (shops/wares/events/npcs keyed to shop_id 12–14, item_id 543–544, event 201–202) |
+| `types.ts` | vocabulary | `Category` = `image · svg · lottie · sheet · gif`; `migrateCategory()` maps old `shop/item/event/npc` rows on load |
+| `lib/engines.mjs` | routing, prices, requests | **DOM-free.** `MODELS`, `resolveRoute`, `generateBytes`, `estimateCost`, `explainFailure`, the OVH pacer. Types in `engines.d.mts` |
+| `lib/providers.ts` | browser wrapper | `ForgeSettings`, `normalizeSettings` (all migrations), key pools, `scribeChat` |
+| `lib/csv.ts` | the contract | RFC 4180 parser; forgiving import |
+| `lib/validate.ts` | filename rules | `RULES` (7; 2 unswitchable), `nameForMime` (extension follows bytes), `autoFixFilename` |
+| `lib/paidGuard.ts` | money | `checkPaidRun` routes **each row** — it counts only billed rows |
+| `lib/testConnection.ts` | "does this key work?" | real calls, not model lists; Gemini checks know free vs paid pool |
+| `lib/visionEngine.ts` | chat/vision models | `readModelEntry` (price, vision, chat from provider metadata), `filterModels`, `routeBase` (NVIDIA proxy) |
+| `lib/settingsBackup.ts` | proof of saving | `saveSettingsVerified` (write, read back, compare), `censusOf` (counts keys, never shows them), backup file |
+| `lib/storage.ts` | the 5 MB box | `safeSet` reports failure in words |
+| `lib/chatPlan.ts` + `appFacts.ts` | the Chat | `FORGE:` / `ROWS:` / `EDIT:` reply protocol; the chat answers app questions only from `APP_FACTS` |
+| `lib/chatStore.ts` | chat history | |
+| `lib/styleCatalogue.ts` | 36 styles, 6 groups | which engines can do which look; `needsText` styles are limited to models that spell |
+| `lib/sheets.ts` | sprite / turnaround / viseme / expression / avatar eyes & brows | each frame gets its own seed plus a "change ONLY this" instruction |
+| `lib/warp.ts`, `textLayer.ts` | the Letterer | homography maths; text auto-shrinks |
+| `lib/vectorAssets.ts` | SVG + Lottie | `sanitiseSvg()` strips scripts and external refs |
+| `lib/theme.ts` | colour | the whole palette is derived from the accent hue |
+| `lib/version.ts` | `APP_VERSION` | must equal `package.json` — `tests/version.test.ts` enforces it |
+| `components/TextEngines.tsx` | accounts + three jobs | dedupes models across accounts; free-only filter hides only what a provider states |
+| `components/ui.tsx` | primitives | inline SVG icons, `Btn`, `Lightbox` |
+| `electron/main.js` | desktop shell | see §9 |
+| `scripts/build-exe.js` + `build/installer.nsh` | packaging | see §9 |
 
 ---
 
-## 5. Data model
-
-```ts
-interface ManifestRow {
-  id; filename; prompt; negative_prompt?; note?;
-  category: "shop"|"item"|"event"|"npc";
-  kind?: string;            // one of 12 KINDS ids; drives tag + flavor + negative default
-  rating?: "like"|"dislike";
-  item_id; shop_id; event_id;           // foreign keys into YOUR app
-  style; aspect_ratio; seed;
-  model;                    // "" = default engine from settings
-  status: "pending"|"generating"|"done"|"failed"|"skipped"|"imported";
-  error; generated_at; imported_attachment_id;
-  retry_at?;                // ISO — cooldown parked rows carry
-  preview?;                 // in-memory only: raw SVG or dataURL — NEVER persisted
-}
-```
-
-**Persistence:**
+## 5. Data and persistence
 
 | store | key | contents |
 |---|---|---|
-| localStorage | `image-forge-manifest-v1` | rows (minus `preview`), styleLock, appendStyle — **debounced 350 ms** |
-| localStorage | `image-forge-settings-v1` | `ForgeSettings` (always through `normalizeSettings`) |
+| localStorage | `image-forge-manifest-v1` | rows (minus `preview`), style lock — debounced 350 ms |
+| localStorage | `image-forge-settings-v1` | `ForgeSettings`, saved on every change and **read back** |
+| localStorage | `…-v1.rescue` | the original bytes of anything that could not be read at startup |
 | localStorage | `image-forge-setups-v1` / `-batches-v1` | recipes / batch registry |
-| localStorage | `emberfair-v1` | market progress |
-| IndexedDB | `image-forge` → `kv.dir` | the `FileSystemDirectoryHandle` |
-| localStorage | `image-forge-tauri-folder` | Tauri folder path string |
-| disk | `%APPDATA%\Image Forge` | desktop-shell data (Electron/Tauri) |
+| IndexedDB | `image-forge` → `kv.dir` | the linked folder handle |
+| disk (desktop) | `%APPDATA%\image-forge` | Electron's data folder: all of the above, plus `window-state.json` |
 
-**In-memory only:** `imagesRef` (`Map<filename, Blob>`) — plates don't survive
-a reload by design; "doors" (folder/ZIP/PNG) are how bytes escape.
+**The rescue rule (do not undo it).** `loadInitial` / `loadSettings` report
+`stored`, `empty` or `rescued`. On `rescued` the raw bytes are copied to the
+`.rescue` key and autosave for that store is **held back**. Before this, one
+unreadable read fell back to defaults and autosave wrote those defaults over
+the real data 350 ms later — observed: a 26-row manifest reduced to 8 seed
+rows, engine reset.
 
----
+**The data folder name.** Electron names it after `package.json` `name`
+(`image-forge`) because there is no `productName`. **Adding a `productName`
+would silently move every user's data to a new empty folder.** A test forbids
+it.
 
-## 6. Engine internals (the part everyone gets wrong)
-
-`resolveRoute(row, settings)` → `{ engine, apiModel, def }`:
-**the row's `model` column wins**; only if blank does `settings.provider`
-decide. That's why one manifest can mix paid `nano-banana-2` shop signs with
-free `cloudflare-flux` icons.
-
-A route can also come back as `engine: "retired"` (the row names a model the
-provider switched off) or `engine: "paused"` (the user switched that engine
-off in Settings). Both throw a named error immediately rather than making a
-doomed request.
-
-**Key rotation** happens inside `generateReal(row, settings, signal, exhaust, cooldownMs)`:
-1. filter the pool to keys with `exhaustedUntil <= now`,
-2. try the row,
-3. on 429 → `RateLimitError(pool, keyId, retryAt)` — `App.tsx`'s `strike()`
-   catches it, benches the key via the `exhaust` callback, and parks the row
-   with `retry_at = now + cooldownHoursFor(modelId)`.
-4. A watcher effect (20 s interval, `settings.autoRetry`) silently re-queues
-   rows whose `retry_at` passed.
-
-**Cooldowns** are user-editable per model (`settings.cooldowns[id]`), default
-24 h for the daily-quota models. `usage` tracks per-model/per-day counters
-(reset on date change — see `bumpUsage`/`usedToday`).
-
-**Simulated engine**: `strike()` branches before `generateReal` — it sleeps,
-rolls a fail chance, and renders `preview.ts`. Real engines return
-`{ dataUrl, blob }`; the blob goes to `imagesRef` + the folder door, the
-dataURL becomes the preview.
+`imagesRef` (a `Map<filename, Blob>`) is in memory only. Pictures reach disk
+through the folder, ZIP or per-picture save.
 
 ---
 
-## 7. Output doors (3, in priority order in `saveToFolder`)
+## 6. Engine internals
 
-1. **Tauri native** (`isTauri()`) — dialog picker + fs plugin writes. No
-   permission re-prompts, works where the browser API can't.
-2. **Browser File System Access** — `showDirectoryPicker`, handle in IndexedDB,
-   permission re-confirm once per session (the `pendingName` state). **Blocked
-   in sandboxed iframes** — that's the #1 support question; the error surfaces
-   inline in Settings → Folders.
-3. **ZIP** (`buildZipBlob`) — universal fallback, always works.
+`resolveRoute(row, settings)` → `{ engine, apiModel, def }`. **The row's
+`model` column wins**; blank falls back to `settings.provider`. A route can
+also be `retired` (the provider switched the model off) or `paused` (the user
+switched the engine off) — both fail immediately with a sentence.
 
-All three produce the identical tree: `shops/ items/ events/ npcs/` +
-optionally a refreshed `marketplace-images.csv` (`writeCsvOnSync`).
+**Key rotation** is inside `generateBytes`: healthy keys only, free Gemini keys
+before paid; on `429` the key is benched and the same row retries with the
+next key. Only when the whole pool rests does the row park with `retry_at`.
 
-Procedural previews must be rasterized (`svgToPngBlob` wraps the raw SVG in a
-data-URL — raw strings won't load into `Image`). Real engine outputs are
-already blobs.
+**Provider facts that contradict their own docs** (dated, verified on live
+accounts — keep adding to these):
 
----
+| Provider | Fact |
+|---|---|
+| Google | Image API accepts only `image/jpeg`. `429` can mean "no prepay balance". `403` can mean a project-level ban |
+| Cloudflare | Sends no CORS headers — must be proxied. Rejects the whole request if `seed` is sent. Returns JPEG |
+| NVIDIA | Preflight `200` with no `Access-Control-Allow-Origin` — must be proxied (4 Sep 2026) |
+| OVHcloud | No key. Two a minute anonymously. Only `prompt` + `negative_prompt`. PNG 1024² (11 Sep 2026) |
+| Pollinations | Anonymous requests refused with a Turnstile error; needs a free token |
+| Mistral | `pixtral-large-latest` not on the account; `mistral-medium-latest` does vision (2 Sep 2026) |
+| OpenRouter | Publishes a price per model, so "free only" is exact there |
 
-## 8. UI conventions
+**The OVH pacer.** OVH's limit clears in seconds, but a `429` on the normal
+path parks a row for hours. So `engines.mjs` queues OVH calls one behind
+another, 31 s apart, however many lanes run, and waits out `RateLimit-Reset`.
 
-- **No icon library** — every glyph is an inline SVG component in `ui.tsx`.
-  Add yours there; keep stroke style (1.6 px, round caps).
-- **Feedback**: `pushToast(kind, msg, action?)` + `pushLog(msg, kind)` (forge
-  console strip). Never `alert/confirm/prompt`.
-- **Destructive actions**: double-confirm pattern (see Reset in Advanced) or
-  toast-with-undo (see `deleteRow`).
-- **Design tokens** live in `index.css` `@theme`: `ink/coal/panel/line`,
-  `cream/parch/dust`, `ember/moss/blood/potion/lagoon`; fonts Alfa Slab One
-  (display) / Instrument Sans (body) / JetBrains Mono. Motion classes:
-  `rise-in · develop · breathe · shimmer · stripes-live · sway · flicker-*`.
-  The accent palette (`ACCENTS` in types) rewires `--color-ember*` at runtime.
-
----
-
-## 9. The Emberfair connection (don't "clean it up")
-
-`market/data.ts` entities intentionally match `seed.ts`: shop_id **12–14**,
-item_id **543–544**, events **201–202**, filenames `shop_blacksmith.png` etc.
-`MarketApp` renders **the same `renderPreview` plates**, so art generated by
-the forge *is* the market's art. Roadmap item: replace the seed plates with
-real generated images looked up by filename from the manifest.
+**Proxies.** Cloudflare (`/cf-api`) and NVIDIA (`/nv-api`) are forwarded in
+**both** `vite.config.js` (dev) and `electron/main.js` (desktop). They must
+stay in step. Node has no CORS, so the MCP server calls both directly.
 
 ---
 
-## 10. Recipes for common changes
+## 7. Money
 
-**Add a world kind** → append to `KINDS` in `types.ts` (`id, label, tag,
-blurb, flavor, negative`). Filename tag, prompt seasoning, negative default
-and wizard card all light up automatically.
-
-**Add an engine** → add a `ProviderId` + `PROVIDER_META`, register its models
-in `MODELS` (`engine` field ties them together), add a case to
-`generateReal`, a key-pool field in `ForgeSettings` (+ default +
-`normalizeSettings` entry), and a card in `WizardView` step 5.
-
-**Add a style** → users do this in-app (Library → Visual styles, optionally
-AI-crafted via `SCRIBE_SYSTEMS.styleCrafter`). Built-ins live in `STYLES`;
-custom ones in `settings.customStyles`. **Both lists must be checked anywhere
-a style block resolves** — the v1.0 bug was exactly forgetting the custom list.
-
-**Add a settings section** → extend the `SettingsSection` unions in **both**
-`SettingsView.tsx` and `TopMenu.tsx` (they're separate types!), add the rail
-entry + menu item + section JSX, thread any new callbacks through `App.tsx`.
-
-**Change the CSV schema** → `FULL_COLUMNS` + `rowsToCsv` + `rowsFromCsv`
-(always forgiving: `get()` defaults, unknown columns ignored) + this file.
+`paidGuard.checkPaidRun` routes every row on its own, counts only the rows
+that bill, prices each at the billed model's rate, and names the credit that
+runs out soonest. Free engines (`local`, `simulated`, `cloudflare`,
+`pollinations`, `ovh`) are never gated. There is **no spending guard over
+MCP** — no human is there to confirm — so keep paid keys out of an agent's
+environment.
 
 ---
 
-## 11. Known sharp edges
+## 8. Output doors
 
-- **`vite build` skips typecheck** — run `npm run typecheck`.
-- **The React components have no tests.** The libraries are well covered
-  (385 tests across 20 files) but every component is unverified except by
-  hand. This is the biggest gap in the project.
-- **Pollinations** is slow (5–40 s) and now needs a free token — anonymous
-  requests are refused with a Turnstile error.
-- **Cloudflare sends no CORS headers**, so the browser cannot call it at all.
-  There is a proxy in `vite.config.js` AND in `electron/main.js`; both must
-  stay in step. Node has no such rule, so the MCP server calls it directly.
-- **localStorage** has a ~5 MB ceiling — the 350 ms debounce helps; if
-  manifests grow huge, migrate to IndexedDB (`idb-keyval`).
-- **Preview sandboxes** block File System Access → folder linking fails there
-  by design; ZIP is the escape hatch.
-- **Electron vs Tauri divergence**: keep `tauriFs.ts` and `output.ts` behavior
-  identical when changing folder semantics.
-- The two `SettingsSection` unions and the `APP_VERSION`/`package.json` pair
-  are manually synced — grep before assuming.
+1. **Browser File System Access** — `showDirectoryPicker`, handle in
+   IndexedDB. Blocked in sandboxed iframes by design.
+2. **ZIP** — always works.
+3. **One picture** — Save from the row.
+
+Files go into `images/ vectors/ lottie/ sheets/ gifs/` (from `CATEGORY_META`).
+The filename extension is corrected from the real MIME type when a picture
+comes back (`nameForMime`), never the stem, and never onto another row's name.
 
 ---
 
-## 12. Where to take it next (prioritized)
+## 9. The desktop app
 
-1. **Component tests** — CI (.github/workflows/ci.yml) already gates
-   typecheck + vitest + build; the UI layer is still untested.
-2. **Code signing** for the installers (cert purchase → `win.certificateFile`
-   in `build-exe.js` / `certificateThumbprint` in `tauri.conf.json`).
-3. **A `forge` CLI** wrapping `mcp-server.js` so the pipeline runs headless
-   (`forge run --limit 10`), which also unlocks n8n exec nodes without MCP.
-4. **OAuth Google Drive** as door #4 (`@tauri-apps/plugin-http` or a tiny
-   Electron preload token dance).
-5. **Scheduled runs** — a `setInterval` already re-queues cooled rows; a
-   "strike nightly at 02:00" toggle is a small step from there.
-6. **Reconnect Emberfair** to real generated plates (filename lookup +
-   `imported` status gate).
+`electron/main.js` is **ESM** (`"type": "module"`). Never `require()` in it —
+v1.0.0 did, inside the proxy, and Cloudflare and NVIDIA crashed in the desktop
+app while working in the browser.
 
----
+- Serves `dist/` on `127.0.0.1`, **fixed** ports 47821–47825. Never
+  `listen(0)`: storage is per origin, so a random port was a new empty store
+  every launch (the 1.0.0 "keys disappear" bug).
+- Single instance; a second launch focuses the first window.
+- `APP_USER_MODEL_ID` must equal `appId` in `build-exe.js`. Never change it —
+  it is how an installer knows it is an upgrade.
+- Window size and position in `window-state.json`, dropped if off-screen.
+- A port that will not open shows an error box rather than no window.
+- Help → Where is my data? opens `app.getPath("userData")`.
 
-## 13. Questions the author anticipates
+`build/installer.nsh` adds one uninstall question. It deletes
+`$APPDATA\image-forge` only on Yes, and **`/SD IDNO` makes a silent uninstall
+answer No**.
 
-- *Why not a backend?* The manifest-is-API philosophy: any filesystem +
-  spreadsheet is already integration. Agents get MCP instead of REST.
-- *Why lanes rather than one at a time?* It used to be strictly sequential,
-  because free tiers punish concurrency. It is now 1–6 lanes, defaulting to
-  1, with rows handed out one at a time from a shared cursor — so the old
-  behaviour is still the default and a slow picture no longer blocks the
-  rest. Stop lands within one request.
-- *Why does `strike()` live in App, not a lib?* It mutates three stores
-  (rows, settings pools, imagesRef) and talks to toasts/log — it's the
-  orchestrator. Pure parts (routing, requests, math) are all in
-  `providers.ts` and unit-testable.
-- *Is Emberfair dead weight?* No — it's the demand side of the pipeline and
-  the proof that the forge's IDs and plates are real-world usable.
+`author` in `build-exe.js` must be an object (`{ name }`) — a string left the
+Publisher blank in Settings → Apps.
+
+The exes are **not signed**. electron-builder's log says "signing with
+signtool" even so; `Get-AuthenticodeSignature` reports `NotSigned`.
 
 ---
 
-## 14. Subsystems added since this file was first written
+## 10. Releasing
 
-Each of these is self-contained, tested, and safe to read on its own.
+1. Bump the version in `package.json`, `src/lib/version.ts` and the
+   `version:` in `scripts/mcp-server.js`. `tests/version.test.ts` fails if
+   they differ.
+2. Add a `CHANGELOG.md` entry that says what was actually wrong.
+3. `npm test`, `npm run typecheck`, `npm run build`.
+4. `node scripts/build-exe.js` (set `FORGE_OUTPUT` to a folder outside the repo
+   if Windows Defender locks `win-unpacked`).
+5. **Install it for real** — see STANDARDS #6. What was checked for 1.0.1 on a
+   real machine: listed in Settings → Apps with publisher and version; Start
+   Menu and Desktop shortcuts pointing at the exe; starts on 47821 with one
+   window; the Cloudflare route answers rather than crashing; a second launch
+   opens no second copy; closes cleanly; window state written; same port on
+   relaunch; silent uninstall removes app and shortcuts and keeps data.
+6. Push a `vX.Y.Z` tag. `release.yml` runs typecheck and tests, builds on
+   `windows-latest`, and publishes both exes to a GitHub release.
 
-| Where | What it does | Worth knowing |
-|---|---|---|
-| `lib/paidGuard.ts` | Works out what a run will cost and which credit pays | Free engines are never gated. Names the credit expiring soonest among *usable* keys, because free keys are tried first but carry no date |
-| `lib/visionEngine.ts` | A model that can look at a picture | Any OpenAI-shaped endpoint. **No hard-coded model list** — `listChatModels()` asks the endpoint, because a stale id in our source becomes the user's 404 |
-| `lib/testConnection.ts` | "Does this key actually work?" per engine | Must make a **real** call. Listing models is free and proves nothing. The vision check sends a real red square |
-| `lib/styleCatalogue.ts` | 34 styles in 6 groups | Knows which engines can do which style; infographic/poster are limited to models that can really render text |
-| `lib/warp.ts` | Homography maths for the four-corner text warp | Pure functions, no DOM, heavily tested |
-| `lib/textLayer.ts` | Text layers with real fonts | Auto-shrinks to fit rather than clipping |
-| `lib/sheets.ts` | Sprite / turnaround / viseme / expression sheets | Each frame gets its own seed plus a "change ONLY this" instruction — that is what keeps a character consistent |
-| `lib/vectorAssets.ts` | SVG and Lottie via a code model | `sanitiseSvg()` strips scripts, handlers and external refs, and adds a missing `xmlns` |
-| `lib/motionPlan.ts` | Camera-motion plans for GIFs | Motion over one still, not many generations — coherent, instant, free |
-| `lib/modelLadder.ts` | Step-down through models as allowances run out | Used by the text side. The Letterer no longer uses it: vision is one configured engine now |
-
-### Settings shape
-
-Three chat-style engines, all `{ base, key, model }` and all
-OpenAI-compatible: `scribe` (writes), `coder` (SVG/Lottie), `vision` (looks).
-Settings → Text engines offers to point all three at one key.
-
-`pausedEngines: string[]` switches an engine off without dismantling it.
-
-### The one rule worth repeating
-
-`engines.mjs` stays DOM-free. It is what lets the app and the MCP server run
-the same code. See [STANDARDS.md](STANDARDS.md) for the rest, and
-[docs/troubleshooting.md](docs/troubleshooting.md) for provider behaviour that
-contradicts provider documentation.
-
+**Documentation site:** `docs.yml` builds `docs/` for GitHub Pages, but Pages
+is **not enabled** on the repository, so that workflow fails. The repo owner
+must set Settings → Pages → Source → GitHub Actions. Until then the docs are
+read directly in `docs/` on GitHub.
 
 ---
 
-*Last verified 2 September 2026 — if this file and the code disagree, the
-code wins, and please fix this file.*
+## 11. Recipes
+
+**Add an image engine** → a `MODELS` entry in `engines.mjs` (with a dated
+`note` about what you verified); a branch in `generateBytes`; teach
+`explainFailure` its errors; add to `FREE_ENGINES` in **both** `engines.mjs`
+and `paidGuard.ts` if free; `ProviderId` in `engines.d.mts`; `PROVIDER_META`;
+a toolbar option in `TopMenu.tsx`; a `testConnection` check that makes a real
+call; a test. If it refuses browsers, add a proxy in both places (§6).
+
+**Add a style** → `STYLE_CATALOGUE`. A look that needs readable words gets
+`needsText: true` and a recommended list of models that can spell. No studio
+trademarks in a name or prompt — a test enforces it.
+
+**Add a setting** → `ForgeSettings` + `DEFAULT_SETTINGS` + a line in
+`normalizeSettings`, so older saved settings still load.
+
+**Change the CSV schema** → `FULL_COLUMNS` + both directions in `csv.ts` +
+`docs/manifest.md`. `csv-parity.test.ts` pins that the app and the MCP server
+agree.
+
+---
+
+## 12. Known sharp edges
+
+- **Components have almost no tests.** The libraries are well covered; the UI
+  is verified by hand. Biggest gap.
+- **localStorage is ~5 MB.** Previews are never stored. A very large manifest
+  will eventually need IndexedDB.
+- **OVH**: square only, no seed, two a minute.
+- **The portable exe** keeps settings in `%APPDATA%\image-forge`.
+- **Keys from 1.0.0** live under old random ports and are not migrated.
+- **The MCP server still names every file `.png`**, even when an engine
+  returns JPEG. The app corrects the extension from the real bytes
+  (`nameForMime`); the server's `safeFilename` accepts only `.png` and its
+  tests pin that. Bringing it in line is a small, separate change.
+- **Two `SettingsSection` unions** (`SettingsView.tsx`, `TopMenu.tsx`) are
+  synced by hand.
+
+---
+
+## 13. Where to take it next
+
+1. Component tests for the flows that touch money and files.
+2. Code signing (`win.certificateFile` in `build-exe.js`).
+3. Enable GitHub Pages so the docs site exists.
+4. Key pooling with rotation for text engines (they currently use one account
+   per job).
+5. A headless `forge` CLI wrapping the MCP server.

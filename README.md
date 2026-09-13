@@ -10,10 +10,10 @@ Give it a list of pictures you want. Get back a folder of images, named and
 sorted, with a CSV that says what happened to each one. Your API keys stay on
 your machine — there is no account, no server, and nothing to sign up for.
 
-**Runs free with no credit card.** Cloudflare Workers AI gives roughly 690
-images a day; Pollinations is unlimited but slow; your own machine is
-unlimited and private. Paid engines are there when you want them, and the app
-asks before spending a penny.
+**Runs free, with no card and even no key.** OVHcloud's hosted SDXL needs no
+signup at all; Cloudflare Workers AI gives roughly 690 images a day; your own
+machine is unlimited and private. Paid engines are there when you want them,
+and the app asks before spending a penny.
 
 <br>
 
@@ -27,9 +27,15 @@ asks before spending a penny.
 [![CI](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Stravelakis/image-forge?label=release&color=f2a33c)](https://github.com/Stravelakis/image-forge/releases/latest)
 [![Licence](https://img.shields.io/badge/licence-Apache--2.0-8cb56f)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-484-56b8a5)](tests/)
+[![Tests](https://img.shields.io/badge/tests-606-56b8a5)](tests/)
 
 </div>
+
+---
+
+> **Upgrading from 1.0.0 on the desktop?** 1.0.0 lost its settings on every
+> restart. 1.0.1 fixes that, but keys typed into 1.0.0 need entering once
+> more. [What happened](CHANGELOG.md).
 
 ---
 
@@ -46,7 +52,7 @@ ignore the rest.
 | 🧑‍💻 | **[I'm a developer](docs/developers.md)** | Architecture, the engine registry, how to add a provider, the test suite, the CSV contract. |
 | 🎥 | **[I make content](docs/creators.md)** | Sprite sheets, mouth shapes for talking avatars, GIFs from a single still, text with perspective warp. |
 
-**[📖 Full documentation](https://stravelakis.github.io/image-forge/)** — searchable, with a page per subsystem.
+**[📖 All the documentation](docs/index.md)** · **[What changed](CHANGELOG.md)** · **[When something is wrong](docs/troubleshooting.md)**
 
 ---
 
@@ -78,17 +84,18 @@ that cannot make a single call, *because* of the money. **Unlinking the
 project restores the free tier** — confirmed on a real account, not repeated
 from a forum.
 
-Image Forge tests each key with a **real generation call**, not a model list —
-because a key in this state lists all fifty models perfectly and then refuses
-everything. It names the cause rather than the symptom, tells you which of the
-two fixes you want, and offers the free engines meanwhile.
+Image Forge checks each key with a **real call**, not a model list — because a
+key in this state lists all fifty models perfectly and then refuses
+everything. It names the cause rather than the symptom, and the advice depends
+on where the key sits: a key in your **free** pool is told how to get the free
+tier back; a key in your **paid** pool is told its prepay balance is empty and
+*not* to unlink, because unlinking would undo the very thing it is there for.
 
 There is a second, different failure that looks identical from the outside.
 Google also returns `403` *"Your project has been denied access"* — a block on
 the whole project, not a billing problem, and not something more credit will
 fix. On a real thirteen-key setup we found eight keys in the first state and
-**five in the second**, which no amount of topping up would have helped. The
-two are now reported separately, by name.
+**five in the second**. The two are reported separately, by name.
 
 It also finds the same key pasted into two slots, which is easy to do and
 quietly halves what you thought your allowance was.
@@ -96,17 +103,19 @@ quietly halves what you thought your allowance was.
 </details>
 
 <details>
-<summary><b>"Imagen was retired and my script stopped working"</b></summary>
+<summary><b>"My settings and keys keep disappearing"</b></summary>
 
 <br>
 
-Google switched off every Imagen `:predict` endpoint on **17 August 2026**,
-and the old free allowance went with it. Image generation moved to a new API
-with a different request shape.
+If that was the 1.0.0 desktop app, it was the app, and it is fixed. 1.0.0
+served itself on a different local port each launch, and the browser engine
+inside keeps saved data per port — so every restart opened an empty store.
 
-Old manifests are migrated on load. **Settings → Advanced → Repair** moves any
-row still pointing at a dead model onto a current one, and the agent API has
-`forge_fix_retired` for the same job.
+1.0.1 also makes saving **visible**. Settings shows when your settings were
+last saved *and read straight back*, and how many keys are stored — counted,
+never shown. There is **Save now**, **Back up to a file** and **Restore**. And
+if stored data ever cannot be read, the app keeps the original aside and
+stops saving until you decide, instead of quietly replacing it with defaults.
 
 </details>
 
@@ -115,13 +124,21 @@ row still pointing at a dead model onto a current one, and the agent API has
 
 <br>
 
-The unit of work is a spreadsheet row, not a chat message. One row, one
-picture, one filename — and the filename rules are enforced as you type, with
-one-click fixes. Images land in subfolders by category. The CSV records what
-was made, when, with which model, and what went wrong if anything did.
+The unit of work is a spreadsheet row. One row, one picture, one filename —
+and the filename rules are checked as you type, with one-click fixes. Images
+land in subfolders by what they are: `images/`, `vectors/`, `lottie/`,
+`sheets/`, `gifs/`. The CSV records what was made, when, with which model, and
+what went wrong if anything did.
+
+A file's extension follows what the engine actually returned. Google and
+Cloudflare send JPEG, so those files end in `.jpg` rather than claiming to be
+PNG.
 
 Failed rows can be retried on their own. Rows that hit a daily quota park
 themselves and re-queue when the quota resets.
+
+Want just one picture? The **Chat** makes one at a time from a description,
+and can also write a whole list of rows for you.
 
 </details>
 
@@ -147,12 +164,13 @@ other interface, so nothing on your network can reach it.
 <br>
 
 Free engines are never gated. Paid ones always are: before a paid run you get
-a dialog naming the count, the model, the price per picture, the total, and
-which credit it comes out of — including how many days that credit has left.
-You can approve it, or switch to a free engine from the same dialog.
+a dialog naming how many pictures will be billed, the model, the price per
+picture, the total, and which credit it comes out of — including how many
+days that credit has left. If the same queue also holds free rows, it says how
+many. You can approve it, or switch to a free engine from the same dialog.
 
-Google's half-price batch mode is one button. Free-tier keys are always tried
-before paid ones.
+When Google's half-price delayed mode is available, a **New €/2 delayed
+queue** button appears. Free-tier keys are always tried before paid ones.
 
 </details>
 
@@ -169,7 +187,8 @@ the same engine code the app uses.
 claude mcp add image-forge node scripts/mcp-server.js
 ```
 
-Then: *"use the forge to make the pending images"* — and it will.
+Then: *"use the forge to make the pending images"* — and it will. With no keys
+at all it uses OVHcloud, which needs none.
 
 </details>
 
@@ -179,55 +198,72 @@ Then: *"use the forge to make the pending images"* — and it will.
 
 | `model` column | Engine | Cost per image | Free allowance |
 |---|---|---|---|
-| *(blank)* | Your own machine via LocalAI | **free** | unlimited, private, no internet |
+| *(blank)* | Whichever engine you picked in the toolbar | — | — |
+| `ovh-sdxl` | OVHcloud SDXL | **free** | **no key, no signup** · two a minute · always square, no seed |
 | `cloudflare-flux` | Cloudflare Workers AI | **free** | ~690/day, resets midnight UTC, no card |
 | `flux` · `turbo` | Pollinations | **free** | unlimited, ~one per 5s, needs a free token |
-| `nano-banana-2-lite` | Google | $0.034 · batch $0.017 | none |
-| `nano-banana-2` | Google | $0.067 · batch $0.034 | none |
-| `nano-banana` | Google | $0.039 · batch $0.019 | none — **off 2 Oct 2026** |
-| `gemini-3-pro-image` | Google | $0.134 · batch $0.067 | none |
+| *(your own machine)* | LocalAI, ComfyUI, LM Studio… | **free** | unlimited, private, no internet |
+| `nano-banana-2-lite` | Google | $0.034 · delayed $0.017 | none |
+| `nano-banana-2` | Google | $0.067 · delayed $0.034 | none |
+| `nano-banana` | Google | $0.039 · delayed $0.019 | none — **off 2 Oct 2026** |
+| `gemini-3-pro-image` | Google | $0.134 · delayed $0.067 | none |
 | `dall-e-3` · `gpt-image-1` | Any OpenAI-compatible endpoint | ~$0.04 | none |
 | *(practice forge)* | Procedural, offline, deterministic | free | infinite |
 
-> Prices checked against the providers on **2 September 2026**. Free
+> Google, Cloudflare and OpenAI prices and allowances checked on
+> **2 September 2026**; OVHcloud checked on **11 September 2026**. Free
 > allowances drift — check the provider's own page before you build on one.
-> "Batch" is Google's half price for pictures you will collect later.
+> "Delayed" is Google's half price for pictures you collect later.
 
 The `model` column routes **each row** to its own engine, so one batch can mix
 free and paid.
+
+**Writing, code and vision** use separate text models. Enter an account once
+(Mistral, OpenAI, OpenRouter, Google, NVIDIA or your own machine), load its
+models, and pick one per job. One free Mistral key covers all three:
+`mistral-medium-latest` writes and sees, `codestral-latest` writes code.
 
 ---
 
 ## What it does
 
+**Chat** — describe one picture and get it, ask how the app works, or have it
+write or rewrite rows. Every change to existing rows is shown before it is
+applied. History on the left, grouped by date or model.
+
 **The Wizard** — nine steps, one decision each. Name the batch, pick a world,
 list the pictures (or let a text model write them), pick a look, a painter, a
 shape, a home. Saved setups become one-click recipes.
 
-**34 styles** in six families, with per-style notes on which engines can
-actually do them. Infographics and posters are limited to the models that can
-really render text, rather than letting you find out the expensive way.
+**36 styles** in six families, with per-style notes on which engines can
+actually do them. Star the ones you use and they come first. Infographics,
+posters and the branded house style are limited to the models that can really
+render text, rather than letting you find out the expensive way.
 
-**Sheets** — sprite sheets, character turnarounds, and viseme sheets: the ten
-mouth shapes an avatar needs to look like it is speaking. Each frame gets its
-own seed and a *"change only this"* instruction.
+**Sheets** — sprite sheets, character turnarounds, expression sets, and viseme
+sheets: the mouth shapes an avatar needs to look like it is speaking. Each
+frame gets its own seed and a *"change only this"* instruction.
 
 **GIFs** — turn any finished picture into an animation, or describe one and
 have the frames generated.
 
 **Text with perspective** — drop text onto an image and drag its four corners
-independently, the way you would in PowerPoint or Photoshop. Real projective
-warp, so text sits on a wall or a sign instead of floating over it.
+independently. Real projective warp, so text sits on a wall or a sign instead
+of floating over it.
 
 **Vectors** — SVG and Lottie written by a code model, sanitised before
 anything is rendered or saved.
 
 **Key pools** — as many keys as you like per engine. On a `429` the key rests
-and the next one retries the same row immediately. Check every key in a pool
-at once and see which ones actually work.
+and the next one retries the same row immediately. Check every key at once and
+see which ones actually work.
 
 **Files** — a linked folder (point it at a Drive sync folder for free cloud
-backup), a ZIP with the structure and CSV, or one picture at a time.
+backup), a ZIP with the structure and CSV, or one picture at a time. Click any
+picture to see it full size.
+
+**Your settings, provably saved** — last saved and read back at what time, how
+many keys are stored, Save now, Back up to a file, Restore.
 
 ---
 
@@ -235,14 +271,14 @@ backup), a ZIP with the structure and CSV, or one picture at a time.
 
 ```csv
 id,filename,prompt,category,aspect_ratio,seed,model,status
-1,shop_cyber_noodle_bar.png,"rain-slick noodle stall, neon steam",shop,16:9,41,cloudflare-flux,pending
+1,image_cyber_noodle_bar.png,"rain-slick noodle stall, neon steam",image,16:9,41,cloudflare-flux,pending
 ```
 
 `filename` is the only required column. Everything else has a sensible
 default. Import forgives missing columns; export is CSV or XLSX.
 
 Any tool that can read and write this CSV is a first-class citizen of the
-project. That is the whole design.
+project. That is the whole design. [Every column, explained](docs/manifest.md).
 
 ---
 
@@ -255,7 +291,7 @@ npm run dev
 
 Opens at `http://localhost:3000`. Works on Windows, macOS and Linux.
 
-Build a Windows installer:
+Build the Windows installer and portable version:
 
 ```bash
 node scripts/build-exe.js
@@ -267,15 +303,17 @@ node scripts/build-exe.js
 
 Being straight about this saves everyone time.
 
-- **Not a chat image generator.** If you want one picture from one sentence,
-  the provider's own web app is faster.
 - **Not signed.** Windows shows a blue "Windows protected your PC" box on
   first run, because a code-signing certificate costs a few hundred a year.
   [What to click](docs/download.md).
 - **Not a hosted service.** There is no cloud version and no accounts.
 - **Not able to fix a provider's outage or an empty balance.** It will tell
   you clearly which one it is, and offer you a free engine instead.
+- **Not able to make most models spell.** Only the Nano Banana family can be
+  relied on for words in a picture. The Letterer adds real text afterwards.
 - **Mac and Linux run from source only.** The packaged builds are Windows.
+- **The portable version is not trace-free.** It keeps settings in
+  `%APPDATA%\image-forge` on the computer it runs on.
 
 ---
 
@@ -303,7 +341,7 @@ push. Anything touching the CSV, filenames, money or the engines needs a test.
 
 <div align="center">
 
-Built with React · Vite · Tailwind · Electron · Tauri.
+Built with React · Vite · Tailwind · Electron.
 No backend. No accounts. Your keys, your machine.
 
 *struck, not templated* ⚒

@@ -63,8 +63,16 @@ jobs:
           body: |
             **Image Forge — Windows**
 
-            · `Image Forge Setup *.exe` — the normal installer, pick your folder
-            · `image-forge-portable.exe` — no install, runs from anywhere
+            · `Image Forge Setup *.exe` — the normal installer. **Most people want this.**
+            · `image-forge-portable.exe` — no install. It still saves settings on the
+              computer it runs on, in `%APPDATA%\image-forge`.
+
+            **What changed, and what was actually wrong:**
+            [CHANGELOG.md](https://github.com/Stravelakis/image-forge/blob/master/CHANGELOG.md)
+
+            **Coming from 1.0.0?** 1.0.0 lost its settings on every restart. This
+            version fixes that, but keys typed into 1.0.0 need entering once more.
+            Then use **Settings → Back up to a file**.
 
             Windows will show a blue "Windows protected your PC" box the first
             time, because the app is not signed with a paid certificate.

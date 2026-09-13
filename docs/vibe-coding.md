@@ -17,7 +17,7 @@ exposes the whole pipeline as eight tools.
 claude mcp add image-forge node scripts/mcp-server.js
 ```
 
-Or drop this in your project's `.mcp.json` — the repo ships with one already:
+Or drop this in your project's `.mcp.json`:
 
 ```json
 {
@@ -51,32 +51,48 @@ Then just talk to it:
 | `forge_generate_one` | Generate one row by filename |
 | `forge_retry_failed` | Put failed rows back to pending |
 | `forge_fix_retired` | Move rows off models the provider switched off |
-| `forge_models` | Every model with price per image, batch price, free allowance |
+| `forge_models` | Every model with price per image, delayed price, free allowance |
 
-`forge_generate_*` write real PNGs to disk and update the CSV. They are not
+`forge_generate_*` write real files into `images/`, `vectors/`, `lottie/`,
+`sheets/` and `gifs/` under `--out`, and update the CSV. They are not
 simulations.
 
 ---
 
 ## Giving the agent engines
 
-With no configuration it uses Pollinations, which is free. To give it the same
-engines the app has, either point it at a settings backup:
+**With no configuration at all it uses OVHcloud SDXL**, which needs no key.
+Two pictures a minute, always square.
+
+To give it the same engines the app has, point it at a backup file from the
+app — either **Settings → Back up to a file** or **Settings → Advanced →
+Backup**:
 
 ```bash
-node scripts/mcp-server.js --settings ./image-forge-backup-2026-09-02.json
+node scripts/mcp-server.js --settings ./image-forge-settings-2026-09-13.json
 ```
-
-*(**Settings → Advanced → Backup** writes that file.)*
 
 Or use environment variables:
 
 | Variable | Meaning |
 |---|---|
+| `CLOUDFLARE_ACCOUNT_ID` · `CLOUDFLARE_API_TOKEN` | Cloudflare Workers AI, free |
+| `POLLINATIONS_TOKEN` | Pollinations, free |
 | `GEMINI_API_KEY` / `GEMINI_API_KEYS` | Google keys, comma-separated, rotated on `429` |
+| `GEMINI_IMAGE_MODEL` | Which Google model, e.g. `nano-banana-2-lite` |
 | `OPENAI_API_KEY` / `OPENAI_API_KEYS` | Keys for any OpenAI-compatible endpoint |
 | `OPENAI_BASE_URL` · `OPENAI_IMAGE_MODEL` | Point at Together, OpenRouter, a local server |
-| `FORGE_PROVIDER` | Force `pollinations` / `cloudflare` / `openai` |
+| `FORGE_PROVIDER` | Force `ovh` / `cloudflare` / `pollinations` / `gemini` / `openai` |
+
+Which engine it uses when a row names none:
+
+1. `FORGE_PROVIDER`, if set.
+2. Otherwise the engine that was selected when the backup was made (the
+   practice forge is skipped — an agent writing real files should not produce
+   practice drawings).
+3. Otherwise the first one that is set up: Cloudflare, Pollinations, Google,
+   OpenAI-compatible.
+4. Otherwise OVHcloud, which needs nothing.
 
 A row's own `model` column beats all of it, exactly as in the app.
 
@@ -86,17 +102,17 @@ A row's own `model` column beats all of it, exactly as in the app.
 
 **Give it a free engine.** An agent in a loop is exactly how you discover what
 your paid balance was. The app's paid confirmation dialog does not exist over
-MCP — there is no human there to confirm — so the server has no spending
-guard. Point it at Cloudflare, Pollinations, or your own machine, and keep
-paid keys out of its environment unless you are watching.
+MCP — there is no human there to confirm — so the server has **no spending
+guard**. Keep paid keys out of its environment unless you are watching.
 
 **Cap the batch.** `forge_generate_pending` takes a `limit`. Use it.
 
+**OVHcloud is slow on purpose.** Two a minute. A limit of 10 takes about five
+minutes.
+
 **Weak models cannot spell.** The server suppresses text instructions on
-models that produce gibberish, the same way the app does — so an agent asking
-for a shop sign gets a picture without invented lettering rather than a
-picture reading "GERNIKE ORIDANY". Ask a Nano Banana model if you need real
-words.
+models that produce gibberish, the same way the app does. Ask a Nano Banana
+model if you need real words.
 
 **Filenames are validated.** `forge_add_row` rejects path separators outright.
 An agent cannot write outside the output folder by choosing a clever filename.
@@ -118,9 +134,6 @@ with open("marketplace-images.csv", newline="", encoding="utf-8") as f:
 pending = [r for r in rows if r["status"] == "pending"]
 ```
 
-Write the file back with a `status` of `pending` on the rows you want made,
-open the app, press Forge. That is a complete integration.
-
 Missing columns are forgiven on import, so you can hand it a two-column CSV
 with just `filename` and `prompt`.
 
@@ -128,14 +141,11 @@ with just `filename` and `prompt`.
 
 ## Wiring into other stacks
 
-The repo has a longer walkthrough in
 [CONNECT-AGENTS.md](https://github.com/Stravelakis/image-forge/blob/master/CONNECT-AGENTS.md)
-covering Claude Code, n8n, LangGraph and Hermes.
+covers Claude Code, n8n, LangGraph and Hermes.
 
-The short version for LangGraph: treat `forge_generate_pending` as a node,
-`forge_status` as your loop condition, and let the CSV be the state that
-survives between runs. It is already durable and already human-readable, which
-saves you writing a checkpointer for it.
+For LangGraph: treat `forge_generate_pending` as a node, `forge_status` as your
+loop condition, and let the CSV be the state that survives between runs.
 
 ---
 

@@ -8,8 +8,9 @@
  *
  * Speaks MCP over stdio. It drives the SAME marketplace-images.csv manifest the
  * web app uses, and generates through the SAME engines (src/lib/engines.mjs), so
- * an agent gets Pollinations for free and Imagen / DALL-E / any OpenAI-compatible
- * endpoint as soon as keys are supplied. So an agent can:
+ * an agent gets OVHcloud SDXL free with no key at all, and Cloudflare,
+ * Pollinations, Google or any OpenAI-compatible endpoint as soon as keys are
+ * supplied. So an agent can:
  *   · read the manifest           (forge_list / forge_status)
  *   · add new picture ideas       (forge_add_row)
  *   · generate the pending ones   (forge_generate_pending) → real PNGs on disk
@@ -19,10 +20,12 @@
  * a bare settings object) and/or the environment:
  *   GEMINI_API_KEY / GEMINI_API_KEYS (comma-separated)
  *   OPENAI_API_KEY / OPENAI_API_KEYS, OPENAI_BASE_URL, OPENAI_IMAGE_MODEL
- *   FORGE_PROVIDER (simulated | pollinations | imagen | openai)
- * With no keys at all the server falls back to keyless Pollinations.
+ *   CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, POLLINATIONS_TOKEN
+ *   FORGE_PROVIDER (ovh | cloudflare | pollinations | gemini | openai | local)
+ * With no keys at all the server uses OVHcloud SDXL, which needs none.
  *
- * Images land in shops/ items/ events/ npcs/ under --out (default: ./generated-images).
+ * Images land in images/ vectors/ lottie/ sheets/ gifs/ under --out
+ * (default: ./generated-images), the same folders the app uses.
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
@@ -58,9 +61,32 @@ const COLUMNS = [
   "id", "filename", "prompt", "negative_prompt", "category", "style",
   "aspect_ratio", "seed", "model", "status", "error", "generated_at",
 ];
-const FOLDERS = { shop: "shops", item: "items", event: "events", npc: "npcs" };
+/**
+ * The same folders the app writes to (CATEGORY_META in src/types.ts).
+ *
+ * This was still shop/item/event/npc after the app moved to categories that
+ * describe what a row makes, so every "image" row from an agent landed in a
+ * folder called items/ that the app never uses. Old category names are still
+ * accepted and count as images, exactly as the app reads them.
+ */
+const FOLDERS = {
+  image: "images",
+  svg: "vectors",
+  lottie: "lottie",
+  sheet: "sheets",
+  gif: "gifs",
+  shop: "images",
+  item: "images",
+  event: "images",
+  npc: "images",
+};
 const ASPECTS = ["16:9", "1:1", "9:16", "4:3"];
-const CATEGORIES = ["shop", "item", "event", "npc"];
+const CATEGORIES = ["image", "svg", "lottie", "sheet", "gif", "shop", "item", "event", "npc"];
+
+/** Where a row's file goes. Unknown categories are pictures. */
+function folderFor(category) {
+  return FOLDERS[String(category || "").toLowerCase()] || "images";
+}
 /** Seeds are passed straight to the engines; keep the space wide so batches don't collide. */
 const SEED_MAX = 2147483647;
 const MODEL_IDS = MODELS.map((m) => m.id);
@@ -68,6 +94,45 @@ const MODEL_IDS = MODELS.map((m) => m.id);
 /* ---------------- settings (keys, provider, cooldowns) ---------------- */
 
 const LS_SETTINGS = "image-forge-settings-v1";
+
+/**
+ * Read any of the files the app can give you.
+ *
+ *   · Settings → Back up to a file   { kind: "image-forge-settings", settings }
+ *   · Settings → Advanced → Backup   { "image-forge-settings-v1": {...}, ... }
+ *   · a bare settings object
+ *
+ * The first did not exist when this was written, so pointing --settings at it
+ * silently gave the agent no keys at all.
+ */
+function unwrapSettingsFile(parsed) {
+  if (!parsed || typeof parsed !== "object") return {};
+  if (parsed.kind === "image-forge-settings" && parsed.settings && typeof parsed.settings === "object") {
+    return parsed.settings;
+  }
+  return parsed[LS_SETTINGS] ?? parsed;
+}
+
+/**
+ * Which engine an agent gets when a row does not name one.
+ *
+ * Forced by FORGE_PROVIDER first, then whatever the backup had selected, then
+ * the first engine that is actually set up, cheapest-and-free first — and
+ * finally OVHcloud, because it needs nothing.
+ *
+ * That last step used to be Pollinations. Pollinations stopped serving
+ * anonymous requests, so an agent with no keys was handed an engine that
+ * refused every single picture. STANDARDS #4: a keyless fallback must work.
+ */
+function pickProvider({ forced, saved, cloudflare, pollinationsToken, geminiKeys, openaiKeys }) {
+  if (forced) return forced;
+  if (saved && saved !== "simulated") return saved;
+  if (cloudflare?.accountId && cloudflare?.token) return "cloudflare";
+  if (pollinationsToken) return "pollinations";
+  if (geminiKeys?.length) return "gemini";
+  if (openaiKeys?.length) return "openai";
+  return "ovh";
+}
 
 const asKeys = (raw) =>
   String(raw || "")
@@ -83,7 +148,7 @@ function loadSettings() {
     try {
       const parsed = JSON.parse(fs.readFileSync(path.resolve(SETTINGS_PATH), "utf8"));
       // accept either a full app backup or a bare settings object
-      file = parsed?.[LS_SETTINGS] ?? parsed ?? {};
+      file = unwrapSettingsFile(parsed);
     } catch (e) {
       process.stderr.write(`[image-forge] could not read --settings: ${e.message || e}\n`);
     }
@@ -105,18 +170,14 @@ function loadSettings() {
   // Pick whatever is actually usable, cheapest-and-free first. "imagen" in an
   // old backup means Google, whose endpoints changed when Imagen was retired.
   const saved = file.provider === "imagen" ? "gemini" : file.provider;
-  const provider =
-    process.env.FORGE_PROVIDER ||
-    (saved && saved !== "simulated" ? saved : "") ||
-    (cloudflare.accountId && cloudflare.token
-      ? "cloudflare"
-      : pollinationsToken
-      ? "pollinations"
-      : geminiKeys.length
-      ? "gemini"
-      : openaiKeys.length
-      ? "openai"
-      : "pollinations");
+  const provider = pickProvider({
+    forced: process.env.FORGE_PROVIDER,
+    saved,
+    cloudflare,
+    pollinationsToken,
+    geminiKeys,
+    openaiKeys,
+  });
 
   return {
     provider,
@@ -151,7 +212,9 @@ const exhaust = (poolName, keyId, untilMs) => {
 };
 
 const cooldownMsFor = (row) => {
-  const def = findModel((row.model || "").trim()) || findModel(SETTINGS.pollinationsModel);
+  // The model this row will really use. This looked up the Pollinations model
+  // whenever a row named none, whatever engine was actually selected.
+  const def = resolveRoute({ model: (row.model || "").trim() }, SETTINGS).def;
   const id = def?.id;
   const custom = id ? SETTINGS.cooldowns[id] : undefined;
   const hours = typeof custom === "number" && custom >= 0 ? custom : def?.defaultCooldownH ?? 1;
@@ -254,7 +317,7 @@ async function generateImage(row) {
     exhaust,
     cooldownMsFor(row)
   );
-  const folder = FOLDERS[row.category] || "items";
+  const folder = folderFor(row.category);
   const dir = path.join(OUT_DIR, folder);
   fs.mkdirSync(dir, { recursive: true });
   const dest = path.join(dir, filename);
@@ -274,6 +337,7 @@ const describeEngine = () => {
   const wired = [
     SETTINGS.cloudflare.accountId && SETTINGS.cloudflare.token ? "cloudflare ✓" : "cloudflare ✗",
     SETTINGS.pollinationsToken ? "pollinations token ✓" : "pollinations token ✗",
+    "ovhcloud ✓ (needs no key)",
     `${SETTINGS.geminiKeys.length} google key(s)`,
     `${SETTINGS.openaiKeys.length} endpoint key(s)`,
   ].join(" · ");
@@ -287,7 +351,7 @@ const retiredRows = (rows) =>
 /* ---------------- MCP server ---------------- */
 
 const server = new Server(
-  { name: "image-forge", version: "1.0.0" },
+  { name: "image-forge", version: "1.0.1" },
   { capabilities: { tools: {} } }
 );
 
@@ -303,7 +367,7 @@ const SCHEMAS = {
       filename: z.string(),
       prompt: z.string().min(1),
       negative_prompt: z.string().optional(),
-      category: z.enum(CATEGORIES).default("item"),
+      category: z.enum(CATEGORIES).default("image"),
       aspect_ratio: z.enum(ASPECTS).default("1:1"),
       seed: z.number().int().min(1).max(SEED_MAX).optional(),
       model: z.enum(MODEL_IDS).optional(),
@@ -339,10 +403,10 @@ const TOOLS = [
     description: "Add a picture idea to the manifest.",
     inputSchema: obj(
       {
-        filename: { type: "string", description: "lowercase, underscores, e.g. shop_bakery.png" },
+        filename: { type: "string", description: "lowercase, underscores, e.g. image_bakery.png" },
         prompt: { type: "string" },
         negative_prompt: { type: "string" },
-        category: { type: "string", enum: CATEGORIES, default: "item" },
+        category: { type: "string", enum: CATEGORIES, default: "image" },
         aspect_ratio: { type: "string", enum: ASPECTS, default: "1:1" },
         seed: { type: "integer", minimum: 1, maximum: SEED_MAX },
         model: { type: "string", enum: MODEL_IDS, description: "leave empty to use the server's default engine" },
@@ -352,7 +416,7 @@ const TOOLS = [
   },
   {
     name: "forge_generate_pending",
-    description: "Generate images for all pending rows through the configured engine (keyless Pollinations unless keys are supplied). Writes PNGs to disk and marks rows done.",
+    description: "Generate images for all pending rows through the configured engine (keyless OVHcloud unless keys are supplied). Writes PNGs to disk and marks rows done.",
     inputSchema: obj({ limit: { type: "integer", minimum: 1, description: "max rows to generate" } }),
   },
   {
@@ -541,7 +605,7 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   }
 });
 
-export { parseCsv, toCsv, TOOLS, SCHEMAS };
+export { parseCsv, toCsv, TOOLS, SCHEMAS, pickProvider, folderFor, unwrapSettingsFile };
 
 /* Only speak MCP when run as a program — importing this file (tests) must not connect. */
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
