@@ -132,9 +132,14 @@ async function main() {
     // a default that changes in electron-builder v27.
     publish: "never",
     config: {
+      // Must equal APP_USER_MODEL_ID in electron/main.js, and must never
+      // change: it is how Windows knows a new installer is an UPGRADE of the
+      // app already there, and how taskbar pins find the running window.
       appId: "forge.imageforge.app",
       productName: "Image Forge",
-      copyright: "Image Forge — forged locally",
+      // Shown in the exe's Properties and in Settings → Apps. It said
+      // "forged locally" and the author was a name from an old project.
+      copyright: "Copyright © 2026 Stravelakis · Apache-2.0",
       asar: true,
       // FORGE_OUTPUT lets you package somewhere else — useful when a syncing or
       // aggressively scanned folder makes electron-builder trip over its own
@@ -164,7 +169,10 @@ async function main() {
       },
       extraMetadata: {
         description: "Image Forge — standalone, manifest-driven AI image pipeline",
-        author: "Emberfair Works",
+        // An object, not a string: electron-builder takes the Publisher shown in
+        // Settings > Apps and in the exe Properties from author.name. A plain
+        // string left both blank — seen on a real install, 13 September 2026.
+        author: { name: "Stravelakis" },
       },
       portable: { artifactName: "image-forge-portable.exe" },
     },
@@ -177,7 +185,7 @@ async function main() {
   · the "portable" file runs straight from a USB stick
   · first launch may show a SmartScreen warning (unsigned app):
       More info → Run anyway
-  · your data (manifest, recipes, keys, settings) lives in %APPDATA%\\Image Forge`);
+  · your data (manifest, recipes, keys, settings) lives in %APPDATA%\\image-forge`);
 }
 
 main().catch((e) => fail(e && e.message ? e.message : String(e)));

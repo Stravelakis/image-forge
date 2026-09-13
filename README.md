@@ -131,7 +131,7 @@ themselves and re-queue when the quota resets.
 <br>
 
 There is no backend. Keys live in your browser's local storage, or in
-`%APPDATA%\Image Forge` on the desktop build. They are sent to exactly one
+`%APPDATA%\image-forge` on the desktop build. They are sent to exactly one
 place: the engine you chose. Nothing is phoned home, because there is nowhere
 to phone.
 

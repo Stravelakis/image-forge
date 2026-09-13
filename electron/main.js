@@ -10,8 +10,13 @@
 import http from "node:http";
 import path from "node:path";
 import fs from "node:fs";
+// A real import, not require(): this file is ESM ("type": "module"), where
+// require does not exist. It used to be `require("node:https")` inside the
+// proxy, which threw on the first Cloudflare or NVIDIA request in the
+// packaged app. The dev server never runs this file, so it never showed.
+import https from "node:https";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, Menu, shell, dialog } from "electron";
+import { app, BrowserWindow, Menu, shell, dialog, screen } from "electron";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -71,7 +76,6 @@ const PROXIED = {
  * machine leaks.
  */
 function proxyUpstream(prefix, req, res) {
-  const https = require("node:https");
   const { host, name } = PROXIED[prefix];
   const target = req.url.slice(prefix.length) || "/";
   const upstream = https.request(
@@ -180,6 +184,48 @@ function startServer(distDir) {
 
 /* ---------------- app ---------------- */
 
+/**
+ * Must equal `appId` in scripts/build-exe.js.
+ *
+ * Windows groups taskbar buttons, pins and notifications by this id. Left
+ * unset, a pinned shortcut and the running window can show as two separate
+ * icons. Changing it later breaks existing pins, so it is pinned by a test.
+ */
+const APP_USER_MODEL_ID = "forge.imageforge.app";
+app.setAppUserModelId(APP_USER_MODEL_ID);
+
+/* A normal desktop app reopens where you left it. */
+const stateFile = () => path.join(app.getPath("userData"), "window-state.json");
+
+function readWindowState() {
+  try {
+    const s = JSON.parse(fs.readFileSync(stateFile(), "utf8"));
+    if (!Number.isFinite(s.width) || !Number.isFinite(s.height)) return null;
+    // A window saved on a monitor that is no longer plugged in would open
+    // off-screen and look like the app failed to start. Keep the size, drop
+    // the position, unless the saved spot is still on a real display.
+    const onScreen =
+      Number.isFinite(s.x) &&
+      Number.isFinite(s.y) &&
+      screen.getAllDisplays().some(({ workArea: a }) =>
+        s.x >= a.x - 50 && s.y >= a.y - 50 && s.x < a.x + a.width - 100 && s.y < a.y + a.height - 100
+      );
+    return onScreen ? s : { width: s.width, height: s.height, maximized: s.maximized };
+  } catch {
+    return null;
+  }
+}
+
+function writeWindowState(win) {
+  try {
+    const maximized = win.isMaximized();
+    const b = maximized ? win.getNormalBounds() : win.getBounds();
+    fs.writeFileSync(stateFile(), JSON.stringify({ ...b, maximized }));
+  } catch {
+    /* a lost window size is not worth an error box */
+  }
+}
+
 // one instance only
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -218,11 +264,15 @@ if (!app.requestSingleInstanceLock()) {
         {
           label: "Where is my data?",
           click: () => {
+            shell.openPath(app.getPath("userData"));
             dialog.showMessageBox({
               type: "info",
               title: "Your data",
-              message: "Your manifest, recipes, engine keys and settings live in:",
-              detail: path.join(app.getPath("appData"), "Image Forge"),
+              message: "Your settings, API keys and manifest live in:",
+              // Asked of Electron, not typed in. The folder is named after the
+              // package ("image-forge"), and the hard-coded "Image Forge" that
+              // used to be here pointed at a folder that never existed.
+              detail: app.getPath("userData"),
               buttons: ["OK"],
             });
           },
@@ -244,13 +294,24 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
 
-    const { port } = await startServer(distDir);
+    let port;
+    try {
+      ({ port } = await startServer(distDir));
+    } catch (e) {
+      // Without this the promise rejected into nothing: no window, no message,
+      // just a process in Task Manager. Say what happened instead.
+      dialog.showErrorBox("Image Forge could not start", e && e.message ? e.message : String(e));
+      app.quit();
+      return;
+    }
 
     const iconPath = path.join(__dirname, "..", "build", "icon.png");
 
+    const saved = readWindowState();
     mainWindow = new BrowserWindow({
-      width: 1320,
-      height: 840,
+      width: saved?.width ?? 1320,
+      height: saved?.height ?? 840,
+      ...(Number.isFinite(saved?.x) ? { x: saved.x, y: saved.y } : {}),
       minWidth: 980,
       minHeight: 640,
       backgroundColor: "#17120e",
@@ -264,7 +325,11 @@ if (!app.requestSingleInstanceLock()) {
       },
     });
 
-    mainWindow.once("ready-to-show", () => mainWindow.show());
+    mainWindow.once("ready-to-show", () => {
+      if (saved?.maximized) mainWindow.maximize();
+      mainWindow.show();
+    });
+    mainWindow.on("close", () => writeWindowState(mainWindow));
 
     // external links open in the real browser, Windows deep-links open in the OS
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {

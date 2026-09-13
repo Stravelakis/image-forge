@@ -18,8 +18,8 @@ want one of these two:
 
 | File | Choose this if |
 |---|---|
-| `Image Forge Setup 1.0.0.exe` | You want a normal install — Start menu entry, desktop shortcut, an uninstaller. **Most people want this one.** |
-| `image-forge-portable.exe` | You want no install at all. Runs from wherever you put it, including a USB stick. Leaves nothing behind. |
+| `Image Forge Setup x.y.z.exe` | You want a normal install — Start menu entry, desktop shortcut, an uninstaller. **Most people want this one.** |
+| `image-forge-portable.exe` | You want no install at all. Runs from wherever you put it, including a USB stick. Your settings and keys are still saved on the computer you run it on, in `%APPDATA%\image-forge`. |
 
 Both are about 200 MB. That is normal: the app carries its own browser engine
 so it does not matter what you have installed.
@@ -74,11 +74,11 @@ the app before you sign up for anything.
 
 | What | Where |
 |---|---|
-| Your settings and keys | `%APPDATA%\Image Forge` |
+| Your settings and keys | `%APPDATA%\image-forge` |
 | Your images | Wherever you point **Link folder** — pick your OneDrive or Google Drive folder and you get free cloud backup |
 | Your manifest | Inside the app, and written to `marketplace-images.csv` in your linked folder |
 
-Paste `%APPDATA%\Image Forge` into the address bar of any Explorer window to
+Paste `%APPDATA%\image-forge` into the address bar of any Explorer window to
 open it. The app's **Help → Where is my data?** menu does the same thing.
 
 ---
@@ -103,7 +103,7 @@ The uninstaller asks whether you also want to delete your settings and keys.
 Say no if you plan to reinstall; say yes if you are done. Your images are
 never touched — they are in your own folder, not the app's.
 
-For the portable version: delete the `.exe`. That is all there is.
+For the portable version: delete the `.exe`. Your settings and keys stay in `%APPDATA%\image-forge` until you delete that folder too.
 
 ---
 
