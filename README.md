@@ -65,7 +65,7 @@ ignore the rest.
 | **[How it is built](docs/developers.md)** | Architecture, the engine registry, how to add a provider, the test suite, releasing. |
 | **[HANDOFF.md](HANDOFF.md)** | The full engineering map, every non-obvious decision, and the provider facts that contradict their own docs. |
 
-**[📖 All the documentation](docs/index.md)** · **[What changed](CHANGELOG.md)** · **[When something is wrong](docs/troubleshooting.md)**
+**[📖 Documentation site — docs.stravelakis.com](https://docs.stravelakis.com/image-forge/)** · **[What changed](CHANGELOG.md)** · **[When something is wrong](docs/troubleshooting.md)**
 
 ---
 

@@ -261,10 +261,16 @@ would break the next release. Follow
 [SignPath's GitHub guide](https://docs.signpath.io/trusted-build-systems/github)
 when doing it, and update the policy page's status in the same commit.
 
-**Documentation site:** `docs.yml` builds `docs/` for GitHub Pages, but Pages
-is **not enabled** on the repository, so that workflow fails. The repo owner
-must set Settings → Pages → Source → GitHub Actions. Until then the docs are
-read directly in `docs/` on GitHub.
+**Documentation site:** `docs.yml` builds `docs/` with Jekyll and deploys it to
+GitHub Pages on every push that touches `docs/`. It is live at
+**https://docs.stravelakis.com/image-forge/**.
+
+That address comes from the **organisation site**, the separate repository
+`Stravelakis/Stravelakis.github.io`, which owns `docs.stravelakis.com`. GitHub
+serves every project site that has no custom domain of its own under the
+organisation site's domain, at `/<repo>/`. So **never give this repository its
+own custom domain** — that would pull it out from under the shared domain.
+`baseurl: /image-forge` in `docs/_config.yml` must match the repository name.
 
 ---
 

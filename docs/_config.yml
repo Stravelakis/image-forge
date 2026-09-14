@@ -9,7 +9,9 @@ remote_theme: just-the-docs/just-the-docs
 
 # Pages live in /docs but the site is served from the repo root path.
 baseurl: "/image-forge"
-url: "https://stravelakis.github.io"
+# Served under the organisation site Stravelakis.github.io, which owns this
+# domain. Every project site without its own domain appears at /<repo>/ here.
+url: "https://docs.stravelakis.com"
 
 search_enabled: true
 search:
