@@ -1,9 +1,9 @@
 ---
-title: If you make content
-nav_order: 6
+title: "For everyone: sheets, GIFs and lettering"
+nav_order: 4
 ---
 
-# If you make content
+# For everyone: sheets, GIFs and lettering
 
 Sprite sheets, talking-avatar mouth shapes, GIFs from a single still, and text
 that sits *on* a surface instead of floating over it.

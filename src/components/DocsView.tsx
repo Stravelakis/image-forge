@@ -170,7 +170,7 @@ export default function DocsView({
             </div>
             <div className="plaque rounded-xl p-4">
               <p className="font-mono text-[10px] tracking-[0.2em] text-ember uppercase">row by row</p>
-              <p className="mt-2 text-[12px] leading-relaxed text-parch">Every row drawer has <span className="text-cream">Save PNG</span> for reviewing single plates.</p>
+              <p className="mt-2 text-[12px] leading-relaxed text-parch">Every row drawer has <span className="text-cream">Save picture</span> for reviewing single plates.</p>
             </div>
           </div>
         </li>

@@ -1,9 +1,9 @@
 ---
-title: If you don't write code
+title: "For everyone: your first pictures"
 nav_order: 3
 ---
 
-# If you don't write code
+# For everyone: your first pictures
 
 This guide assumes nothing. If a word is unfamiliar, it gets explained the
 first time it appears.

@@ -1,54 +1,19 @@
 import type { Category, ManifestRow } from "../types";
 
-/**
- * The extensions a forged file may legitimately carry.
- *
- * There is no single right one, which is the whole point. Cloudflare and the
- * OpenAI-shaped engines return PNG; Google's image API refuses to return
- * anything except JPEG; Pollinations sends whatever it feels like; vectors are
- * .svg and Lottie is .json. A name is correct when it matches its own bytes,
- * not when it matches a house rule.
+/*
+ * What a file's name and bytes must agree on lives in engines.mjs, so the MCP
+ * server — which cannot import TypeScript — uses exactly the same rules.
  */
-export const KNOWN_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".json"] as const;
-
-/** What a MIME type should be called on disk. */
-const MIME_EXTENSION: Record<string, string> = {
-  "image/png": ".png",
-  "image/jpeg": ".jpg",
-  "image/jpg": ".jpg",
-  "image/webp": ".webp",
-  "image/gif": ".gif",
-  "image/svg+xml": ".svg",
-  "application/json": ".json",
-};
-
-/** The extension a MIME type deserves, or "" when we do not recognise it. */
-export const extensionForMime = (mime: string): string =>
-  MIME_EXTENSION[(mime || "").split(";")[0].trim().toLowerCase()] ?? "";
-
-/** The extension a name currently carries, lowercased, or "". */
-export const extensionOf = (name: string): string => {
-  const lower = name.toLowerCase();
-  return KNOWN_EXTENSIONS.find((e) => lower.endsWith(e)) ?? "";
-};
-
-/**
- * The same name, wearing the extension its bytes actually earned.
- *
- * Returns the name unchanged when it is already right, when the type is one we
- * do not recognise, or when the difference is only jpg/jpeg — renaming a file
- * over that would be noise. The stem never changes, so a row keeps its
- * identity and nothing that matches rows to pictures has to care.
- */
-export function nameForMime(name: string, mime: string): string {
-  const want = extensionForMime(mime);
-  if (!want) return name;
-  const have = extensionOf(name);
-  if (!have) return name + want;
-  if (have === want) return name;
-  if ((have === ".jpg" || have === ".jpeg") && want === ".jpg") return name;
-  return name.slice(0, -have.length) + want;
-}
+export {
+  KNOWN_EXTENSIONS,
+  extensionForMime,
+  extensionOf,
+  nameForMime,
+  mimeFromBytes,
+  withSuffix,
+  uniqueName,
+} from "./engines.mjs";
+import { KNOWN_EXTENSIONS, extensionOf } from "./engines.mjs";
 
 /** What the categories were called before they described the artefact. */
 const LEGACY_PREFIXES: string[] = ["shop_", "item_", "event_", "npc_"];

@@ -6,6 +6,22 @@ whether to update.
 
 ---
 
+## Unreleased
+
+### Fixed
+
+- **JPEG pictures were still saved as `.png` on several paths.** 1.0.1 fixed
+  the normal queue, but not Google's half-price delayed queue (every picture
+  from it is JPEG), keeping a variant, duplicating a row, or the agent server.
+  All of them now name a file for what its bytes actually are.
+- **A duplicated or de-duplicated JPEG got two extensions** — `a.jpg` became
+  `a.jpg_2.png`. It is now `a_2.jpg`.
+- **New rows started with the old `item_` prefix.** They now start `image_`.
+- The row button said **Save PNG** whatever the file was. It now says
+  **Save picture**.
+
+---
+
 ## 1.0.1 — 13 September 2026
 
 ### If you used 1.0.0 on the desktop, read this first

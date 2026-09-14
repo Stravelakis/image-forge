@@ -1,9 +1,9 @@
 ---
-title: If you're a developer
-nav_order: 5
+title: "For developers: how it is built"
+nav_order: 6
 ---
 
-# If you're a developer
+# For developers: how it is built
 
 React 18 + Vite + TypeScript, with an Electron shell for Windows. No backend,
 no state library. About 20,000 lines of source. Everything durable is a CSV or
@@ -20,7 +20,7 @@ This page is the short version.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # vitest, 606 tests across 30 files
+npm test           # vitest, 621 tests across 31 files
 npm run typecheck  # tsc --noEmit
 npm run build      # vite build
 ```
@@ -33,8 +33,10 @@ Package it for Windows:
 node scripts/build-exe.js   # installer + portable, into release/
 ```
 
-There is also a `src-tauri/` folder. The Tauri build is not part of CI or the
-release and has not been verified recently.
+There is also a `src-tauri/` folder. The Tauri build is **experimental**: not
+built in CI, not released, and not built recently (it needs Rust and the
+Microsoft C++ Build Tools). **Cloudflare and NVIDIA do not work in it** — it has
+no equivalent of the Electron proxies those providers need.
 
 ---
 

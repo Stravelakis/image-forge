@@ -521,7 +521,7 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
             <IRetry size={13} /> Variant
           </Btn>
           <Btn className="justify-center" disabled={!row.preview} onClick={() => downloadRow(row.id)}>
-            <IDownload size={13} /> Save PNG
+            <IDownload size={13} /> Save picture
           </Btn>
           <Btn className="justify-center" onClick={() => openScribe(row.id)} title="Open the chat with this row, to rewrite its prompt, rename it or change its look">
             <IQuill size={13} /> Ask the chat

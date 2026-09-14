@@ -15,15 +15,29 @@ account, no server, no subscription — your keys stay on your machine.
 
 ## Start where you are
 
-Five guides, each written for one kind of reader. Pick yours.
+Three kinds of reader. Pick yours.
+
+### For everyone
+
+No code and no terminal. Words like "API key" are explained the first time.
 
 | Guide | For you if |
 |---|---|
 | [Download and install](download.md) | You are on Windows and want to double-click something. |
-| [If you don't write code](no-code.md) | Words like "API key" are unfamiliar and you would like that fixed. |
-| [If you vibe-code](vibe-coding.md) | You want an agent to fill the manifest and run the forge. |
-| [If you're a developer](developers.md) | You want the architecture and how to add an engine. |
-| [If you make content](creators.md) | You want sprite sheets, talking avatars, GIFs and text on surfaces. |
+| [Your first pictures](no-code.md) | You want to make pictures and have never set up an engine. |
+| [Sheets, GIFs and lettering](creators.md) | You want sprite sheets, talking avatars, GIFs and text on surfaces. |
+
+### For vibe coders
+
+| Guide | For you if |
+|---|---|
+| [Agents and the manifest](vibe-coding.md) | You want an agent to fill the manifest and run the forge. |
+
+### For developers
+
+| Guide | For you if |
+|---|---|
+| [How it is built](developers.md) | You want the architecture, how to add an engine, and how to release. |
 
 ---
 

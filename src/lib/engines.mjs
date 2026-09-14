@@ -416,6 +416,98 @@ function fetchWithTimeout(url, init, ms, outer) {
   });
 }
 
+/* ---------------- what a file really is ---------------- */
+
+/**
+ * The extensions a forged file may legitimately carry.
+ *
+ * There is no single right one. Cloudflare returns JPEG, Google's image API
+ * refuses to return anything except JPEG, OVHcloud and most local servers
+ * return PNG, vectors are .svg and Lottie is .json. A name is correct when it
+ * matches its own bytes, not when it matches a house rule.
+ *
+ * This lives here, not in validate.ts, because the MCP server writes files
+ * too and cannot import TypeScript. One copy means the app and an agent can
+ * never disagree about what a JPEG is called.
+ */
+export const KNOWN_EXTENSIONS = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".json"];
+
+const MIME_EXTENSION = {
+  "image/png": ".png",
+  "image/jpeg": ".jpg",
+  "image/jpg": ".jpg",
+  "image/webp": ".webp",
+  "image/gif": ".gif",
+  "image/svg+xml": ".svg",
+  "application/json": ".json",
+};
+
+/** The extension a MIME type deserves, or "" when we do not recognise it. */
+export const extensionForMime = (mime) =>
+  MIME_EXTENSION[String(mime || "").split(";")[0].trim().toLowerCase()] ?? "";
+
+/** The extension a name currently carries, lowercased, or "". */
+export const extensionOf = (name) => {
+  const lower = String(name || "").toLowerCase();
+  return KNOWN_EXTENSIONS.find((e) => lower.endsWith(e)) ?? "";
+};
+
+/**
+ * The same name, wearing the extension its bytes actually earned.
+ *
+ * Unchanged when already right, when the type is unrecognised, or when the
+ * only difference is jpg versus jpeg. The stem never changes, so a row keeps
+ * its identity.
+ */
+export function nameForMime(name, mime) {
+  const want = extensionForMime(mime);
+  if (!want) return name;
+  const have = extensionOf(name);
+  if (!have) return name + want;
+  if (have === want) return name;
+  if ((have === ".jpg" || have === ".jpeg") && want === ".jpg") return name;
+  return name.slice(0, -have.length) + want;
+}
+
+/**
+ * What the bytes say they are, whatever the server's header claimed.
+ *
+ * Headers are a claim; the first bytes of a file are not. Two paths in this
+ * app used to write "image/png" by hand — the local engine for every base64
+ * reply, and Google's half-price batch collector — while the bytes were JPEG.
+ * The signatures below are the file formats' own definitions.
+ */
+export function mimeFromBytes(bytes) {
+  const b = bytes;
+  if (!b || b.length < 12) return "";
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50)
+    return "image/webp";
+  if (b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x38) return "image/gif";
+  return "";
+}
+
+/** Add a suffix before the extension: image_a.jpg + "_copy" → image_a_copy.jpg */
+export function withSuffix(name, suffix) {
+  const ext = extensionOf(name);
+  const stem = ext ? name.slice(0, -ext.length) : name;
+  return stem + suffix + ext;
+}
+
+/**
+ * A name nothing in `taken` uses, adding _2, _3… before the extension.
+ *
+ * The code this replaces only understood ".png", so a duplicate "a.jpg"
+ * became "a.jpg_2.png" — a picture with two extensions and the wrong one last.
+ */
+export function uniqueName(name, taken) {
+  if (!taken.has(name)) return name;
+  let n = 2;
+  while (taken.has(withSuffix(name, `_${n}`))) n++;
+  return withSuffix(name, `_${n}`);
+}
+
 export const b64ToBytes = (b64) => {
   const clean = String(b64).replace(/^data:[^,]*,/, "");
   if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(clean, "base64"));
@@ -826,7 +918,7 @@ async function openaiCompat(row, apiModel, s, signal, exhaust, cooldownMs) {
 }
 
 /** Real generation against the routed engine, with key rotation on rate limits. */
-export async function generateBytes(rawRow, s, signal, exhaust, cooldownMs, opts = {}) {
+async function generateBytesRaw(rawRow, s, signal, exhaust, cooldownMs, opts = {}) {
   const { engine, apiModel, pausedEngine } = resolveRoute(rawRow, s);
   if (engine === "retired") throw new RetiredModelError(apiModel, RETIRED_MODELS[apiModel]);
   if (engine === "paused") throw new PausedEngineError(PROVIDER_LABELS[pausedEngine] ?? pausedEngine ?? "That engine");
@@ -846,4 +938,15 @@ export async function generateBytes(rawRow, s, signal, exhaust, cooldownMs, opts
   if (engine === "cloudflare") return cloudflare(row, apiModel, s, signal, exhaust, cooldownMs);
   if (engine === "openai") return openaiCompat(row, apiModel, s, signal, exhaust, cooldownMs);
   throw new Error("The practice forge draws its own pictures — it never goes online.");
+}
+
+/**
+ * Real generation — and the type is read from the bytes, not trusted from
+ * the engine. Every caller (the app, the batch collector, the MCP server)
+ * names files from this, so correcting it here corrects it everywhere.
+ */
+export async function generateBytes(rawRow, s, signal, exhaust, cooldownMs, opts = {}) {
+  const out = await generateBytesRaw(rawRow, s, signal, exhaust, cooldownMs, opts);
+  const sniffed = mimeFromBytes(out?.bytes);
+  return sniffed && sniffed !== out.mime ? { ...out, mime: sniffed } : out;
 }

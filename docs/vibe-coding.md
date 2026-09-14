@@ -1,9 +1,9 @@
 ---
-title: If you vibe-code
-nav_order: 4
+title: "For vibe coders: agents and the manifest"
+nav_order: 5
 ---
 
-# If you vibe-code
+# For vibe coders: agents and the manifest
 
 You want to describe what you want and have an agent do it. Image Forge is
 built for that: the manifest is a plain CSV, and there is an MCP server that

@@ -93,9 +93,10 @@ plain text, so keep it somewhere private. **Restore** reads it back.
 
 ## 5. Updating
 
-The app checks for a newer release and tells you when there is one. To update,
-download the new installer and run it — it installs over the old version and
-keeps your settings, keys and manifest.
+**Settings → Advanced** has a button that asks GitHub whether there is a newer
+release. The app never checks on its own. To update, download the new
+installer and run it — it installs over the old version and keeps your
+settings, keys and manifest.
 
 Every release stays on the
 [releases page](https://github.com/Stravelakis/image-forge/releases) if you

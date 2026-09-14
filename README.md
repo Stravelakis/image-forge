@@ -27,7 +27,7 @@ and the app asks before spending a penny.
 [![CI](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Stravelakis/image-forge?label=release&color=f2a33c)](https://github.com/Stravelakis/image-forge/releases/latest)
 [![Licence](https://img.shields.io/badge/licence-Apache--2.0-8cb56f)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-606-56b8a5)](tests/)
+[![Tests](https://img.shields.io/badge/tests-621-56b8a5)](tests/)
 
 </div>
 
@@ -41,16 +41,29 @@ and the app asks before spending a penny.
 
 ## Start where you are
 
-Five doors. Each one is a full guide written for that reader — pick yours and
+Three kinds of reader, each with guides written for them. Pick yours and
 ignore the rest.
 
-| | | |
-|---|---|---|
-| 🪟 | **[I just want to download and use it](docs/download.md)** | Windows, double-click, no terminal. Includes what to do about the blue "Windows protected your PC" box. |
-| 🙂 | **[I don't write code](docs/no-code.md)** | What an API key is, which free engine to start with, and how to make your first batch. Nothing assumed. |
-| ✨ | **[I vibe-code](docs/vibe-coding.md)** | Wire it to Claude Code, Cursor or n8n over MCP and let an agent fill the manifest and run the forge. |
-| 🧑‍💻 | **[I'm a developer](docs/developers.md)** | Architecture, the engine registry, how to add a provider, the test suite, the CSV contract. |
-| 🎥 | **[I make content](docs/creators.md)** | Sprite sheets, mouth shapes for talking avatars, GIFs from a single still, text with perspective warp. |
+### 🙂 For everyone — no code, no terminal
+
+| | |
+|---|---|
+| **[Download and install](docs/download.md)** | Windows, double-click. Includes what to do about the blue "Windows protected your PC" box. |
+| **[Your first pictures](docs/no-code.md)** | What an API key is, which free engine to start with, and how to make your first batch. Nothing assumed. |
+| **[Sheets, GIFs and lettering](docs/creators.md)** | Sprite sheets, mouth shapes for talking avatars, GIFs from a single still, text with perspective warp. |
+
+### ✨ For vibe coders — let an agent do it
+
+| | |
+|---|---|
+| **[Agents and the manifest](docs/vibe-coding.md)** | Wire it to Claude Code, Cursor or n8n over MCP and let an agent fill the manifest and run the forge. |
+
+### 🧑‍💻 For developers — change the code
+
+| | |
+|---|---|
+| **[How it is built](docs/developers.md)** | Architecture, the engine registry, how to add a provider, the test suite, releasing. |
+| **[HANDOFF.md](HANDOFF.md)** | The full engineering map, every non-obvious decision, and the provider facts that contradict their own docs. |
 
 **[📖 All the documentation](docs/index.md)** · **[What changed](CHANGELOG.md)** · **[When something is wrong](docs/troubleshooting.md)**
 
@@ -303,9 +316,9 @@ node scripts/build-exe.js
 
 Being straight about this saves everyone time.
 
-- **Not signed.** Windows shows a blue "Windows protected your PC" box on
-  first run, because a code-signing certificate costs a few hundred a year.
-  [What to click](docs/download.md).
+- **Not signed yet.** Windows shows a blue "Windows protected your PC" box on
+  first run. [What to click](docs/download.md). Free open-source signing is
+  being prepared — [the policy, and what it will and will not change](CODE_SIGNING_POLICY.md).
 - **Not a hosted service.** There is no cloud version and no accounts.
 - **Not able to fix a provider's outage or an empty balance.** It will tell
   you clearly which one it is, and offer you a free engine instead.

@@ -18,7 +18,7 @@ describe("safeFilename", () => {
     expect(() => safeFilename(name)).toThrow(/unsafe filename/);
   });
 
-  it.each(["Shop_Bakery.png", "shop bakery.png", "shop-bakery.png", "shop_bakery.jpg", "shop_bakery", "", "  "])(
+  it.each(["Shop_Bakery.png", "shop bakery.png", "shop-bakery.png", "shop_bakery.txt", "shop_bakery", "", "  "])(
     "refuses malformed name %j",
     (name) => {
       expect(() => safeFilename(name)).toThrow(/unsafe filename/);

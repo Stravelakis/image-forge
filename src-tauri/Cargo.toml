@@ -1,8 +1,8 @@
 [package]
 name = "image-forge"
-version = "1.0.0"
+version = "1.0.1"
 description = "Image Forge — standalone, manifest-driven AI image pipeline"
-authors = ["you"]
+authors = ["Stravelakis"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

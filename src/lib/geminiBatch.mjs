@@ -13,7 +13,7 @@
  * the results back up. Google keeps finished results for six weeks.
  */
 
-import { readGeminiImage, findModel, b64ToBytes } from "./engines.mjs";
+import { readGeminiImage, findModel, b64ToBytes, mimeFromBytes } from "./engines.mjs";
 
 const API = "https://generativelanguage.googleapis.com/v1beta";
 
@@ -127,7 +127,10 @@ export function collectBatch(job, filenames = []) {
       failures.push({ filename, error: "Came back without an image — the prompt may have been blocked." });
       return;
     }
-    out.push({ filename, bytes: b64ToBytes(b64), mime: "image/png" });
+    // This said "image/png" by hand. Google's image API only returns JPEG, so
+    // every half-price picture was saved as a JPEG called PNG.
+    const bytes = b64ToBytes(b64);
+    out.push({ filename, bytes, mime: mimeFromBytes(bytes) || "image/jpeg" });
   });
 
   return { images: out, failures };

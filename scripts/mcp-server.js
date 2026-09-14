@@ -31,6 +31,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import fs from "node:fs";
+import { nameForMime } from "../src/lib/engines.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
@@ -294,17 +295,20 @@ export function safeFilename(raw) {
   if (/[/\\]/.test(name) || name.includes("..") || path.basename(name) !== name) {
     throw new Error(`unsafe filename "${raw}" — a bare filename only, no path separators`);
   }
-  if (!/^[a-z0-9][a-z0-9_]*\.png$/.test(name)) {
-    throw new Error(`unsafe filename "${raw}" — use lowercase a–z, 0–9 and underscores, ending in .png`);
+  // Any picture extension, because the engine decides the format: Google and
+  // Cloudflare return JPEG. This used to insist on .png, so every JPEG an
+  // agent made was written out under a name claiming to be PNG.
+  if (!/^[a-z0-9][a-z0-9_]*\.(png|jpg|jpeg|webp|gif)$/.test(name)) {
+    throw new Error(`unsafe filename "${raw}" — use lowercase a–z, 0–9 and underscores, ending in .png, .jpg, .webp or .gif`);
   }
   return name;
 }
 
 /* ---------------- generation ---------------- */
 
-async function generateImage(row) {
+async function generateImage(row, taken = new Set()) {
   const filename = safeFilename(row.filename);
-  const { bytes } = await generateBytes(
+  const { bytes, mime } = await generateBytes(
     {
       prompt: row.prompt,
       negative_prompt: row.negative_prompt,
@@ -320,9 +324,13 @@ async function generateImage(row) {
   const folder = folderFor(row.category);
   const dir = path.join(OUT_DIR, folder);
   fs.mkdirSync(dir, { recursive: true });
-  const dest = path.join(dir, filename);
+  // Name the file for what it really is, exactly as the app does — unless
+  // another row already owns that name, which would overwrite its picture.
+  const wanted = nameForMime(filename, mime);
+  const finalName = wanted !== filename && !taken.has(wanted) ? safeFilename(wanted) : filename;
+  const dest = path.join(dir, finalName);
   fs.writeFileSync(dest, bytes);
-  return dest;
+  return { dest, filename: finalName };
 }
 
 const describeEngine = () => {
@@ -542,7 +550,11 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
           const rec = m.records.find((x) => get(m.headers, x, "filename") === r.filename);
           try {
             set(m.headers, rec, "status", "generating");
-            const dest = await generateImage(r);
+            const { dest, filename: savedAs } = await generateImage(
+              r,
+              new Set(toRows(m).map((x) => x.filename).filter((f) => f !== r.filename))
+            );
+            if (savedAs !== r.filename) set(m.headers, rec, "filename", savedAs);
             set(m.headers, rec, "status", "done");
             set(m.headers, rec, "generated_at", new Date().toISOString());
             set(m.headers, rec, "error", "");
@@ -572,7 +584,11 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         if (!rec) return text(`no row named ${filename}`, true);
         const row = toRows(m).find((r) => r.filename === filename);
         try {
-          const dest = await generateImage(row);
+          const { dest, filename: savedAs } = await generateImage(
+            row,
+            new Set(toRows(m).map((x) => x.filename).filter((f) => f !== row.filename))
+          );
+          if (savedAs !== row.filename) set(m.headers, rec, "filename", savedAs);
           set(m.headers, rec, "status", "done");
           set(m.headers, rec, "generated_at", new Date().toISOString());
           set(m.headers, rec, "error", "");

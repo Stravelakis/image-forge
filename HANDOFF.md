@@ -34,7 +34,7 @@ the UI; all three share `src/lib/engines.mjs`.
 ```bash
 npm install
 npm run dev                 # browser app → http://localhost:3000
-npm test                    # vitest — 606 tests across 30 files
+npm test                    # vitest — 621 tests across 31 files
 npm run typecheck           # tsc --noEmit (vite build does NOT typecheck)
 npm run build               # vite build → dist/
 node scripts/build-exe.js   # Electron installer + portable → release/
@@ -44,8 +44,12 @@ node scripts/mcp-server.js  # the agent API (stdio)
 CI (`.github/workflows/ci.yml`) runs typecheck, tests and build on every push
 and pull request. A red CI is not "probably fine".
 
-`src-tauri/` also exists. The Tauri build is **not** part of CI or the release
-and has not been verified recently — treat it as unmaintained.
+`src-tauri/` is **experimental**. It is not built in CI or released, and has
+not been built at all recently: this needs Rust and the Microsoft C++ Build
+Tools, which the release machine does not have. Its version and dev address
+are kept in step by `tests/version.test.ts`, but **Cloudflare and NVIDIA do not
+work in it** — Tauri has no equivalent of the `/cf-api` and `/nv-api` proxies,
+so those browser-refusing providers fail there.
 
 ---
 
@@ -242,6 +246,21 @@ signtool" even so; `Get-AuthenticodeSignature` reports `NotSigned`.
 6. Push a `vX.Y.Z` tag. `release.yml` runs typecheck and tests, builds on
    `windows-latest`, and publishes both exes to a GitHub release.
 
+**Code signing (not live).** Releases are unsigned. The plan is SignPath
+Foundation's free open-source programme — see
+[CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) for its conditions and status.
+Once the maintainer is approved, the release workflow gains one step between
+"Keep the files" and "Publish the download page": upload the unsigned exes as
+an artifact, then `SignPath/github-action-submit-signing-request@v1` with
+`api-token` (a repository secret), `organization-id`, `project-slug`,
+`signing-policy-slug`, `github-artifact-id` (the upload step's output),
+`wait-for-completion: true` and `output-artifact-directory`, and publish the
+signed files from that directory. The slugs only exist after approval, so this
+is **deliberately not wired in yet** — an untested step in the release path
+would break the next release. Follow
+[SignPath's GitHub guide](https://docs.signpath.io/trusted-build-systems/github)
+when doing it, and update the policy page's status in the same commit.
+
 **Documentation site:** `docs.yml` builds `docs/` for GitHub Pages, but Pages
 is **not enabled** on the repository, so that workflow fails. The repo owner
 must set Settings → Pages → Source → GitHub Actions. Until then the docs are
@@ -280,10 +299,11 @@ agree.
 - **OVH**: square only, no seed, two a minute.
 - **The portable exe** keeps settings in `%APPDATA%\image-forge`.
 - **Keys from 1.0.0** live under old random ports and are not migrated.
-- **The MCP server still names every file `.png`**, even when an engine
-  returns JPEG. The app corrects the extension from the real bytes
-  (`nameForMime`); the server's `safeFilename` accepts only `.png` and its
-  tests pin that. Bringing it in line is a small, separate change.
+- **File type comes from the bytes, in one place.** `mimeFromBytes`,
+  `nameForMime`, `withSuffix` and `uniqueName` live in `engines.mjs` so the app
+  and the MCP server share them; `validate.ts` only re-exports. `generateBytes`
+  overrides any engine's claimed MIME type with what the bytes say. Do not add
+  a second copy anywhere — every `.png`-only assumption was a copy.
 - **Two `SettingsSection` unions** (`SettingsView.tsx`, `TopMenu.tsx`) are
   synced by hand.
 

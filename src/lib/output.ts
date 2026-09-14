@@ -32,7 +32,9 @@ export const blobToDataUrl = (blob: Blob): Promise<string> =>
   });
 
 export const dataUrlToBlob = (dataUrl: string): Blob => {
-  const m = dataUrl.match(/^([^;]+);base64,(.*)$/s);
+  // The type used to come out as "data:image/jpeg", which no MIME check
+  // recognises — so a kept variant could never be named for what it was.
+  const m = dataUrl.match(/^(?:data:)?([^;,]+);base64,(.*)$/s);
   if (m) return b64ToBlob(m[2], m[1]);
   return new Blob([dataUrl], { type: "image/svg+xml" });
 };

@@ -146,3 +146,11 @@ export declare function generateBytes(
 ): Promise<EngineBytes>;
 
 export const OVH_URL: string;
+
+export declare const KNOWN_EXTENSIONS: readonly string[];
+export declare function extensionForMime(mime: string): string;
+export declare function extensionOf(name: string): string;
+export declare function nameForMime(name: string, mime: string): string;
+export declare function mimeFromBytes(bytes: Uint8Array | null | undefined): string;
+export declare function withSuffix(name: string, suffix: string): string;
+export declare function uniqueName(name: string, taken: Set<string>): string;

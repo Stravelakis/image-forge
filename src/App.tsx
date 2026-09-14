@@ -21,7 +21,7 @@ type UpdateReady = {
 import { SEED_ROWS } from "./lib/seed";
 import { downloadCsv, parseCsv, rowsFromCsv, rowsToCsv } from "./lib/csv";
 import { renderPreview } from "./lib/preview";
-import { nameForMime, styleDriftCount, violationCount } from "./lib/validate";
+import { nameForMime, styleDriftCount, uniqueName, violationCount, withSuffix } from "./lib/validate";
 import {
   RateLimitError,
   RETIRED_MODELS,
@@ -719,7 +719,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     const maxId = rowsRef.current.reduce((m, r) => Math.max(m, r.id), 0);
     const row: ManifestRow = {
       id: maxId + 1,
-      filename: `item_new_${maxId + 1}.png`,
+      filename: `image_new_${maxId + 1}.png`,
       prompt: "",
       category: "image",
       item_id: "",
@@ -767,7 +767,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     const maxId = rowsRef.current.reduce((m, r) => Math.max(m, r.id), 0);
     setRows((prev) => [
       ...prev,
-      { ...src, id: maxId + 1, filename: src.filename.replace(/\.png$/, "_copy.png"), status: "pending", generated_at: "", imported_attachment_id: "", error: "", preview: undefined },
+      { ...src, id: maxId + 1, filename: uniqueName(withSuffix(src.filename, "_copy"), new Set(rowsRef.current.map((r) => r.filename))), status: "pending", generated_at: "", imported_attachment_id: "", error: "", preview: undefined },
     ]);
   }, []);
 
@@ -831,10 +831,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         let renamed = 0;
         for (const r of imported) {
           if (names.has(r.filename)) {
-            const stem = r.filename.replace(/\.png$/, "");
-            let n = 2;
-            while (names.has(`${stem}_${n}.png`)) n++;
-            r.filename = `${stem}_${n}.png`;
+            r.filename = uniqueName(r.filename, names);
             renamed++;
           }
           names.add(r.filename);
@@ -1009,8 +1006,15 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       if (!compare || compare.rowId !== id) return;
       const blob = dataUrlToBlob(compare.variant);
       const row = rowsRef.current.find((x) => x.id === id);
-      if (row) imagesRef.current.set(row.filename, blob);
-      patchRow(id, { preview: compare.variant, seed: compare.variantSeed });
+      // A variant is a fresh picture and can come back in a different format
+      // from the one it replaces, so its name follows its own bytes.
+      let filename = row?.filename ?? "";
+      if (row) {
+        const trueName = nameForMime(row.filename, blob.type);
+        if (trueName !== row.filename && !rowsRef.current.some((r) => r.id !== id && r.filename === trueName)) filename = trueName;
+        imagesRef.current.set(filename, blob);
+      }
+      patchRow(id, { preview: compare.variant, seed: compare.variantSeed, ...(row ? { filename } : {}) });
       setCompare(null);
       pushToast("ok", "Variant kept — it replaces the original.");
     },
@@ -1076,11 +1080,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         moved++;
       }
       if (seen.has(out.filename)) {
-        const stem = out.filename.replace(/\.png$/, "");
-        let n = 2;
-        while (seen.has(`${stem}_${n}.png`)) n++;
-        fixes.push(`renamed ${r.filename} → ${stem}_${n}.png`);
-        out = { ...out, filename: `${stem}_${n}.png` };
+        const next = uniqueName(out.filename, seen);
+        fixes.push(`renamed ${r.filename} → ${next}`);
+        out = { ...out, filename: next };
       }
       seen.add(out.filename);
       return out;
@@ -1180,9 +1182,19 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
           const blob = new Blob([img.bytes], { type: img.mime });
           const row = rowsRef.current.find((r) => r.filename === img.filename);
           if (!row) continue;
-          imagesRef.current.set(img.filename, blob);
-          await saveToFolder(row, blob);
-          patchRow(row.id, { status: "done", generated_at: new Date().toISOString(), error: "" });
+          // This path kept the row's name whatever came back. Google's image
+          // API only returns JPEG, so every half-price picture was a JPEG
+          // called PNG. Same rule as a normal strike: the stem stays, the
+          // extension follows the bytes, and never onto another row's name.
+          const trueName = nameForMime(row.filename, blob.type);
+          const filename =
+            trueName !== row.filename && !rowsRef.current.some((r) => r.id !== row.id && r.filename === trueName)
+              ? trueName
+              : row.filename;
+          if (filename !== row.filename) pushLog(`✎ ${row.filename} → ${filename} (Google returned ${blob.type})`, "info");
+          imagesRef.current.set(filename, blob);
+          await saveToFolder({ ...row, filename }, blob);
+          patchRow(row.id, { filename, status: "done", generated_at: new Date().toISOString(), error: "" });
         }
         for (const f of failures) {
           const row = rowsRef.current.find((r) => r.filename === f.filename);
