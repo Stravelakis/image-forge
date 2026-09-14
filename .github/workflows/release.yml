@@ -63,7 +63,7 @@ jobs:
           body: |
             **Image Forge — Windows**
 
-            · `Image Forge Setup *.exe` — the normal installer. **Most people want this.**
+            · `Image.Forge.Setup.*.exe` — the normal installer. **Most people want this.**
             · `image-forge-portable.exe` — no install. It still saves settings on the
               computer it runs on, in `%APPDATA%\image-forge`.
 

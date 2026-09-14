@@ -18,7 +18,7 @@ want one of these two:
 
 | File | Choose this if |
 |---|---|
-| `Image Forge Setup x.y.z.exe` | You want a normal install — Start menu entry, desktop shortcut, an entry in Settings → Apps to uninstall it from. **Most people want this one.** |
+| `Image.Forge.Setup.x.y.z.exe` | You want a normal install — Start menu entry, desktop shortcut, an entry in Settings → Apps to uninstall it from. **Most people want this one.** |
 | `image-forge-portable.exe` | You want no install at all. Runs from wherever you put it, including a USB stick. Your settings and keys are still saved on the computer you run it on, in `%APPDATA%\image-forge`. |
 
 Each is about 115 MB. That is normal: the app carries its own browser engine,
