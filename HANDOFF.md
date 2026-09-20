@@ -323,3 +323,65 @@ agree.
 4. Key pooling with rotation for text engines (they currently use one account
    per job).
 5. A headless `forge` CLI wrapping the MCP server.
+
+---
+
+## 14. The direction (decided 20 September 2026)
+
+Two things are agreed as the next phase. Neither is started; this section
+exists so the next session does not invent a different plan.
+
+### 14.1 Make it straightforward and intuitive
+
+The app is powerful and **not easy**. It is a manifest, a queue, nine settings
+sections, three text engines, seven filename rules and a wizard, and a newcomer
+meets all of it at once. The goal for the next phase is **high-volume image
+making that feels obvious**, not more features.
+
+Working principles for that work:
+
+- **One obvious path in.** Say what you want, in one box, and get pictures.
+  Everything else — the manifest, the rules, the engines — becomes the thing
+  you *can* open, not the thing you must learn.
+- **Nothing configured to begin.** OVHcloud needs no key: first run should
+  already be able to draw.
+- **Bulk is the product.** Sixty pictures should be as easy to ask for as one.
+  The chat already writes whole lists; that path deserves to be the front door.
+- **Settings are for later.** Anything the app can decide for itself, it
+  should, and say what it decided.
+- **Count the clicks.** A change that adds a decision to the common path is a
+  change that has to justify itself.
+
+### 14.2 Interconnection with BYOK Vid Creator — not a merge
+
+[`BYOK-Vid-Creator`](../BYOK-Vid-Creator) is a separate Electron app that turns
+scripts into narrated lesson videos: script → narration → puppet avatars with
+lip-sync → background clips → rendered MP4.
+
+**The decision taken on 20 September 2026: they stay two apps.** No merge, no
+shared UI, no shared repository. What is wanted is narrower and much safer —
+**game recognising game**: when both are installed on the same computer, they
+notice each other and cooperate.
+
+The direction of the favour is one-way and specific: **the vid creator asks
+the image forge for the pictures it needs** — viseme sheets, sprite sheets,
+character turnarounds, expression sets, backgrounds — instead of a person
+exporting files from one app and hand-placing them in the other.
+
+Handles that already exist, so this needs no new plumbing invented:
+
+- Image Forge serves itself on a **fixed local port** (47821–47825), so it is
+  discoverable by a program on the same machine.
+- `scripts/mcp-server.js` already exposes the whole pipeline as **eight tools
+  over stdio**, and already writes real files and updates the manifest.
+- `lib/sheets.ts` already plans viseme, turnaround, expression and avatar
+  eyes/brows sheets — exactly the assets the puppets are made of.
+
+Open questions, deliberately not answered yet: which side initiates, whether
+it goes over the MCP server or the local HTTP port, how the vid creator says
+"I need these ten mouth shapes for this character" and how finished files get
+back. Settle that here before writing any of it.
+
+**Nothing has been built for this. Nothing was started on 20 September 2026.**
+The matching note is in `BYOK-Vid-Creator/docs/HANDOFF.md`; keep the two in
+step.
