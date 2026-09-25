@@ -190,7 +190,11 @@ function seedProviders(s: Record<string, unknown>): ForgeSettings["textProviders
 }
 
 export const DEFAULT_SETTINGS: ForgeSettings = {
-  provider: "simulated",
+  // A first run with nothing set up still makes real pictures: OVHcloud needs
+  // no key. It used to be the offline practice forge, so nobody saw a real
+  // picture until they had found and filled in a settings page. Saved settings
+  // keep whatever engine they had.
+  provider: "ovh",
   pollinationsModel: "flux",
   pollinationsToken: "",
   pollinationsReferrer: "image-forge",

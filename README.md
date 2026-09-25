@@ -4,10 +4,12 @@
 
 # Image Forge
 
-### Bulk AI image generation from a spreadsheet, using your own API keys
+### Bulk AI images from one sentence — free, no account, your own keys
 
-Give it a list of pictures you want. Get back a folder of images, named and
-sorted, with a CSV that says what happened to each one. Your API keys stay on
+<img src="site/public/screens/start-results.png" alt="Image Forge's Start screen: a request for four potion shop fronts, and the four pictures it made on the free engine." width="860">
+
+Say what you need and how many. Get back a folder of pictures, named and
+sorted, with a list that says what happened to each one. Your API keys stay on
 your machine — there is no account, no server, and nothing to sign up for.
 
 **Runs free, with no card and even no key.** OVHcloud's hosted SDXL needs no
@@ -27,15 +29,16 @@ and the app asks before spending a penny.
 [![CI](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Stravelakis/image-forge?label=release&color=f2a33c)](https://github.com/Stravelakis/image-forge/releases/latest)
 [![Licence](https://img.shields.io/badge/licence-Apache--2.0-8cb56f)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-621-56b8a5)](tests/)
+[![Tests](https://img.shields.io/badge/tests-659-56b8a5)](tests/)
 
 </div>
 
 ---
 
-> **Upgrading from 1.0.0 on the desktop?** 1.0.0 lost its settings on every
-> restart. 1.0.1 fixes that, but keys typed into 1.0.0 need entering once
-> more. [What happened](CHANGELOG.md).
+> **New in 1.0.2:** the app opens on a **Start** screen — one box, one number,
+> one button — and a fresh install makes real pictures straight away. It also
+> works hand in hand with [BYOK Vid Creator](#i-make-videos-with-byok-vid-creator).
+> [Everything that changed](CHANGELOG.md).
 
 ---
 
@@ -65,7 +68,7 @@ ignore the rest.
 | **[How it is built](docs/developers.md)** | Architecture, the engine registry, how to add a provider, the test suite, releasing. |
 | **[HANDOFF.md](HANDOFF.md)** | The full engineering map, every non-obvious decision, and the provider facts that contradict their own docs. |
 
-**[📖 Documentation site — docs.stravelakis.com](https://docs.stravelakis.com/image-forge/)** · **[What changed](CHANGELOG.md)** · **[When something is wrong](docs/troubleshooting.md)**
+**[📖 Documentation site — docs.stravelakis.com/image-forge](https://docs.stravelakis.com/image-forge/)** · **[The full manual](GUIDE.md)** · **[Install](INSTALL.md)** · **[What changed](CHANGELOG.md)** · **[When something is wrong](docs/troubleshooting.md)**
 
 ---
 
@@ -205,6 +208,28 @@ at all it uses OVHcloud, which needs none.
 
 </details>
 
+<details id="i-make-videos-with-byok-vid-creator">
+<summary><b>"I make videos with BYOK Vid Creator and need pictures for my characters"</b></summary>
+
+<br>
+
+Install both on the same computer and they recognise each other. The vid
+creator can ask Image Forge for mouth-shape sheets, sprites or anything else:
+
+```bash
+npm run ask-forge -- visemes kaiti --sheets viseme-sheets-v2
+```
+
+The request lands in a folder Image Forge watches, so neither app has to be
+open at the same moment. Your keys never leave the forge, and a request on a
+paid engine still stops and asks first.
+
+Be warned, honestly: free engines usually draw **one** picture when asked for
+a grid of nine mouth shapes — seen on a real run. The tools say so every time.
+A Google model follows grid instructions far better.
+
+</details>
+
 ---
 
 ## The engines
@@ -239,6 +264,10 @@ models, and pick one per job. One free Mistral key covers all three:
 ---
 
 ## What it does
+
+**Start** — the front door. Describe it once, say how many, press the button.
+With a text engine it writes a genuinely different prompt for each picture;
+without one it varies the framing and says so.
 
 **Chat** — describe one picture and get it, ask how the app works, or have it
 write or rewrite rows. Every change to existing rows is shown before it is
@@ -302,7 +331,8 @@ npm install
 npm run dev
 ```
 
-Opens at `http://localhost:3000`. Works on Windows, macOS and Linux.
+Opens at `http://localhost:3000`. Works on Windows, macOS and Linux. Full
+setup, updating, repairing and uninstalling: [INSTALL.md](INSTALL.md).
 
 Build the Windows installer and portable version:
 

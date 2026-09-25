@@ -50,6 +50,11 @@ export interface ManifestRow {
   generated_at: string;
   imported_attachment_id: string;
   retry_at?: string;
+  /**
+   * Set when another app asked for this picture through the link (see
+   * electron/link.mjs). Kept in the app, not in the CSV.
+   */
+  request_id?: string;
   preview?: string;
 }
 

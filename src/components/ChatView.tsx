@@ -368,8 +368,8 @@ ${manifestDigest(rows)}`,
         <div className="mt-5 rounded-xl border border-ember/40 bg-ember/10 p-4">
           <p className="text-[13px] text-cream">It needs a text model first.</p>
           <p className="mt-1 text-[12.5px] leading-relaxed text-parch">
-            One free Mistral key covers writing, code and vision. There is a button in Text engines that fills in all
-            three at once.
+            One free Mistral key covers writing, code and vision: add it once under Your accounts in Text engines,
+            then pick a model for each job. The Start screen works without one.
           </p>
           <Btn variant="primary" className="mt-3" onClick={onOpenSettings}>
             Open Text engines

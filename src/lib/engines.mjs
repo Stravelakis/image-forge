@@ -488,6 +488,24 @@ export function mimeFromBytes(bytes) {
   return "";
 }
 
+/**
+ * Where a style's words go in the prompt, per engine.
+ *
+ * Normally at the end: the subject leads, the look follows. But SDXL — the
+ * OVHcloud engine — reads only about the first 77 tokens of a prompt (the
+ * limit of its CLIP text encoder) and drops the rest silently. Found on a real
+ * request, 25 September 2026: a long mouth-shape-grid prompt came back with no
+ * trace of the clay look it asked for, because the look was past the cut. On
+ * that engine the look goes first.
+ */
+const READS_ONLY_THE_FRONT = new Set(["ovh"]);
+export function withStyleBlock(prompt, block, engine) {
+  const p = String(prompt || "").trim();
+  const b = String(block || "").trim();
+  if (!b || p.includes(b)) return p;
+  return READS_ONLY_THE_FRONT.has(engine) ? `${b}, ${p}` : `${p}, ${b}`;
+}
+
 /** Add a suffix before the extension: image_a.jpg + "_copy" → image_a_copy.jpg */
 export function withSuffix(name, suffix) {
   const ext = extensionOf(name);

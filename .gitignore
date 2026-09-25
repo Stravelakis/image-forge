@@ -10,4 +10,5 @@ build/*
 release/
 .env
 .env.*
+!.env.example
 *.log

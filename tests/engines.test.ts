@@ -613,3 +613,26 @@ describe("OVHcloud SDXL", () => {
     ).rejects.toThrow(/reference picture/);
   });
 });
+
+/**
+ * Where a style's words go. SDXL (OVHcloud) reads only about the first 77
+ * tokens and drops the rest silently — seen on a real request, 25 Sep 2026,
+ * where a long prompt came back without the clay look it asked for.
+ */
+describe("placing the style in the prompt", () => {
+  it("puts the look first on an engine that only reads the front", async () => {
+    const { withStyleBlock } = await import("../src/lib/engines.mjs");
+    expect(withStyleBlock("a very long prompt", "claymation style", "ovh")).toBe("claymation style, a very long prompt");
+  });
+
+  it("keeps the look last everywhere else", async () => {
+    const { withStyleBlock } = await import("../src/lib/engines.mjs");
+    expect(withStyleBlock("a fox", "claymation style", "cloudflare")).toBe("a fox, claymation style");
+  });
+
+  it("never adds it twice, and leaves a prompt alone when there is no look", async () => {
+    const { withStyleBlock } = await import("../src/lib/engines.mjs");
+    expect(withStyleBlock("a fox, claymation style", "claymation style", "ovh")).toBe("a fox, claymation style");
+    expect(withStyleBlock("a fox", "", "ovh")).toBe("a fox");
+  });
+});

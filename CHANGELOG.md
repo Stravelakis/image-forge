@@ -1,12 +1,34 @@
 # Changelog
 
-What changed, in plain words. Newest first. Every entry that fixes something
-says what was actually wrong, because "various fixes" helps nobody decide
-whether to update.
+All notable changes to Image Forge, in [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
+format; versions follow [Semantic Versioning](https://semver.org/). Every entry
+that fixes something says what was actually wrong, because "various fixes"
+helps nobody decide whether to update.
 
 ---
 
-## Unreleased
+## [Unreleased]
+
+## [1.0.2] - 2026-09-25
+
+### Added
+
+- **A Start screen, and the app opens on it.** One box — "What do you need?" —
+  a number, a look, a shape, and one button. Twelve different pictures from one
+  sentence, without meeting the spreadsheet first. With a text engine set up it
+  writes genuinely different prompts; without one it varies the framing, and
+  says which it did. The spreadsheet is one click away.
+- **Image Forge and BYOK Vid Creator recognise each other** when both are
+  installed. The vid creator can ask the forge for pictures — mouth-shape
+  sheets for its puppets, sprites, anything — through a folder in the forge's
+  data directory. API keys never leave the forge, neither app has to be open
+  at the same moment, and requests on paid engines still stop and ask first.
+
+### Changed
+
+- **A first run with nothing set up makes real pictures.** The default engine
+  is now OVHcloud, which needs no key; it used to be the offline practice
+  forge. Saved settings keep whatever engine they had.
 
 ### Fixed
 
@@ -22,7 +44,7 @@ whether to update.
 
 ---
 
-## 1.0.1 — 13 September 2026
+## [1.0.1] - 2026-09-13
 
 ### If you used 1.0.0 on the desktop, read this first
 
@@ -104,6 +126,11 @@ Nothing failed to save; each launch simply looked somewhere new.
 
 ---
 
-## 1.0.0 — 2 September 2026
+## [1.0.0] - 2026-09-02
 
 First release.
+
+[Unreleased]: https://github.com/Stravelakis/image-forge/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/Stravelakis/image-forge/compare/v1.0.1...v1.0.2
+[1.0.1]: https://github.com/Stravelakis/image-forge/compare/v1.0.0...v1.0.1
+[1.0.0]: https://github.com/Stravelakis/image-forge/releases/tag/v1.0.0

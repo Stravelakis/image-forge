@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import type { Category, LogEntry, ManifestRow, Status, Toast } from "./types";
+import type { AspectKey, Category, LogEntry, ManifestRow, Status, Toast } from "./types";
 import { ASPECTS, STYLES, accentHex, migrateCategory } from "./types";
 import { APP_VERSION } from "./lib/version";
 import { checkForge, isNewerThan } from "./lib/selfCheck";
@@ -81,6 +81,16 @@ import WpImportModal from "./components/WpImportModal";
 import GifMaker from "./components/GifMaker";
 import UpdateReadyDialog from "./components/UpdateReadyDialog";
 import ChatView from "./components/ChatView";
+import StartView from "./components/StartView";
+import { withStyleBlock } from "./lib/engines.mjs";
+import {
+  claimRequest as linkClaim,
+  fetchRequests as linkFetch,
+  finishRequest as linkFinish,
+  requestOutcome,
+  rowsForRequest,
+  sendPicture as linkSend,
+} from "./lib/link";
 import { CardPanel } from "./components/nav";
 import { filenameFor, type ChatPlan, type RowEdit } from "./lib/chatPlan";
 import { CountUp, type MotionLevel } from "./components/motion";
@@ -192,7 +202,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const firstLoad = useRef<{ rows: ReturnType<typeof loadInitial>; settings: ReturnType<typeof loadSettings> }>(null!);
   if (!firstLoad.current) firstLoad.current = { rows: loadInitial(), settings: loadSettings() };
   const [rows, setRows] = useState<ManifestRow[]>(() => firstLoad.current.rows.rows);
-  const [view, setView] = useState<View>("workbench");
+  // The front door (HANDOFF §14.1): one box, one number, one button.
+  const [view, setView] = useState<View>("start");
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("engines");
   const [batchFilter, setBatchFilter] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
@@ -503,10 +514,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         STYLES.find((x) => x.id === row.style)?.block ??
         settingsRef.current.customStyles.find((x) => x.id === row.style)?.block ??
         "";
-      let prompt =
-        appendStyle && styleBlockFor && !row.prompt.includes(styleBlockFor)
-          ? `${row.prompt}, ${styleBlockFor}`
-          : row.prompt;
+      // Where the look goes depends on the engine — see withStyleBlock.
+      let prompt = appendStyle ? withStyleBlock(row.prompt, styleBlockFor, String(route.engine)) : row.prompt;
 
       // Each style carries its own negatives — "no photographic sheen" for clay,
       // "no colour" for line art — merged with whatever the row already asks to avoid.
@@ -1303,6 +1312,47 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
    * exactly as they do everywhere else. The chat gets no private path to
    * spending money.
    */
+  /**
+   * The Start screen's list, straight into the manifest and straight into the
+   * queue. Free engines run at once; a paid engine stops at the usual dialog,
+   * because runQueue always asks before money is spent.
+   */
+  const makeFromStart = useCallback(
+    async (prompts: string[], style: string, aspect: AspectKey): Promise<number[]> => {
+      const taken = rowsRef.current.map((r) => r.filename);
+      let nextId = rowsRef.current.reduce((m, r) => Math.max(m, r.id), 0);
+      const made: ManifestRow[] = prompts.map((prompt) => {
+        nextId += 1;
+        const filename = filenameFor(prompt, "image", taken);
+        taken.push(filename);
+        return {
+          id: nextId,
+          filename,
+          prompt,
+          category: "image",
+          item_id: "",
+          shop_id: "",
+          event_id: "",
+          style,
+          aspect_ratio: aspect,
+          seed: Math.floor(Math.random() * 98) + 1,
+          model: "",
+          status: "pending",
+          error: "",
+          generated_at: "",
+          imported_attachment_id: "",
+        };
+      });
+      setRows((prev) => [...prev, ...made]);
+      pushLog(`▸ Start: ${made.length} picture${made.length === 1 ? "" : "s"} added`, "info");
+      await new Promise((r) => setTimeout(r, 0));
+      const ids = made.map((r) => r.id);
+      void runQueue(ids);
+      return ids;
+    },
+    [pushLog, runQueue]
+  );
+
   const forgeFromChat = useCallback(
     async (plan: ChatPlan): Promise<number | null> => {
       const taken = rowsRef.current.map((r) => r.filename);
@@ -1332,6 +1382,86 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     },
     [runQueue]
   );
+
+  /* ---------- the link: another app asks for pictures (electron/link.mjs) ----------
+     Polled only while the app is open. In the browser the endpoint does not
+     exist, the first call returns null, and polling stops for good. */
+  const linkSeen = useRef<Set<string>>(new Set());
+  const linkSent = useRef<Set<string>>(new Set());
+  const [linkAvailable, setLinkAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (linkAvailable === false) return;
+    let stop = false;
+    const tick = async () => {
+      const reqs = await linkFetch();
+      if (stop) return;
+      if (reqs === null) {
+        setLinkAvailable(false);
+        return;
+      }
+      setLinkAvailable(true);
+      for (const req of reqs) {
+        if (linkSeen.current.has(req.id)) continue;
+        linkSeen.current.add(req.id);
+        // Already turned into rows in an earlier session: leave them be.
+        if (rowsRef.current.some((r) => r.request_id === req.id)) continue;
+        if (!(await linkClaim(req.id))) continue;
+        const taken = new Set(rowsRef.current.map((r) => r.filename));
+        const start = rowsRef.current.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+        const made = rowsForRequest(req, start, taken);
+        setRows((prev) => [...prev, ...made]);
+        pushLog(`⇄ ${req.from} asked for ${made.length} picture${made.length === 1 ? "" : "s"}${req.note ? ` — ${req.note}` : ""}`, "info");
+        pushToast("info", `${req.from} asked for ${made.length} picture${made.length === 1 ? "" : "s"}.`);
+        // Seen on a real request: free SDXL asked for a 3x3 grid of mouth
+        // shapes painted one portrait instead. Say so before, not after.
+        const weak = made.filter((r) => r.category === "sheet" && ["ovh", "cloudflare", "pollinations"].includes(String(resolveRoute(r, settingsRef.current).engine)));
+        if (weak.length)
+          pushLog(
+            `⚠ ${weak.length} of these are sheets (many panels in one picture). Free engines usually draw one picture instead — check them, or use a Google model.`,
+            "err"
+          );
+        await new Promise((r) => setTimeout(r, 0));
+        // Free engines start by themselves; paid ones stop at the usual dialog.
+        void runQueue(made.map((r) => r.id));
+      }
+    };
+    void tick();
+    const t = setInterval(() => void tick(), 5000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, [linkAvailable, pushLog, pushToast, runQueue]);
+
+  // When every row of a request has ended, hand the pictures back.
+  useEffect(() => {
+    if (!linkAvailable) return;
+    const ids = [...new Set(rows.map((r) => r.request_id).filter(Boolean) as string[])];
+    for (const id of ids) {
+      if (linkSent.current.has(id)) continue;
+      const outcome = requestOutcome(rows, id);
+      if (!outcome) continue;
+      linkSent.current.add(id);
+      void (async () => {
+        const failed = [...outcome.failed];
+        const done: string[] = [];
+        for (const filename of outcome.done) {
+          const blob = imagesRef.current.get(filename);
+          // A picture made in an earlier session is not in memory any more.
+          if (blob && (await linkSend(id, filename, blob))) done.push(filename);
+          else failed.push({ filename, error: "the picture was made, but is not in memory any more — press Redo in Image Forge" });
+        }
+        const ok = await linkFinish(id, { done, failed });
+        pushLog(
+          ok
+            ? `⇄ sent back ${done.length} picture${done.length === 1 ? "" : "s"}${failed.length ? `, ${failed.length} did not work` : ""}`
+            : "⚠ could not hand the pictures back to the other app",
+          ok ? "ok" : "err"
+        );
+      })();
+    }
+  }, [rows, linkAvailable, pushLog]);
 
   /**
    * A whole list from the chat, into the manifest.
@@ -1797,7 +1927,18 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
       {/* body */}
       <div className="relative z-10 flex min-h-0 flex-1">
-        {view === "workbench" ? (
+        {view === "start" ? (
+          <main className="min-w-0 flex-1 overflow-y-auto">
+            <StartView
+              settings={settings}
+              rows={rows}
+              isRunning={isRunning}
+              onMake={makeFromStart}
+              onOpenForge={() => nav("workbench")}
+              onOpenSettings={() => nav("settings", "engines")}
+            />
+          </main>
+        ) : view === "workbench" ? (
           <>
             <Sidebar
               rows={rows}
