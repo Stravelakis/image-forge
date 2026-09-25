@@ -2,10 +2,11 @@
 
 > **Read this before touching anything.** It maps every subsystem, explains the
 > non-obvious decisions, and ends with recipes for the changes you are most
-> likely to make. True as of **13 September 2026, version 1.0.1**. If this file
+> likely to make. True as of **25 September 2026, version 1.0.2**. If this file
 > and the code disagree, the code wins — then fix this file.
 
-Also read: **[STANDARDS.md](STANDARDS.md)** (what "done" means),
+Also read: **[STANDARDS.md](STANDARDS.md)** (what "done" means here, and how
+this repo applies the owner's shared repo standards),
 **[CHANGELOG.md](CHANGELOG.md)** (what changed and why),
 **[docs/troubleshooting.md](docs/troubleshooting.md)** (provider behaviour that
 contradicts provider documentation).
@@ -34,11 +35,13 @@ the UI; all three share `src/lib/engines.mjs`.
 ```bash
 npm install
 npm run dev                 # browser app → http://localhost:3000
-npm test                    # vitest — 621 tests across 31 files
+npm test                    # vitest — 659 tests across 33 files
 npm run typecheck           # tsc --noEmit (vite build does NOT typecheck)
 npm run build               # vite build → dist/
 node scripts/build-exe.js   # Electron installer + portable → release/
 node scripts/mcp-server.js  # the agent API (stdio)
+npx electron scripts/capture/capture.mjs   # real screenshots + share card (after npm run build)
+cd site && npm run dev      # the docs site, locally
 ```
 
 CI (`.github/workflows/ci.yml`) runs typecheck, tests and build on every push
@@ -81,7 +84,8 @@ so those browser-refusing providers fail there.
 ```
 
 The UI is a view switch rendered by `App.tsx`, with a top menu
-(`TopMenu.tsx`): Forge, Chat, Wizards, Gallery, Docs, Settings.
+(`TopMenu.tsx`): Start, Forge, Chat, Wizards, Gallery, Docs, Settings. The app
+opens on **Start** (`components/StartView.tsx`).
 
 ---
 
@@ -90,7 +94,7 @@ The UI is a view switch rendered by `App.tsx`, with a top menu
 | file | owns | worth knowing |
 |---|---|---|
 | `types.ts` | vocabulary | `Category` = `image · svg · lottie · sheet · gif`; `migrateCategory()` maps old `shop/item/event/npc` rows on load |
-| `lib/engines.mjs` | routing, prices, requests | **DOM-free.** `MODELS`, `resolveRoute`, `generateBytes`, `estimateCost`, `explainFailure`, the OVH pacer. Types in `engines.d.mts` |
+| `lib/engines.mjs` | routing, prices, requests, file types | **DOM-free.** `MODELS`, `resolveRoute`, `generateBytes` (MIME from the bytes), `estimateCost`, `explainFailure`, the OVH pacer, `withStyleBlock` (style first on SDXL). Types in `engines.d.mts` |
 | `lib/providers.ts` | browser wrapper | `ForgeSettings`, `normalizeSettings` (all migrations), key pools, `scribeChat` |
 | `lib/csv.ts` | the contract | RFC 4180 parser; forgiving import |
 | `lib/validate.ts` | filename rules | `RULES` (7; 2 unswitchable), `nameForMime` (extension follows bytes), `autoFixFilename` |
@@ -109,6 +113,8 @@ The UI is a view switch rendered by `App.tsx`, with a top menu
 | `lib/version.ts` | `APP_VERSION` | must equal `package.json` — `tests/version.test.ts` enforces it |
 | `components/TextEngines.tsx` | accounts + three jobs | dedupes models across accounts; free-only filter hides only what a provider states |
 | `components/ui.tsx` | primitives | inline SVG icons, `Btn`, `Lightbox` |
+| `lib/startPlan.ts` + `components/StartView.tsx` | the Start screen | one sentence + a number → N prompts: the text engine writes them if set up, otherwise built-in framings; says which |
+| `lib/link.ts` + `electron/link.mjs` | the link to BYOK Vid Creator | see §14.2 — validation lives only in `link.mjs` |
 | `electron/main.js` | desktop shell | see §9 |
 | `scripts/build-exe.js` + `build/installer.nsh` | packaging | see §9 |
 
@@ -230,9 +236,13 @@ signtool" even so; `Get-AuthenticodeSignature` reports `NotSigned`.
 
 ## 10. Releasing
 
-1. Bump the version in `package.json`, `src/lib/version.ts` and the
-   `version:` in `scripts/mcp-server.js`. `tests/version.test.ts` fails if
-   they differ.
+0. Follow the owner's release gate (STANDARDS.md → repo standards §2): README
+   and HANDOFF current, full audit, `gitleaks git -v` clean, CHANGELOG entry
+   written, docs site rebuilds. Work on a `release/x.y.z` branch and merge by
+   PR — never push straight to master.
+1. Bump the version in `package.json`, `src/lib/version.ts`, the
+   `version:` in `scripts/mcp-server.js`, `src-tauri/tauri.conf.json` and
+   `src-tauri/Cargo.toml`. `tests/version.test.ts` fails if they differ.
 2. Add a `CHANGELOG.md` entry that says what was actually wrong.
 3. `npm test`, `npm run typecheck`, `npm run build`.
 4. `node scripts/build-exe.js` (set `FORGE_OUTPUT` to a folder outside the repo
@@ -243,8 +253,14 @@ signtool" even so; `Get-AuthenticodeSignature` reports `NotSigned`.
    window; the Cloudflare route answers rather than crashing; a second launch
    opens no second copy; closes cleanly; window state written; same port on
    relaunch; silent uninstall removes app and shortcuts and keeps data.
-6. Push a `vX.Y.Z` tag. `release.yml` runs typecheck and tests, builds on
-   `windows-latest`, and publishes both exes to a GitHub release.
+6. Refresh screenshots: `npm run build`, then
+   `npx electron scripts/capture/capture.mjs` (add `--skip-make` offline). It
+   drives the built app in a throwaway profile and writes
+   `site/public/screens/*.png` and the 1200x630 `site/public/og-image.png`.
+7. PR → CI → `gh pr merge`, then push a `vX.Y.Z` tag on master.
+   `release.yml` builds and publishes both exes; `docs.yml` rebuilds the docs
+   site. The GitHub repository's social preview image cannot be set by API —
+   upload `site/public/og-image.png` by hand in Settings → General.
 
 **Code signing (not live).** Releases are unsigned. The plan is SignPath
 Foundation's free open-source programme — see
@@ -261,16 +277,23 @@ would break the next release. Follow
 [SignPath's GitHub guide](https://docs.signpath.io/trusted-build-systems/github)
 when doing it, and update the policy page's status in the same commit.
 
-**Documentation site:** `docs.yml` builds `docs/` with Jekyll and deploys it to
-GitHub Pages on every push that touches `docs/`. It is live at
-**https://docs.stravelakis.com/image-forge/**.
+**Documentation site:** `site/` is a copy of the owner's shared **docs-theme**
+(Astro; repo standards §7): three reading levels in `site/src/docs/dev.md`,
+`plain.md` and `eli5.md`, screenshots in a carousel, a share card. Most edits
+go in `site/site.config.ts` and those three files. `docs.yml` builds it on
+every `v*` tag (and by hand) and deploys to GitHub Pages; it is live at
+**https://docs.stravelakis.com/image-forge/**. Tags can only deploy because
+Settings → Environments → `github-pages` has a rule allowing `v*`.
+
+`docs/*.md` stay as the in-repo guides that README links to; they are no
+longer a website.
 
 That address comes from the **organisation site**, the separate repository
 `Stravelakis/Stravelakis.github.io`, which owns `docs.stravelakis.com`. GitHub
 serves every project site that has no custom domain of its own under the
 organisation site's domain, at `/<repo>/`. So **never give this repository its
 own custom domain** — that would pull it out from under the shared domain.
-`baseurl: /image-forge` in `docs/_config.yml` must match the repository name.
+`base: '/image-forge'` in `site/astro.config.mjs` must match the repository name.
 
 ---
 
@@ -302,7 +325,10 @@ agree.
   is verified by hand. Biggest gap.
 - **localStorage is ~5 MB.** Previews are never stored. A very large manifest
   will eventually need IndexedDB.
-- **OVH**: square only, no seed, two a minute.
+- **OVH**: square only, no seed, two a minute, and it reads only the first
+  ~77 tokens of a prompt. It does **not** follow "draw a 3x3 grid of nine
+  panels" — on a real request it painted one portrait. Sheets need a Google
+  model or your own machine with a reference picture.
 - **The portable exe** keeps settings in `%APPDATA%\image-forge`.
 - **Keys from 1.0.0** live under old random ports and are not migrated.
 - **File type comes from the bytes, in one place.** `mimeFromBytes`,
@@ -318,20 +344,29 @@ agree.
 ## 13. Where to take it next
 
 1. Component tests for the flows that touch money and files.
-2. Code signing (`win.certificateFile` in `build-exe.js`).
-3. Enable GitHub Pages so the docs site exists.
+2. Code signing — SignPath Foundation, deferred until there is real use to
+   show (CODE_SIGNING_POLICY.md).
+3. Repo standards §6 still missing: a **browser-mode toggle** inside the app
+   (one codebase, the user's choice of window or browser) and an **Update**
+   button that installs the latest release rather than only checking.
 4. Key pooling with rotation for text engines (they currently use one account
    per job).
 5. A headless `forge` CLI wrapping the MCP server.
 
 ---
 
-## 14. The direction (decided 20 September 2026)
+## 14. The direction (decided 20 September 2026, built 25 September)
 
-Two things are agreed as the next phase. Neither is started; this section
-exists so the next session does not invent a different plan.
+Two things were agreed on 20 September and both shipped in 1.0.2. This
+section keeps the reasoning so later work does not drift from it.
 
 ### 14.1 Make it straightforward and intuitive
+
+**Built (1.0.2):** the Start screen is the front door and the default view; a
+fresh install defaults to OVHcloud, so the first press makes real pictures.
+**Still to do** under the same principles: fewer decisions on the common path
+elsewhere (settings sections, the wizard), and a progress view worth watching
+for big runs.
 
 The app is powerful and **not easy**. It is a manifest, a queue, nine settings
 sections, three text engines, seven filename rules and a wizard, and a newcomer
@@ -377,11 +412,36 @@ Handles that already exist, so this needs no new plumbing invented:
 - `lib/sheets.ts` already plans viseme, turnaround, expression and avatar
   eyes/brows sheets — exactly the assets the puppets are made of.
 
-Open questions, deliberately not answered yet: which side initiates, whether
-it goes over the MCP server or the local HTTP port, how the vid creator says
-"I need these ten mouth shapes for this character" and how finished files get
-back. Settle that here before writing any of it.
+**Built (1.0.2), chosen by the owner:** shared folders, not a network call;
+free requests run by themselves, paid ones stop at the usual dialog.
 
-**Nothing has been built for this. Nothing was started on 20 September 2026.**
+```
+%APPDATA%\image-forge\link\presence.json          the forge is running: version, port
+                           inbox\<id>.json          a request (dropped by the other app)
+                           inbox\rejected\<id>.*    refused, with a .why.txt
+                           processing\<id>.json     claimed, being made
+                           outbox\<id>\*            the pictures, then done.json last
+```
+
+- `electron/link.mjs` (main process) is the **only** place a request is
+  validated: id shape, at most 60 rows, plain lowercase picture filenames, a
+  size limit. The page never sees an unvalidated request.
+- The page polls `/link/requests` every 5 seconds. Every link route demands an
+  `X-Forge-Link: 1` header: a custom header forces a browser preflight, which
+  this server never grants, so no other web page on the computer can drive it.
+- Rows carry `request_id` (kept in the app, not in the CSV). When every row of
+  a request has ended — a row parked on a rate limit has not — the page sends
+  each picture and then `done`. A picture made in an earlier session is no
+  longer in memory and is reported as failed with a reason, not skipped.
+- Keys never cross over. Neither app has to be open at the same moment.
+- The vid creator's half: `tools/lib/forgeLink.mjs` and
+  `npm run ask-forge -- visemes <character>`.
+
+**Verified end to end on 25 September 2026** on the installed 1.0.2: the vid
+creator asked, the forge made the picture on OVHcloud and handed it back, the
+vid creator built the sheet. And the **honest result**: SDXL ignored the grid
+instruction and painted one portrait, so the "sheet" was one picture cut in
+nine. Both apps now warn about this every time; see §12.
+
 The matching note is in `BYOK-Vid-Creator/docs/HANDOFF.md`; keep the two in
 step.

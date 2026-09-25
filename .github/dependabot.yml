@@ -1,0 +1,21 @@
+version: 2
+updates:
+  # Change the ecosystem per repo: npm, pip, composer, cargo, docker...
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      dependencies:
+        patterns:
+          - "*"
+
+  # Keeps the versions in .github/workflows current. Every repo has workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns:
+          - "*"

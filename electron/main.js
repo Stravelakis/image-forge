@@ -15,6 +15,15 @@ import fs from "node:fs";
 // proxy, which threw on the first Cloudflare or NVIDIA request in the
 // packaged app. The dev server never runs this file, so it never showed.
 import https from "node:https";
+import {
+  linkPaths,
+  writePresence,
+  removePresence,
+  pendingRequests,
+  claimRequest,
+  writeResult,
+  finishRequest,
+} from "./link.mjs";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, Menu, shell, dialog, screen } from "electron";
 
@@ -110,6 +119,68 @@ function proxyUpstream(prefix, req, res) {
  */
 const PORTS = [47821, 47822, 47823, 47824, 47825];
 
+/* ---------------- the link (see link.mjs) ---------------- */
+
+let LINK = null; // set once Electron knows where userData is
+
+const json = (res, code, body) => {
+  res.writeHead(code, { "Content-Type": "application/json" });
+  res.end(JSON.stringify(body));
+};
+
+function readBody(req, limit) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    let size = 0;
+    req.on("data", (c) => {
+      size += c.length;
+      if (size > limit) {
+        reject(new Error("too large"));
+        req.destroy();
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => resolve(Buffer.concat(chunks)));
+    req.on("error", reject);
+  });
+}
+
+/**
+ * The page's side of the link. Only the forge's own page calls these.
+ *
+ * The X-Forge-Link header is the guard. Any web page in any browser on this
+ * computer could send a request to 127.0.0.1; a custom header makes the
+ * browser ask permission first, and this server never grants it. So only the
+ * app's own window — same origin, no preflight — gets through.
+ */
+async function handleLink(req, res) {
+  if (!LINK) return json(res, 503, { error: "link not ready" });
+  if (req.headers["x-forge-link"] !== "1") return json(res, 403, { error: "forbidden" });
+  const url = new URL(req.url, "http://127.0.0.1");
+  const parts = url.pathname.split("/").filter(Boolean); // ["link", "requests", id?, action?, file?]
+  try {
+    if (req.method === "GET" && parts.length === 2 && parts[1] === "requests") {
+      return json(res, 200, { requests: pendingRequests(LINK) });
+    }
+    const id = parts[2];
+    if (req.method === "POST" && parts[3] === "claim") return json(res, 200, { ok: claimRequest(LINK, id) });
+    if (req.method === "PUT" && parts[3] === "files" && parts[4]) {
+      const body = await readBody(req, 60 * 1024 * 1024);
+      const r = writeResult(LINK, id, decodeURIComponent(parts[4]), body);
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    if (req.method === "POST" && parts[3] === "done") {
+      const body = await readBody(req, 512 * 1024);
+      const r = finishRequest(LINK, id, JSON.parse(body.toString("utf8") || "{}"));
+      return json(res, r.ok ? 200 : 400, r);
+    }
+    return json(res, 404, { error: "not found" });
+  } catch (e) {
+    return json(res, 500, { error: e && e.message ? e.message : String(e) });
+  }
+}
+
 function startServer(distDir) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
@@ -119,6 +190,10 @@ function startServer(distDir) {
       const proxied = Object.keys(PROXIED).find((p) => (req.url || "").startsWith(p + "/"));
       if (proxied) {
         proxyUpstream(proxied, req, res);
+        return;
+      }
+      if ((req.url || "").startsWith("/link/")) {
+        handleLink(req, res);
         return;
       }
 
@@ -294,6 +369,9 @@ if (!app.requestSingleInstanceLock()) {
       return;
     }
 
+    // Where other apps find us. userData is %APPDATA%image-forge on Windows.
+    LINK = linkPaths(app.getPath("userData"));
+
     let port;
     try {
       ({ port } = await startServer(distDir));
@@ -304,6 +382,13 @@ if (!app.requestSingleInstanceLock()) {
       app.quit();
       return;
     }
+
+    try {
+      writePresence(LINK, { version: app.getVersion(), port });
+    } catch {
+      /* no presence note means the other app simply does not see us */
+    }
+    app.on("will-quit", () => removePresence(LINK));
 
     const iconPath = path.join(__dirname, "..", "build", "icon.png");
 

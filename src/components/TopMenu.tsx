@@ -6,6 +6,7 @@ import { CardPanel, PillNav, type NavCard } from "./nav";
 import type { MotionLevel } from "./motion";
 
 export type View =
+  | "start"
   | "workbench"
   | "chat"
   | "wizard"
@@ -257,6 +258,8 @@ export default function TopMenu({
           ? "docs"
           : view === "chat"
             ? "chat"
+            : view === "start"
+              ? "start"
             : view === "settings"
               ? "settings"
               : "workbench";
@@ -277,7 +280,7 @@ export default function TopMenu({
 
   const settingsCards: NavCard[] = [
     { id: "engines", title: "Image engines", hint: "keys, models, cooldowns, pausing one", icon: <IImage size={15} />, onPick: () => onNav("settings", "engines") },
-    { id: "styles", title: "Image styles", hint: "the 34 looks, and your own", icon: <IFlask size={15} />, onPick: () => onNav("settings", "styles") },
+    { id: "styles", title: "Image styles", hint: "the 36 looks, and your own", icon: <IFlask size={15} />, onPick: () => onNav("settings", "styles") },
     { id: "text", title: "Text engines", hint: "the models that write, code and see", icon: <IQuill size={15} />, onPick: () => onNav("settings", "text") },
     { id: "prompts", title: "Text prompts", hint: "tune how the AI writes for you", icon: <ISparkle size={15} />, onPick: () => onNav("settings", "prompts") },
     { id: "filenames", title: "Filenames", hint: "the seven naming rules", icon: <IBook size={15} />, onPick: () => onNav("settings", "filenames") },
@@ -298,7 +301,8 @@ export default function TopMenu({
       return;
     }
     setPanel(null);
-    if (id === "workbench") onNav("workbench");
+    if (id === "start") onNav("start");
+    else if (id === "workbench") onNav("workbench");
     else if (id === "chat") onNav("chat");
   };
 
@@ -310,6 +314,7 @@ export default function TopMenu({
           activeId={activePill}
           onPick={pick}
           items={[
+            { id: "start", label: "Start" },
             { id: "workbench", label: "Forge" },
             { id: "chat", label: "Chat" },
             { id: "wizards", label: "Wizards", badge: markedCount > 0 ? String(markedCount) : undefined, opens: true },

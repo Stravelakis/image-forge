@@ -32,3 +32,13 @@ IF YOU ARE JUST USING THE APP
 None of the above applies to you. Run it, make pictures, change it for your
 own use, do whatever you like. The obligations start only when you pass it
 on to someone else.
+
+--------------------------------------------------------------------------
+THIRD-PARTY CREDITS
+--------------------------------------------------------------------------
+
+Documentation site (site/): built from the Stravelakis docs-theme (MIT).
+Its "Dot Field" background is ported from React Bits (https://reactbits.dev),
+licensed MIT + Commons Clause: the credit stays here, and the theme itself
+is not sold. The Sora typeface is self-hosted via @fontsource-variable/sora
+(SIL Open Font License 1.1).

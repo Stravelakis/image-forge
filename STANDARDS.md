@@ -3,6 +3,22 @@
 What "done" means in this project. Short on purpose — a rule nobody reads is
 not a rule.
 
+**This repo follows the owner's shared repo standards** (`repo standards/STANDARDS.md`
+in the maintainer's workspace: required files, release gate, secret scanning,
+installable apps, docs site). The twelve rules below are this project's own,
+on top of those. Where this repo does something differently, it is on
+purpose, and here is why:
+
+| Shared standard | This repo | Why |
+|---|---|---|
+| Licence: MIT | **Apache-2.0** | The owner chose it for its NOTICE clause, the strongest standard attribution requirement for anyone who redistributes it |
+| Build: Tauri suggested | **Electron** | The stack pointed that way from the start; Tauri exists in `src-tauri/` but is experimental (HANDOFF §2) |
+| Docs site in the repo root | **`site/`** | The app already owns the root; the deploy workflow points `DOCS_DIR` at `site` |
+| Default branch `main` | **`master`** | Historical; workflows accept both |
+| Browser mode on a registered port | Dev server on **3000**; desktop on **47821–47825** (registered) | Browser mode is currently "run from source" only — an in-app toggle is still to do (HANDOFF §13) |
+
+---
+
 Every one of these was written after something went wrong. The reason is given
 each time, because a rule without its reason gets dropped the first time it is
 inconvenient.

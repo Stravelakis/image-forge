@@ -1,0 +1,56 @@
+---
+import DocsLayout from '../layouts/DocsLayout.astro';
+import VernacularPanels from '../components/VernacularPanels.astro';
+import FeatureCards from '../components/FeatureCards.astro';
+import Carousel from '../components/Carousel.astro';
+import Playground from '../components/Playground.astro';
+import { siteConfig } from '../../site.config.ts';
+
+import { Content as Dev } from '../docs/dev.md';
+import { Content as Plain } from '../docs/plain.md';
+import { Content as Eli5 } from '../docs/eli5.md';
+
+const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
+
+const features = [
+  { icon: '✍️', title: 'One sentence, many pictures', text: 'Type what you need and how many. Press one button. The spreadsheet is there when you want it, not before.' },
+  { icon: '🆓', title: 'Free with no key at all', text: 'OVHcloud needs no signup. Cloudflare gives ~690 a day with no card. Your own machine is unlimited.' },
+  { icon: '🔑', title: 'Your keys stay yours', text: 'No account, no server. Keys live on your computer and go only to the engine you picked.' },
+  { icon: '💸', title: 'Never spends without asking', text: 'Every paid run stops first: how many, which model, the price each, the total, and a free alternative.' },
+  { icon: '🎞️', title: 'Talks to BYOK Vid Creator', text: 'Installed side by side, the video app can ask the forge for its pictures. No keys cross over.' },
+  { icon: '🤖', title: 'Agents welcome', text: 'An MCP server with eight tools lets Claude Code, Cursor or n8n fill the list and run it.' },
+];
+
+const slides = [
+  { title: 'Start', caption: 'The front door: describe it once, say how many, press the button.', image: `${base}screens/start.png`, alt: 'The Start screen with a request for four potion shop fronts typed in.' },
+  { title: 'Four real pictures', caption: 'Made by the app itself on the free OVHcloud engine — not mock-ups.', image: `${base}screens/start-results.png`, alt: 'The Start screen showing four finished potion shop pictures.' },
+  { title: 'The spreadsheet', caption: 'Full control when you want it: one row per picture, filenames, engines, status.', image: `${base}screens/forge.png`, alt: 'The Forge view: a table of pictures with filename, category, model and status.' },
+  { title: 'Settings', caption: 'Engines, keys and looks — and proof your settings were really saved.', image: `${base}screens/settings.png`, alt: 'Settings showing image engines and the Saved and checked bar.' },
+  { title: 'Chat', caption: 'Ask for one picture in your own words, or ask how the app works.', image: `${base}screens/chat.png`, alt: 'The Chat view explaining it needs a text model first.' },
+];
+---
+<DocsLayout title="Overview" home>
+  <section class="hero reveal" id="top">
+    <span class="eyebrow">Docs · v1.0.2</span>
+    <h1 class="hero-title">{siteConfig.projectName}</h1>
+    <p class="hero-sub">{siteConfig.description}</p>
+    <p class="hero-sub">
+      <a href="https://github.com/Stravelakis/image-forge/releases/latest">Download for Windows</a>
+      · <a href={siteConfig.repoUrl}>Source on GitHub</a>
+      · <a href="https://github.com/Stravelakis/image-forge/blob/master/CHANGELOG.md">What changed</a>
+    </p>
+  </section>
+
+  <FeatureCards features={features} title="What it does" />
+  <Carousel slides={slides} label="Screenshots" />
+
+  <section class="doc-body reveal" id="docs" aria-label="Documentation">
+    <VernacularPanels>
+      <Dev slot="dev" />
+      <Plain slot="plain" />
+      <Eli5 slot="eli5" />
+    </VernacularPanels>
+  </section>
+
+  {siteConfig.playground.enabled && <Playground />}
+</DocsLayout>

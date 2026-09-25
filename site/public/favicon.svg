@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Image Forge">
+  <!--
+    The anvil, drawn as a vector so it stays sharp from a 16-pixel browser tab
+    up to a full-size app icon, in well under a kilobyte.
+
+    Every proportion here is chosen for the 16-pixel case, where one unit of
+    this viewBox is a quarter of a pixel. An earlier version had a slimmer top
+    plate and a small raised step; both turned to mush at tab size. The plate is
+    now twelve units thick and the step is gone, so the whole mark survives as
+    one solid, readable silhouette.
+  -->
+  <rect width="64" height="64" rx="14" fill="#1a1410"/>
+  <path
+    fill="#f2a33c"
+    d="M9 17 H55 V29 L50 29
+       C41 32 39 37 39 45
+       H45 L48 53 H16 L19 45
+       H25 C25 37 23 32 14 29
+       L9 29 Z"/>
+</svg>
