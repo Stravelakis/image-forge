@@ -182,7 +182,24 @@ How it works underneath: [HANDOFF.md §14.2](HANDOFF.md).
 
 ---
 
-## 10. When something goes wrong
+## 10. Window or browser, and updates
+
+**Settings → Advanced → Where Image Forge opens.** Pick your own browser
+instead of the app window if you prefer tabs. Everything you have set up goes
+with it. In browser mode a small Image Forge icon sits by the clock; click it
+to open another tab, right-click it to quit. Your linked folder needs picking
+again once after switching.
+
+![Where Image Forge opens](site/public/screens/settings-advanced.png)
+
+**Updates.** Settings → Advanced → **Check for app update**. If there is a
+newer version, **Update now** downloads it from the official release page,
+installs it and reopens Image Forge — a minute or two. Your keys, settings and
+pictures are not touched.
+
+---
+
+## 11. When something goes wrong
 
 | You see | What it means |
 |---|---|
@@ -198,7 +215,7 @@ Every problem found so far, with its real cause: [docs/troubleshooting.md](docs/
 
 ---
 
-## 11. For agents and developers
+## 12. For agents and developers
 
 - Let an AI agent drive it: [docs/vibe-coding.md](docs/vibe-coding.md),
   [CONNECT-AGENTS.md](CONNECT-AGENTS.md).

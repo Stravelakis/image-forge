@@ -9,6 +9,25 @@ helps nobody decide whether to update.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-09-26
+
+### Added
+
+- **Update now.** When a newer version is out, the desktop app downloads the
+  installer from this project's own release page, installs it and reopens by
+  itself. It accepts installers from nowhere else. Your data is not touched.
+- **Open it in your browser instead of a window** (Settings → Advanced).
+  Switching carries your settings, keys and list across; the app keeps running
+  from a small icon by the clock. Switch back the same way. The linked folder
+  has to be picked again once, because browsers do not share folder
+  permissions.
+
+### Fixed
+
+- **"Check for app update" never showed the new version.** It found the
+  release and then set up a window that nothing displayed, so a newer version
+  looked like silence. The window now appears.
+
 ## [1.0.2] - 2026-09-25
 
 ### Added
@@ -130,7 +149,8 @@ Nothing failed to save; each launch simply looked somewhere new.
 
 First release.
 
-[Unreleased]: https://github.com/Stravelakis/image-forge/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/Stravelakis/image-forge/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/Stravelakis/image-forge/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Stravelakis/image-forge/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Stravelakis/image-forge/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/Stravelakis/image-forge/releases/tag/v1.0.0

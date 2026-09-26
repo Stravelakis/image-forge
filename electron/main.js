@@ -24,8 +24,11 @@ import {
   writeResult,
   finishRequest,
 } from "./link.mjs";
+import { readMode, writeMode, writeHandover, takeHandover, isTrustedInstallerUrl, download, MODES } from "./appctl.mjs";
+import os from "node:os";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { app, BrowserWindow, Menu, shell, dialog, screen } from "electron";
+import { app, BrowserWindow, Menu, Tray, nativeImage, shell, dialog, screen } from "electron";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -181,6 +184,60 @@ async function handleLink(req, res) {
   }
 }
 
+/* ---------------- window or browser, and updates (see appctl.mjs) ---------------- */
+
+// Filled in by the app section below, once there is a port and a window.
+const APP_CTL = { port: 0, switchTo: null };
+
+/**
+ * Same guard as the link: a custom header means only the app's own page,
+ * same origin, can call these. That matters most for /app/update, which
+ * runs a program.
+ */
+async function handleApp(req, res) {
+  if (req.headers["x-forge-app"] !== "1") return json(res, 403, { error: "forbidden" });
+  const userData = app.getPath("userData");
+  const route = `${req.method} ${new URL(req.url, "http://127.0.0.1").pathname}`;
+  try {
+    if (route === "GET /app/info") {
+      return json(res, 200, { desktop: true, mode: readMode(userData), version: app.getVersion() });
+    }
+    if (route === "GET /app/handover") {
+      const me = String(req.headers["x-forge-side"] || "");
+      return json(res, 200, { snapshot: MODES.includes(me) ? takeHandover(userData, me) : null });
+    }
+    if (route === "POST /app/mode") {
+      const body = JSON.parse((await readBody(req, 20 * 1024 * 1024)).toString("utf8") || "{}");
+      if (!MODES.includes(body.mode)) return json(res, 400, { error: "mode must be window or browser" });
+      writeHandover(userData, body.mode, body.snapshot);
+      writeMode(userData, body.mode);
+      json(res, 200, { ok: true });
+      // After answering: the page asking is about to be closed or left.
+      setTimeout(() => APP_CTL.switchTo?.(body.mode), 300);
+      return;
+    }
+    if (route === "POST /app/update") {
+      const body = JSON.parse((await readBody(req, 64 * 1024)).toString("utf8") || "{}");
+      if (!isTrustedInstallerUrl(body.url)) {
+        return json(res, 400, { error: "Only installers from the Image Forge release page are accepted." });
+      }
+      const dest = path.join(os.tmpdir(), `image-forge-update-${Date.now()}.exe`);
+      await download(body.url, dest);
+      json(res, 200, { ok: true });
+      // /S installs without the wizard; --force-run reopens the app after.
+      // Your data lives in %APPDATA% and is never touched by the installer.
+      setTimeout(() => {
+        spawn(dest, ["/S", "--updated", "--force-run"], { detached: true, stdio: "ignore" }).unref();
+        app.quit();
+      }, 500);
+      return;
+    }
+    return json(res, 404, { error: "not found" });
+  } catch (e) {
+    return json(res, 500, { error: e && e.message ? e.message : String(e) });
+  }
+}
+
 function startServer(distDir) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
@@ -194,6 +251,10 @@ function startServer(distDir) {
       }
       if ((req.url || "").startsWith("/link/")) {
         handleLink(req, res);
+        return;
+      }
+      if ((req.url || "").startsWith("/app/")) {
+        handleApp(req, res);
         return;
       }
 
@@ -306,8 +367,16 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
   let mainWindow = null;
+  let tray = null;
+  const iconPath = path.join(__dirname, "..", "build", "icon.png");
 
   app.on("second-instance", () => {
+    // Started again from the shortcut while running in browser mode: open
+    // another tab rather than doing nothing visible.
+    if (!mainWindow && APP_CTL.port) {
+      shell.openExternal(`http://127.0.0.1:${APP_CTL.port}/`);
+      return;
+    }
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
@@ -390,8 +459,18 @@ if (!app.requestSingleInstanceLock()) {
     }
     app.on("will-quit", () => removePresence(LINK));
 
-    const iconPath = path.join(__dirname, "..", "build", "icon.png");
+    APP_CTL.port = port;
+    if (readMode(app.getPath("userData")) === "browser") openBrowser(port);
+    else openWindow(port);
+  });
 
+
+  function openWindow(port) {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+      return;
+    }
     const saved = readWindowState();
     mainWindow = new BrowserWindow({
       width: saved?.width ?? 1320,
@@ -428,8 +507,53 @@ if (!app.requestSingleInstanceLock()) {
       }
     });
 
-    await mainWindow.loadURL(`http://127.0.0.1:${port}/`);
-  });
+    mainWindow.on("closed", () => {
+      mainWindow = null;
+    });
+    mainWindow.loadURL(`http://127.0.0.1:${port}/`);
+  }
 
-  app.on("window-all-closed", () => app.quit()); // Windows convention
+  /*
+   * Browser mode: the same app, served from the same port, opened in the
+   * browser you already use. With no window, a tray icon is how you get back
+   * to it or quit — otherwise the app would be an invisible process.
+   */
+  function openBrowser(port) {
+    shell.openExternal(`http://127.0.0.1:${port}/`);
+    if (tray) return;
+    const img = fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 }) : nativeImage.createEmpty();
+    tray = new Tray(img);
+    tray.setToolTip("Image Forge (open in your browser)");
+    tray.on("click", () => shell.openExternal(`http://127.0.0.1:${port}/`));
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: "Open Image Forge in my browser", click: () => shell.openExternal(`http://127.0.0.1:${port}/`) },
+        { type: "separator" },
+        { label: "Quit Image Forge", click: () => app.quit() },
+      ])
+    );
+  }
+
+  APP_CTL.switchTo = (mode) => {
+    const port = APP_CTL.port;
+    if (mode === "browser") {
+      openBrowser(port);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        writeWindowState(mainWindow);
+        mainWindow.destroy();
+      }
+    } else {
+      if (tray) {
+        tray.destroy();
+        tray = null;
+      }
+      openWindow(port);
+    }
+  };
+
+  // Windows convention: closing the window quits. Not in browser mode, where
+  // the window was closed on purpose and the tray keeps the app alive.
+  app.on("window-all-closed", () => {
+    if (readMode(app.getPath("userData")) !== "browser") app.quit();
+  });
 }

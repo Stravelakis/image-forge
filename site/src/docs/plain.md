@@ -75,3 +75,10 @@ so check sheets by eye. A Google model follows grid instructions far better.
 
 The full troubleshooting page, with the cause of each problem, is in the
 [repository](https://github.com/Stravelakis/image-forge/blob/master/docs/troubleshooting.md).
+
+## Window or browser, and updates
+
+Image Forge can open in its own window or in the browser you already use —
+**Settings → Advanced → Where Image Forge opens**. Your settings and keys come
+along. When a new version is out, **Update now** installs it for you and
+reopens the app; nothing of yours is touched.

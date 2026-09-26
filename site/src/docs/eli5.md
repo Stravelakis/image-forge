@@ -40,3 +40,9 @@ Forge to draw pictures for it. They help each other.
 Usually it just needs a minute — free robot artists are a bit slow. If a
 picture looks wrong, you can ask for it again. And if you are stuck, the
 people who made it would like to hear about it on GitHub.
+
+## New toys
+
+You can open the picture factory in its own window or in your web browser —
+you choose. And when there is a newer factory, one button swaps it in for you.
+Your pictures stay right where they are.

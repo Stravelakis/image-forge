@@ -24,11 +24,14 @@ export default function UpdateReadyDialog({
   current,
   onClose,
   onDownload,
+  installs = false,
 }: {
   info: UpdateInfo;
   current: string;
   onClose: () => void;
   onDownload: () => Promise<void>;
+  /** the desktop app installs it itself; a browser can only download it */
+  installs?: boolean;
 }) {
   const [busy, setBusy] = useState(false);
 
@@ -74,7 +77,7 @@ export default function UpdateReadyDialog({
               }}
             >
               <IDownload size={13} />
-              {busy ? "Downloading…" : `Download the installer${info.sizeNote}`}
+              {busy ? (installs ? "Downloading, then installing…" : "Downloading…") : installs ? `Update now${info.sizeNote}` : `Download the installer${info.sizeNote}`}
             </Btn>
           ) : (
             <a
@@ -89,7 +92,14 @@ export default function UpdateReadyDialog({
           <Btn onClick={onClose}>Not now</Btn>
         </div>
 
-        {info.assetUrl && (
+        {info.assetUrl && installs && (
+          <p className="mt-3 text-[11px] leading-relaxed text-dust">
+            Image Forge downloads the new version, closes, installs it and opens again by itself. It takes a minute or
+            two.
+          </p>
+        )}
+
+        {info.assetUrl && !installs && (
           <p className="mt-3 text-[11px] leading-relaxed text-dust">
             Once it has downloaded, run it. It installs over the version you have. Windows will show its usual warning
             about unsigned software — click <span className="text-parch">More info</span>, then{" "}
