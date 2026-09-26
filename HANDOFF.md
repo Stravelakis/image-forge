@@ -35,7 +35,7 @@ the UI; all three share `src/lib/engines.mjs`.
 ```bash
 npm install
 npm run dev                 # browser app → http://localhost:3000
-npm test                    # vitest — 659 tests across 33 files
+npm test                    # vitest — 672 tests across 34 files
 npm run typecheck           # tsc --noEmit (vite build does NOT typecheck)
 npm run build               # vite build → dist/
 node scripts/build-exe.js   # Electron installer + portable → release/
@@ -346,9 +346,14 @@ agree.
 1. Component tests for the flows that touch money and files.
 2. Code signing — SignPath Foundation, deferred until there is real use to
    show (CODE_SIGNING_POLICY.md).
-3. Repo standards §6 still missing: a **browser-mode toggle** inside the app
-   (one codebase, the user's choice of window or browser) and an **Update**
-   button that installs the latest release rather than only checking.
+3. Repo standards §6 — done in 1.0.3: window-or-browser switch and an
+   Update button that installs. Both live in `electron/appctl.mjs` (tested)
+   and `src/lib/desktop.ts`. The switch hands the page's whole localStorage
+   to the other side through `mode-handover.json` in userData, read once and
+   deleted, because the window and your browser are separate storage boxes
+   even on the same port. Updates run the NSIS installer with
+   `/S --updated --force-run`; verified on 26 September 2026 that it closes
+   the running app, installs and reopens it (about two minutes).
 4. Key pooling with rotation for text engines (they currently use one account
    per job).
 5. A headless `forge` CLI wrapping the MCP server.

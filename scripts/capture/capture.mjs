@@ -41,6 +41,17 @@ const MIME = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css
 function serveDist() {
   return new Promise((resolve) => {
     const server = http.createServer((req, res) => {
+      // Pretend to be the desktop app so its desktop-only settings appear.
+      if ((req.url || "").startsWith("/app/info")) {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ desktop: true, mode: "window", version: "capture" }));
+        return;
+      }
+      if ((req.url || "").startsWith("/app/")) {
+        res.writeHead(404);
+        res.end();
+        return;
+      }
       let p = decodeURIComponent((req.url || "/").split("?")[0]);
       if (p === "/") p = "/index.html";
       let file = path.normalize(path.join(DIST, p));
@@ -180,6 +191,12 @@ app.whenReady().then(async () => {
   await sleep(400);
   await click(win, "Image engines");
   await shoot(win, "settings.png");
+
+  // 6. Settings → Advanced: window or browser, and updates.
+  await click(win, "Advanced");
+  await sleep(400);
+  await win.webContents.executeJavaScript(`[...document.querySelectorAll("p")].find((p) => p.textContent === "Where Image Forge opens")?.scrollIntoView({ block: "center" })`);
+  await shoot(win, "settings-advanced.png");
 
   await shareCard(startShot);
   server.close();

@@ -2,7 +2,7 @@
 
 React 18 + Vite + TypeScript, packaged with Electron for Windows. No backend,
 no state library, ~20k lines. Everything durable is a CSV or a `localStorage`
-key. 659 tests (vitest) run in CI on every push with typecheck and build.
+key. 672 tests (vitest) run in CI on every push with typecheck and build.
 
 ```bash
 npm install
@@ -67,6 +67,16 @@ cross over. The vid creator side is `tools/lib/forgeLink.mjs` +
 `npm run ask-forge`.
 
 ## Desktop specifics
+
+- **Window or browser** (`electron/appctl.mjs`, `src/lib/desktop.ts`): the
+  same server either way. Switching posts the page's whole localStorage to
+  `/app/mode`; the other side takes it once from `/app/handover` before
+  React mounts. The window and a browser are separate storage even on one
+  origin, so without this the switch would look like data loss.
+- **Update now**: `/app/update` accepts only
+  `github.com/Stravelakis/image-forge/releases/download/…Setup….exe`,
+  downloads it and runs it with `/S --updated --force-run`. `/app/*` needs
+  the `X-Forge-App: 1` header, like the link.
 
 - ESM main process; never `require()` (it crashed the proxies in 1.0.0).
 - Fixed ports 47821–47825, never `listen(0)`: storage is per origin.

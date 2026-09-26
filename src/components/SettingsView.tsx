@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import DesktopModeCard from "./DesktopModeCard";
 import type { ManifestRow, Toast } from "../types";
 import { ACCENTS, STYLES } from "../types";
 import type { ApiKey, ForgeSettings, ProviderId } from "../lib/providers";
@@ -1653,9 +1654,11 @@ export default function SettingsView({
               </div>
               <p className="mt-2 text-[11px] text-dust">
                 Pull reads <span className="font-mono text-parch">raw.githubusercontent.com</span> — the repo must be public (or use a gist).
-                The update check reads the repo's latest release and downloads its <span className="font-mono text-parch">Setup.exe</span> if it's newer.
+                The update check reads the repo's latest release. In the desktop app, <span className="text-parch">Update now</span> downloads its <span className="font-mono text-parch">Setup.exe</span>, installs it and reopens Image Forge — your settings and pictures are not touched.
               </p>
             </div>
+
+            <DesktopModeCard pushToast={pushToast} />
 
             {/* reset */}
             <div className="rounded-xl border border-blood/25 bg-blood/4 p-4">

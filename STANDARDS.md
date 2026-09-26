@@ -15,7 +15,7 @@ purpose, and here is why:
 | Build: Tauri suggested | **Electron** | The stack pointed that way from the start; Tauri exists in `src-tauri/` but is experimental (HANDOFF §2) |
 | Docs site in the repo root | **`site/`** | The app already owns the root; the deploy workflow points `DOCS_DIR` at `site` |
 | Default branch `main` | **`master`** | Historical; workflows accept both |
-| Browser mode on a registered port | Dev server on **3000**; desktop on **47821–47825** (registered) | Browser mode is currently "run from source" only — an in-app toggle is still to do (HANDOFF §13) |
+| Browser mode on a registered port | Desktop on **47821–47825** (registered); dev server on 3000 | Settings → Advanced switches between the window and your browser on the same port (HANDOFF §13) |
 
 ---
 

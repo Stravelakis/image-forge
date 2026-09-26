@@ -80,6 +80,8 @@ import { BatchLibrary, ImageLibrary, StyleLibrary, TemplateLibrary } from "./com
 import WpImportModal from "./components/WpImportModal";
 import GifMaker from "./components/GifMaker";
 import UpdateReadyDialog from "./components/UpdateReadyDialog";
+import { MOVED_EVENT } from "./components/DesktopModeCard";
+import { desktopInfo, installUpdate, type LaunchMode } from "./lib/desktop";
 import ChatView from "./components/ChatView";
 import StartView from "./components/StartView";
 import { withStyleBlock } from "./lib/engines.mjs";
@@ -252,6 +254,15 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const [updateReady, setUpdateReady] = useState<UpdateReady | null>(null);
+  // Desktop app only: it can install updates itself, and switch window/browser.
+  const [isDesktop, setIsDesktop] = useState(false);
+  const [movedTo, setMovedTo] = useState<LaunchMode | null>(null);
+  useEffect(() => {
+    void desktopInfo().then((i) => setIsDesktop(!!i));
+    const onMoved = (e: Event) => setMovedTo((e as CustomEvent<LaunchMode>).detail);
+    window.addEventListener(MOVED_EVENT, onMoved);
+    return () => window.removeEventListener(MOVED_EVENT, onMoved);
+  }, []);
   const stopRef = useRef(false);
   const folderRef = useRef<FileSystemDirectoryHandle | null>(null);
   const tauriFolderRef = useRef<string | null>(null);
@@ -1717,6 +1728,23 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   /** What the motion components should do. "system" resolves at use site. */
   const motionLevel: MotionLevel = motionPref === "system" ? "full" : motionPref;
 
+  // After switching window/browser, this copy steps aside entirely so it
+  // cannot keep running the queue or answering the link alongside the other.
+  if (movedTo) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg,#17120e)] p-6 text-center">
+        <div className="max-w-md">
+          <h1 className="font-display text-2xl text-cream">Image Forge moved</h1>
+          <p className="mt-2 text-[14px] leading-relaxed text-dust">
+            {movedTo === "window"
+              ? "It is now open in its own window, with all your settings. You can close this browser tab."
+              : "It is now open in your browser, with all your settings."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="grain relative flex h-screen flex-col overflow-hidden bg-ink"
@@ -2282,6 +2310,28 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         patchRow={patchRow}
         pushToast={pushToast}
       />
+
+      {updateReady && (
+        <UpdateReadyDialog
+          info={updateReady}
+          current={APP_VERSION}
+          installs={isDesktop}
+          onClose={() => setUpdateReady(null)}
+          onDownload={async () => {
+            if (!isDesktop) {
+              window.open(updateReady.assetUrl, "_blank", "noreferrer");
+              return;
+            }
+            try {
+              await installUpdate(updateReady.assetUrl);
+              pushLog(`⬆ installing v${updateReady.version} — Image Forge will reopen by itself`, "info");
+              pushToast("ok", "Installing now. Image Forge closes and opens again in about a minute.");
+            } catch (e) {
+              pushToast("err", `The update did not install — ${(e as Error).message}. Nothing was changed.`);
+            }
+          }}
+        />
+      )}
 
       <ToastHost toasts={toasts} dismiss={(id) => setToasts((t) => t.filter((x) => x.id !== id))} />
     </div>

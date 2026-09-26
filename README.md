@@ -29,15 +29,16 @@ and the app asks before spending a penny.
 [![CI](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Stravelakis/image-forge?label=release&color=f2a33c)](https://github.com/Stravelakis/image-forge/releases/latest)
 [![Licence](https://img.shields.io/badge/licence-Apache--2.0-8cb56f)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-659-56b8a5)](tests/)
+[![Tests](https://img.shields.io/badge/tests-672-56b8a5)](tests/)
 
 </div>
 
 ---
 
-> **New in 1.0.2:** the app opens on a **Start** screen — one box, one number,
-> one button — and a fresh install makes real pictures straight away. It also
-> works hand in hand with [BYOK Vid Creator](#i-make-videos-with-byok-vid-creator).
+> **New in 1.0.3:** **Update now** installs a new version for you, and the
+> app can open in your own browser instead of a window.
+> **1.0.2** brought the **Start** screen — one box, one number, one button —
+> and hand-in-hand work with [BYOK Vid Creator](#i-make-videos-with-byok-vid-creator).
 > [Everything that changed](CHANGELOG.md).
 
 ---
