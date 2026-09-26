@@ -1,7 +1,7 @@
 {
   "name": "image-forge",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Image Forge — standalone, manifest-driven AI image pipeline",
   "main": "electron/main.js",
   "type": "module",

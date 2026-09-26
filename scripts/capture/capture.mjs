@@ -200,6 +200,12 @@ app.whenReady().then(async () => {
 
   await shareCard(startShot);
   server.close();
-  fs.rmSync(PROFILE, { recursive: true, force: true });
+  // Electron still holds files in the profile until it exits; a failed
+  // cleanup here used to leave the script hanging. Temp is cleaned by Windows.
+  try {
+    fs.rmSync(PROFILE, { recursive: true, force: true });
+  } catch {
+    /* left for Windows to clean */
+  }
   app.exit(0);
 });

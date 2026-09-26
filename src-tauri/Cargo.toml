@@ -1,6 +1,6 @@
 [package]
 name = "image-forge"
-version = "1.0.3"
+version = "1.0.4"
 description = "Image Forge — standalone, manifest-driven AI image pipeline"
 authors = ["Stravelakis"]
 edition = "2021"
