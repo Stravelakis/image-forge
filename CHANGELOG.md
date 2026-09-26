@@ -9,6 +9,19 @@ helps nobody decide whether to update.
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-09-26
+
+### Changed
+
+- **Libraries brought up to date:** React 19, Vite 8, Vitest 5, TypeScript 7,
+  Electron 44.4.4 and twelve others. Each was updated on its own and kept only
+  after typecheck, all 672 tests and the build passed; the app was then driven
+  through every screen. Nothing you do in the app changes.
+
+### Fixed
+
+- The screenshot script no longer hangs at the end.
+
 ## [1.0.3] - 2026-09-26
 
 ### Added
@@ -149,7 +162,8 @@ Nothing failed to save; each launch simply looked somewhere new.
 
 First release.
 
-[Unreleased]: https://github.com/Stravelakis/image-forge/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/Stravelakis/image-forge/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/Stravelakis/image-forge/compare/v1.0.3...v1.0.4
 [1.0.3]: https://github.com/Stravelakis/image-forge/compare/v1.0.2...v1.0.3
 [1.0.2]: https://github.com/Stravelakis/image-forge/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/Stravelakis/image-forge/compare/v1.0.0...v1.0.1
