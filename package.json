@@ -23,7 +23,7 @@
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@supabase/supabase-js": "^2.117.0",
     "canvas-confetti": "^1.9.3",
-    "date-fns": "^2.30.0",
+    "date-fns": "^4.4.0",
     "framer-motion": "^11.16.1",
     "gifenc": "^1.0.3",
     "jszip": "^3.10.2",
