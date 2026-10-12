@@ -6,6 +6,7 @@ dist/
 # whole folder meant the release build got all the way to the final NSIS step
 # and then failed with 'cannot find specified resource "installer.nsh"'.
 build/*
+!build/icon.png
 !build/installer.nsh
 release/
 .env
