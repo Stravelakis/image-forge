@@ -26,6 +26,7 @@ import {
 } from "./link.mjs";
 import { readMode, writeMode, writeHandover, takeHandover, isTrustedInstallerUrl, download, MODES } from "./appctl.mjs";
 import { sharedValues, putShared } from "./forgeKeys.mjs";
+import { shelfRoot, openOrders, orderPicture, finishOrder, savePuppetFile, listPuppets } from "./forgeShelf.mjs";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -208,6 +209,26 @@ async function handleApp(req, res) {
     if (route === "GET /app/handover") {
       const me = String(req.headers["x-forge-side"] || "");
       return json(res, 200, { snapshot: MODES.includes(me) ? takeHandover(userData, me) : null });
+    }
+    // The Forge shelf: puppet orders from Video Forge, finished puppets for it
+    // (electron/forgeShelf.mjs). Names are checked there, not here.
+    const shelf = shelfRoot();
+    const seg = route.split(" ")[1].split("/").map(decodeURIComponent); // ["", "app", "orders", id, file]
+    if (route === "GET /app/orders") return json(res, 200, { orders: openOrders(shelf) });
+    if (req.method === "GET" && seg[2] === "orders" && seg.length === 5) {
+      const bytes = orderPicture(shelf, seg[3], seg[4]);
+      if (!bytes) return json(res, 404, { error: "no such picture" });
+      res.writeHead(200, { "Content-Type": "image/png" });
+      return res.end(bytes);
+    }
+    if (req.method === "POST" && seg[2] === "orders" && seg[4] === "done") {
+      const body = JSON.parse((await readBody(req, 16 * 1024)).toString("utf8") || "{}");
+      return json(res, 200, finishOrder(shelf, seg[3], body));
+    }
+    if (route === "GET /app/puppets") return json(res, 200, { puppets: listPuppets(shelf).map(({ slug, name, framing, madeAt }) => ({ slug, name, framing, madeAt })) });
+    if (req.method === "PUT" && seg[2] === "puppets" && seg.length === 5) {
+      const r = savePuppetFile(shelf, seg[3], seg[4], await readBody(req, 12 * 1024 * 1024));
+      return json(res, r.ok ? 200 : 400, r.ok ? { ok: true } : r);
     }
     // Keys shared with Video Forge on this computer (electron/forgeKeys.mjs).
     if (route === "GET /app/keys") {

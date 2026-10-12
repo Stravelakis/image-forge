@@ -79,7 +79,10 @@ export default function SheetMaker({
   }, [settings, shots]);
 
   const route = resolveRoute({ prompt: "", aspect_ratio: "1:1", seed: 1, model: "" } as never, settings);
-  const canReference = route.engine === "local" || route.engine === "gemini";
+  // Cloudflare's own default (FLUX schnell) cannot work from a picture, but its
+  // FLUX.2 klein can — so "from a reference" uses that on Cloudflare (12 Oct 2026).
+  const refModel = route.engine === "cloudflare" ? "cloudflare-flux2-klein" : "";
+  const canReference = route.engine === "local" || route.engine === "gemini" || route.engine === "cloudflare";
 
   const blobToB64 = (b: Blob): Promise<string> =>
     new Promise((res, rej) => {
@@ -102,7 +105,7 @@ export default function SheetMaker({
       style: "",
       aspect_ratio: "1:1",
       seed,
-      model: "",
+      model: method === "from-reference" ? refModel : "",
       status: "pending",
       error: "",
       generated_at: "",
@@ -320,7 +323,7 @@ export default function SheetMaker({
               </div>
               {!canReference && (
                 <p className="mt-2 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-[11.5px] text-ember">
-                  “From a reference” needs your own machine or a Google model — the engine you have chosen cannot work
+                  “From a reference” needs your own machine, Cloudflare (FLUX.2) or a Google model — the engine you have chosen cannot work
                   from a picture. Switch engine, or use “all in one picture”.
                 </p>
               )}

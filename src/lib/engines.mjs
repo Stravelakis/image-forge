@@ -110,6 +110,36 @@ export const MODELS = [
     defaultCooldownH: 6,
   },
   {
+    id: "cloudflare-flux2-dev",
+    label: "Cloudflare FLUX.2 dev",
+    engine: "cloudflare",
+    apiId: "@cf/black-forest-labs/flux-2-dev",
+    priceUsd: 0,
+    batchPriceUsd: null,
+    needsKey: true,
+    free: "free · daily allowance",
+    allowance: "10,000 neurons/day shared with the other Cloudflare models, resets 00:00 UTC",
+    note: "Works FROM a picture: change one thing and keep the rest. What the puppet maker and reference sheets use. ~15 s a picture.",
+    retiresOn: null,
+    defaultCooldownH: 6,
+    refs: true,
+  },
+  {
+    id: "cloudflare-flux2-klein",
+    label: "Cloudflare FLUX.2 klein",
+    engine: "cloudflare",
+    apiId: "@cf/black-forest-labs/flux-2-klein-9b",
+    priceUsd: 0,
+    batchPriceUsd: null,
+    needsKey: true,
+    free: "free · daily allowance",
+    allowance: "10,000 neurons/day shared with the other Cloudflare models, resets 00:00 UTC",
+    note: "The smaller FLUX.2: faster and lighter on the allowance, rougher. Also works from a picture.",
+    retiresOn: null,
+    defaultCooldownH: 6,
+    refs: true,
+  },
+  {
     id: "flux",
     label: "Pollinations FLUX",
     engine: "pollinations",
@@ -212,6 +242,15 @@ export const MODEL_TRAITS = {
     textQuality: "fair",
     promptStyle:
       "A single descriptive sentence, then a few style words. It runs in only four steps, so keep it short and concrete — long prompts get half-read.",
+  },
+  "cloudflare-flux2-dev": {
+    textQuality: "fair",
+    promptStyle:
+      "Plain descriptive sentences. When working from a picture, say exactly what to change and list what must stay the same.",
+  },
+  "cloudflare-flux2-klein": {
+    textQuality: "fair",
+    promptStyle: "Short, concrete sentences. When working from a picture, name the one change and say everything else stays.",
   },
   flux: {
     textQuality: "fair",
@@ -702,14 +741,24 @@ export function readGeminiImage(json) {
 }
 
 /** Body for one Gemini image request — shared by the live call and batch jobs. */
-export function geminiRequestBody(row, apiModel, { imageSize = "1K" } = {}) {
+/** The type of a base64 picture, read from its first bytes. */
+export const b64Mime = (b64) =>
+  String(b64).startsWith("/9j/") ? "image/jpeg" : String(b64).startsWith("UklG") ? "image/webp" : "image/png";
+
+export function geminiRequestBody(row, apiModel, { imageSize = "1K", refImages = [] } = {}) {
   const aspect = GEMINI_ASPECTS.includes(row.aspect_ratio) ? row.aspect_ratio : "1:1";
   const prompt = row.negative_prompt
     ? `${row.prompt}\n\nAvoid: ${row.negative_prompt}`
     : row.prompt;
   return {
     model: apiModel,
-    input: [{ type: "text", text: prompt }],
+    // The reference pictures go first. Until 12 Oct 2026 they were accepted
+    // by the caller and silently dropped here, so "from a reference" on Google
+    // was really "from nothing" — every frame a new character.
+    input: [
+      ...(refImages ?? []).map((b64) => ({ type: "image", data: b64, mime_type: b64Mime(b64) })),
+      { type: "text", text: prompt },
+    ],
     // JPEG, not PNG. Google's own examples show "image/png", but the
     // Interactions API rejects it: "The value 'image/png' is not supported for
     // 'response_format.mime_type'. Supported values: 'image/jpeg'." Confirmed
@@ -779,12 +828,53 @@ async function gemini(row, apiModel, s, signal, exhaust, cooldownMs, refImages) 
   throw lastErr instanceof Error ? lastErr : new Error("Every Google key failed.");
 }
 
-async function cloudflare(row, apiModel, s, signal, exhaust, cooldownMs) {
+/** FLUX.2 on Cloudflare takes a form, not JSON, and can work from pictures. */
+export const isFlux2 = (apiModel) => /flux-2/.test(String(apiModel));
+
+async function cloudflare(row, apiModel, s, signal, exhaust, cooldownMs, refImages, size) {
   const cf = s.cloudflare || {};
   const account = (cf.accountId || "").trim();
   const token = (cf.token || "").trim();
   if (!account || !token) {
     throw new Error("Cloudflare needs an account id and a token — add both in Settings → Engines.");
+  }
+  if (isFlux2(apiModel)) {
+    // Up to four pictures to work from (input_image_0…3). Checked live on
+    // 12 Oct 2026: an owl's beak opened and nothing else moved.
+    const { w, h } = size ?? dimsFor(row.aspect_ratio);
+    const fd = new FormData();
+    const prompt = row.negative_prompt ? `${row.prompt}\n\nAvoid: ${row.negative_prompt}` : row.prompt;
+    fd.append("prompt", String(prompt).slice(0, 4000));
+    fd.append("width", String(w));
+    fd.append("height", String(h));
+    if (Number.isInteger(row.seed) && row.seed > 0) fd.append("seed", String(row.seed));
+    (refImages ?? []).slice(0, 4).forEach((b64, i) =>
+      fd.append(`input_image_${i}`, new Blob([b64ToBytes(b64)], { type: b64Mime(b64) }), `ref${i}.png`)
+    );
+    const res = await fetchWithTimeout(
+      cloudflareUrl(`/client/v4/accounts/${encodeURIComponent(account)}/ai/run/${apiModel}`),
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd },
+      180000,
+      signal
+    );
+    const text = await res.text().catch(() => "");
+    if (res.status === 429 || /neurons|daily (limit|allocation)/i.test(text)) {
+      throw new RateLimitError("Cloudflare's free daily allowance is used up. It resets at midnight UTC.", Date.now() + cooldownMs, "cloudflare");
+    }
+    let json = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      /* not JSON */
+    }
+    const b64 = json?.result?.image ?? json?.image;
+    if (!res.ok || !b64) {
+      // "Your output has been flagged" (code 3030) is the safety filter. It
+      // misfired on a harmless owl portrait; other wording or seed passes.
+      const why = json?.errors?.[0]?.message || explainFailure(res.status, text, "cloudflare");
+      throw new Error(/flagged/i.test(why) ? "Cloudflare's safety filter blocked this picture — try other wording." : why);
+    }
+    return { bytes: b64ToBytes(b64), mime: "image/png" };
   }
   const res = await fetchWithTimeout(
     cloudflareUrl(`/client/v4/accounts/${encodeURIComponent(account)}/ai/run/${apiModel}`),
@@ -943,17 +1033,17 @@ async function generateBytesRaw(rawRow, s, signal, exhaust, cooldownMs, opts = {
   // Models that cannot write get told not to try.
   const row = suppressTextIfWeak(rawRow, s);
   const refImages = opts.refImages ?? [];
-  if (refImages.length && !["local", "gemini"].includes(engine)) {
+  if (refImages.length && !["local", "gemini"].includes(engine) && !(engine === "cloudflare" && isFlux2(apiModel))) {
     throw new Error(
-      "Working from a reference picture needs either your own machine or a Google model. " +
-        "Cloudflare and Pollinations cannot do it."
+      "Working from a reference picture needs Cloudflare FLUX.2 (free), a Google model or your own machine. " +
+        "Pollinations and the other Cloudflare models cannot do it."
     );
   }
   if (engine === "local") return local(row, apiModel, s, signal, refImages);
   if (engine === "pollinations") return pollinations(row, apiModel, s, signal);
   if (engine === "ovh") return ovh(row, s, signal);
   if (engine === "gemini") return gemini(row, apiModel, s, signal, exhaust, cooldownMs, refImages);
-  if (engine === "cloudflare") return cloudflare(row, apiModel, s, signal, exhaust, cooldownMs);
+  if (engine === "cloudflare") return cloudflare(row, apiModel, s, signal, exhaust, cooldownMs, refImages, opts.size);
   if (engine === "openai") return openaiCompat(row, apiModel, s, signal, exhaust, cooldownMs);
   throw new Error("The practice forge draws its own pictures — it never goes online.");
 }

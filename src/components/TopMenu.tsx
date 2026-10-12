@@ -225,6 +225,7 @@ export default function TopMenu({
   doneCount,
   onRerunMarked,
   onWpImport,
+  onPuppet,
   onZip,
   onExportCsv,
   onExportXlsx,
@@ -241,6 +242,7 @@ export default function TopMenu({
   doneCount: number;
   onRerunMarked: () => void;
   onWpImport: () => void;
+  onPuppet: () => void;
   onZip: () => void;
   onExportCsv: () => void;
   onExportXlsx: () => void;
@@ -268,6 +270,7 @@ export default function TopMenu({
     { id: "wizard", title: "Start the wizard", hint: "a new batch, one easy choice at a time", icon: <IWand size={15} />, onPick: () => onNav("wizard") },
     { id: "factory", title: "Prompt factory", hint: "write a huge list — AI or your own CSV", icon: <ISparkle size={15} />, onPick: () => onNav("factory") },
     { id: "rerun", title: "Rerun marked & failed", hint: "notes become extra instructions", icon: <IRetry size={15} />, badge: markedCount > 0 ? String(markedCount) : undefined, onPick: onRerunMarked },
+    { id: "puppet", title: "Make a puppet", hint: "a character that talks, blinks and waves — for Video Forge", icon: <span className="text-[13px] leading-none">☺</span>, onPick: onPuppet },
     { id: "wp", title: "Import to WordPress", hint: "real upload with an app password", icon: <IUpload size={15} />, badge: doneCount > 0 ? String(doneCount) : undefined, onPick: onWpImport },
   ];
 

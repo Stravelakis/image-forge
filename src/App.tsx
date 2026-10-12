@@ -102,6 +102,8 @@ import { filenameFor, type ChatPlan, type RowEdit } from "./lib/chatPlan";
 import { CountUp, type MotionLevel } from "./components/motion";
 import Letterer from "./components/Letterer";
 import SheetMaker from "./components/SheetMaker";
+import PuppetMaker from "./components/PuppetMaker";
+import { openOrders as openPuppetOrders, type PuppetOrder } from "./lib/puppet/shelf";
 import VectorMaker from "./components/VectorMaker";
 import TopMenu, { type View } from "./components/TopMenu";
 import { CursorFX, DotField, EmberField, StarField } from "./components/effects";
@@ -249,6 +251,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const [gifFor, setGifFor] = useState<null | { row: ManifestRow; blob: Blob }>(null);
   const [textFor, setTextFor] = useState<null | { row: ManifestRow; blob: Blob }>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // The puppet maker, opened from a menu (no order) or by Video Forge's order.
+  const [puppet, setPuppet] = useState<{ order: PuppetOrder | null } | null>(null);
   const [vectorOpen, setVectorOpen] = useState(false);
   const [animateOpen, setAnimateOpen] = useState(false);
   const [paidAsk, setPaidAsk] = useState<null | { check: PaidRunCheck; targets: number[] }>(null);
@@ -276,6 +280,25 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const [forgeGoing, setForgeGoing] = useState(false);
   useEffect(() => {
     if (isDesktop) void videoForgeInstalled().then(setVideoForge);
+  }, [isDesktop]);
+  // Puppet orders from Video Forge (Forge shelf). Checked now and every 20 s;
+  // a new one opens the puppet maker filled in, unless it is already open.
+  const puppetRef = useRef(puppet);
+  puppetRef.current = puppet;
+  const seenOrders = useRef(new Set<string>());
+  useEffect(() => {
+    if (!isDesktop) return;
+    const look = () =>
+      void openPuppetOrders().then((orders) => {
+        const fresh = orders.find((o) => !seenOrders.current.has(o.id));
+        if (!fresh || puppetRef.current) return;
+        seenOrders.current.add(fresh.id);
+        pushToast("info", `${fresh.from} ordered a puppet: ${fresh.name}.`);
+        setPuppet({ order: fresh });
+      });
+    look();
+    const t = window.setInterval(look, 20000);
+    return () => window.clearInterval(t);
   }, [isDesktop]);
   const sharedSent = useRef<Record<string, string> | null>(null);
   useEffect(() => {
@@ -1900,6 +1923,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
             rerunMarked(ids);
           }}
           onWpImport={() => setWpOpen(true)}
+          onPuppet={() => setPuppet({ order: null })}
           onZip={zipAll}
           motion={motionLevel}
               onExportCsv={exportCsv}
@@ -1937,6 +1961,13 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
                     hint: "walk cycles, turnarounds, expressions, and a talking head with mouth shapes, blinks and brows",
                     icon: <span className="text-[13px] leading-none">☺</span>,
                     onPick: () => setSheetOpen(true),
+                  },
+                  {
+                    id: "puppet",
+                    title: "Puppet for Video Forge",
+                    hint: "describe it (or drop a photo) — it comes out talking, blinking and waving",
+                    icon: <span className="text-[13px] leading-none">✦</span>,
+                    onPick: () => setPuppet({ order: null }),
                   },
                   {
                     id: "graphics",
@@ -2314,6 +2345,22 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         <SheetMaker
           settings={settings}
           onClose={() => setSheetOpen(false)}
+          pushToast={pushToast}
+          pushLog={pushLog}
+          onExhaust={(pool, id, until) =>
+            setSettings((prev) => ({
+              ...prev,
+              [pool]: prev[pool].map((k) => (k.id === id ? { ...k, exhaustedUntil: until } : k)),
+            }))
+          }
+        />
+      )}
+
+      {puppet && (
+        <PuppetMaker
+          settings={settings}
+          order={puppet.order}
+          onClose={() => setPuppet(null)}
           pushToast={pushToast}
           pushLog={pushLog}
           onExhaust={(pool, id, until) =>
