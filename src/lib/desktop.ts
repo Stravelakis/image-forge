@@ -84,3 +84,24 @@ export async function installUpdate(url: string): Promise<void> {
   });
   if (!r.ok) throw new Error((await r.json().catch(() => null))?.error ?? `the app answered ${r.status}`);
 }
+
+/** The twin switch: is Video Forge installed on this computer? */
+export async function videoForgeInstalled(): Promise<boolean | null> {
+  try {
+    const r = await fetch("/app/video-forge", { headers: HEADERS });
+    if (!r.ok) return null;
+    return !!(await r.json())?.installed;
+  } catch {
+    return null;
+  }
+}
+
+/** Open Video Forge. False when it is not installed or this is not the desktop app. */
+export async function openVideoForge(): Promise<boolean> {
+  try {
+    const r = await fetch("/app/video-forge", { method: "POST", headers: HEADERS });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}

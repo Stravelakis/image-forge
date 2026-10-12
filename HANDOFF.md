@@ -234,6 +234,22 @@ signtool" even so; `Get-AuthenticodeSignature` reports `NotSigned`.
 
 ---
 
+### The Video Forge twin (12 October 2026)
+
+- **Shared keys** — `electron/forgeKeys.mjs` (the same file is
+  `tools/lib/forgeKeys.mjs` in Video Forge; change one, copy to the other).
+  A DPAPI-locked file at `%APPDATA%\Forge\shared-keys.bin`, written through
+  Windows PowerShell via stdin. Routes `GET/POST /app/keys` (same
+  `X-Forge-App` guard). The page side is `src/lib/sharedKeys.ts`: fill empty
+  boxes on load, share typed keys 1.5 s after settings change. Removing a key
+  here is NOT shared (only new values are); Video Forge's removals are.
+- **Twin switch** — `GET/POST /app/video-forge` checks/opens
+  `%LOCALAPPDATA%\Programs\Video Forge\Video Forge.exe`.
+- **Look** — `src/components/SparkField.tsx` (copied from Video Forge), root
+  is `bg-black isolate`, marks in `src/assets/`, styles `.forge-twin` at the
+  end of `index.css`.
+- **Test copy** — `IMAGEFORGE_USER_DATA=<folder>` runs on a separate profile.
+
 ## 10. Releasing
 
 0. Follow the owner's release gate (STANDARDS.md → repo standards §2): README

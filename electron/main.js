@@ -25,6 +25,7 @@ import {
   finishRequest,
 } from "./link.mjs";
 import { readMode, writeMode, writeHandover, takeHandover, isTrustedInstallerUrl, download, MODES } from "./appctl.mjs";
+import { sharedValues, putShared } from "./forgeKeys.mjs";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -194,6 +195,8 @@ const APP_CTL = { port: 0, switchTo: null };
  * same origin, can call these. That matters most for /app/update, which
  * runs a program.
  */
+const videoForgeExe = () => path.join(process.env.LOCALAPPDATA ?? "", "Programs", "Video Forge", "Video Forge.exe");
+
 async function handleApp(req, res) {
   if (req.headers["x-forge-app"] !== "1") return json(res, 403, { error: "forbidden" });
   const userData = app.getPath("userData");
@@ -205,6 +208,24 @@ async function handleApp(req, res) {
     if (route === "GET /app/handover") {
       const me = String(req.headers["x-forge-side"] || "");
       return json(res, 200, { snapshot: MODES.includes(me) ? takeHandover(userData, me) : null });
+    }
+    // Keys shared with Video Forge on this computer (electron/forgeKeys.mjs).
+    if (route === "GET /app/keys") {
+      return json(res, 200, { keys: await sharedValues() });
+    }
+    if (route === "POST /app/keys") {
+      const body = JSON.parse((await readBody(req, 64 * 1024)).toString("utf8") || "{}");
+      return json(res, 200, { changed: await putShared(body.keys ?? {}, "image-forge") });
+    }
+    // The twin switch: open Video Forge, if it is installed (per-user install).
+    if (route === "GET /app/video-forge") {
+      return json(res, 200, { installed: fs.existsSync(videoForgeExe()) });
+    }
+    if (route === "POST /app/video-forge") {
+      const exe = videoForgeExe();
+      if (!fs.existsSync(exe)) return json(res, 404, { error: "Video Forge is not installed on this computer." });
+      const err = await shell.openPath(exe);
+      return json(res, err ? 500 : 200, err ? { error: err } : { ok: true });
     }
     if (route === "POST /app/mode") {
       const body = JSON.parse((await readBody(req, 20 * 1024 * 1024)).toString("utf8") || "{}");
@@ -363,6 +384,9 @@ function writeWindowState(win) {
 }
 
 // one instance only
+// A test copy can run on its own profile, leaving the real one alone.
+if (process.env.IMAGEFORGE_USER_DATA) app.setPath("userData", process.env.IMAGEFORGE_USER_DATA);
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

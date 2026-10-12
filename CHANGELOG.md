@@ -9,6 +9,22 @@ helps nobody decide whether to update.
 
 ## [Unreleased]
 
+### Added
+
+- **Keys shared with Video Forge.** When both apps are installed, a key typed
+  into either works in both: Google (Gemini), OpenRouter, NVIDIA, Mistral,
+  Cloudflare and Pollinations. They are kept in `%APPDATA%\Forge\shared-keys.bin`,
+  locked by Windows so only your Windows user can read it. A shared key only
+  fills an empty box; it never replaces one you typed. Windows only.
+- **The twin switch.** The header shows both Forge marks; clicking Video
+  Forge's opens it. Hidden when Video Forge is not installed.
+- **The Forge ground:** tiny sparks on black, and a small burst on each click
+  (off when motion is off).
+
+### Changed
+
+- New icon: the camera-on-anvil mark on a transparent background.
+
 ## [1.0.4] - 2026-09-26
 
 ### Changed

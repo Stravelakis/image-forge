@@ -81,7 +81,11 @@ import WpImportModal from "./components/WpImportModal";
 import GifMaker from "./components/GifMaker";
 import UpdateReadyDialog from "./components/UpdateReadyDialog";
 import { MOVED_EVENT } from "./components/DesktopModeCard";
-import { desktopInfo, installUpdate, type LaunchMode } from "./lib/desktop";
+import { SparkField } from "./components/SparkField";
+import imageMark from "./assets/image-mark.jpg";
+import videoMark from "./assets/video-mark.jpg";
+import { keysFromSettings, fillFromShared, loadSharedKeys, saveSharedKeys } from "./lib/sharedKeys";
+import { desktopInfo, installUpdate, videoForgeInstalled, openVideoForge, type LaunchMode } from "./lib/desktop";
 import ChatView from "./components/ChatView";
 import StartView from "./components/StartView";
 import { withStyleBlock } from "./lib/engines.mjs";
@@ -101,7 +105,7 @@ import SheetMaker from "./components/SheetMaker";
 import VectorMaker from "./components/VectorMaker";
 import TopMenu, { type View } from "./components/TopMenu";
 import { CursorFX, DotField, EmberField, StarField } from "./components/effects";
-import { Btn, IAnvil, IFolder, IPlay, IQuill, IWand, ToastHost, IX } from "./components/ui";
+import { Btn, IFolder, IPlay, IQuill, IWand, ToastHost, IX } from "./components/ui";
 import type { FolderState } from "./components/SettingsDrawer";
 import MarketApp from "./market/MarketApp";
 
@@ -263,6 +267,36 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     window.addEventListener(MOVED_EVENT, onMoved);
     return () => window.removeEventListener(MOVED_EVENT, onMoved);
   }, []);
+  // Keys shared with Video Forge (lib/sharedKeys.ts): fill empty boxes once,
+  // then share whatever is typed here. `sharedSent` is what the file already
+  // holds, so an unchanged key is never written again.
+  // The twin switch. null = not asked yet / not the desktop app: the mark
+  // still shows, and clicking it explains. false = asked, not installed.
+  const [videoForge, setVideoForge] = useState<boolean | null>(null);
+  const [forgeGoing, setForgeGoing] = useState(false);
+  useEffect(() => {
+    if (isDesktop) void videoForgeInstalled().then(setVideoForge);
+  }, [isDesktop]);
+  const sharedSent = useRef<Record<string, string> | null>(null);
+  useEffect(() => {
+    if (!isDesktop) return;
+    void loadSharedKeys().then((keys) => {
+      sharedSent.current = keys;
+      setSettings((prev) => fillFromShared(prev, keys));
+    });
+  }, [isDesktop]);
+  useEffect(() => {
+    const sent = sharedSent.current;
+    if (!isDesktop || !sent) return;
+    const t = window.setTimeout(() => {
+      const mine = keysFromSettings(settings);
+      const changed = Object.fromEntries(Object.entries(mine).filter(([k, v]) => sent[k] !== v));
+      if (!Object.keys(changed).length) return;
+      sharedSent.current = { ...sent, ...changed };
+      void saveSharedKeys(changed);
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [settings, isDesktop]);
   const stopRef = useRef(false);
   const folderRef = useRef<FileSystemDirectoryHandle | null>(null);
   const tauriFolderRef = useRef<string | null>(null);
@@ -1747,7 +1781,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
   return (
     <div
-      className="grain relative flex h-screen flex-col overflow-hidden bg-ink"
+      className="grain relative isolate flex h-screen flex-col overflow-hidden bg-black"
       data-glow={settings.ambient.glow}
       style={
         {
@@ -1759,6 +1793,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         } as CSSProperties
       }
     >
+      {/* The Forge ground, shared with Video Forge: tiny sparks on black, and a
+          burst up-and-right on every click (12 Oct 2026). */}
+      <SparkField moving={motionLevel !== "off"} />
       {settings.ambient.background === "dots" && (
         <DotField
           className="absolute inset-0 z-0"
@@ -1809,17 +1846,38 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
       {/* header */}
       <header className="relative z-20 flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-line bg-coal/85 px-5 py-3 backdrop-blur">
-        <button onClick={() => nav("workbench")} className="btn-press flex items-center gap-3 text-left">
-          <span className="plaque flex h-10 w-10 items-center justify-center rounded-xl text-ember">
-            <IAnvil size={24} />
-          </span>
-          <span>
+        {/* The twin marks: this app lit, Video Forge greyed. Clicking Video
+            Forge's slides the light over and opens it (same switch as in
+            Video Forge, 12 Oct 2026). */}
+        <div className="flex items-center gap-3">
+          <div className={`forge-twin ${forgeGoing ? "going" : ""}`}>
+            <div className="lamp" />
+            <button className="slot-mark" title="Image Forge — back to the workbench" aria-label="Image Forge (this app)" onClick={() => nav("workbench")}>
+              <img src={imageMark} alt="" />
+            </button>
+            {videoForge !== false && (
+              <button
+                className="slot-mark off"
+                title="Open Video Forge"
+                aria-label="Open Video Forge"
+                onClick={async () => {
+                  setForgeGoing(true);
+                  const ok = await openVideoForge();
+                  setTimeout(() => setForgeGoing(false), 900);
+                  if (!ok) pushToast("info", "Video Forge isn't installed on this computer.");
+                }}
+              >
+                <img src={videoMark} alt="" />
+              </button>
+            )}
+          </div>
+          <button onClick={() => nav("workbench")} className="btn-press text-left">
             <span className="block font-display text-[19px] leading-none tracking-wide text-cream">
               IMAGE <span className="text-ember">FORGE</span>
             </span>
-            <span className="mt-1 block font-mono text-[9.5px] tracking-[0.14em] text-dust uppercase">image pipeline</span>
-          </span>
-        </button>
+            <span className="mt-1 block font-mono text-[9.5px] tracking-[0.14em] text-dust uppercase">AI image generator · BYOK</span>
+          </button>
+        </div>
 
         <TopMenu
           view={view}
