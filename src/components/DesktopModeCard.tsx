@@ -46,11 +46,11 @@ export default function DesktopModeCard({ pushToast }: { pushToast: (kind: Toast
       </p>
       <div className="mt-3 flex flex-wrap gap-2">
         {mode === "window" ? (
-          <Btn variant="moss" disabled={busy} onClick={() => go("browser")}>
+          <Btn data-tip="Closes this window and opens Image Forge in your web browser instead. Your work stays the same." variant="moss" disabled={busy} onClick={() => go("browser")}>
             {busy ? "Switching…" : "Open in my browser instead"}
           </Btn>
         ) : (
-          <Btn variant="moss" disabled={busy} onClick={() => go("window")}>
+          <Btn data-tip="Opens Image Forge in its own app window instead of your web browser. Your work stays the same." variant="moss" disabled={busy} onClick={() => go("window")}>
             {busy ? "Switching…" : "Open in its own window instead"}
           </Btn>
         )}

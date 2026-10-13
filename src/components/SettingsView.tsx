@@ -69,12 +69,15 @@ function TestButton({
   settings,
   label = "Test it",
   watch,
+  "data-tip": tip,
 }: {
   target: TestTarget;
   settings: ForgeSettings;
   label?: string;
   /** the key or token it checks — a pasted one (a jump from short to long) is checked straight away */
   watch?: string;
+  /** the hover help for the button */
+  "data-tip"?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<TestResult | null>(null);
@@ -96,6 +99,7 @@ function TestButton({
     <div className="mt-2">
       <div className="flex flex-wrap items-center gap-2">
         <Btn
+          data-tip={tip ?? "Checks that this connection works."}
           onClick={async () => {
             setBusy(true);
             setRes(null);
@@ -142,7 +146,7 @@ function KeyCheck({ target, settings, pool, keyId, auto }: { target: TestTarget;
   }, [auto]);
   return (
     <span className="flex shrink-0 items-center gap-1.5">
-      <Btn onClick={() => void run()} disabled={busy} className="!px-2.5 !py-1 !text-[11.5px]">
+      <Btn data-tip="Checks that this one key works." onClick={() => void run()} disabled={busy} className="!px-2.5 !py-1 !text-[11.5px]">
         {busy ? "…" : "Test"}
       </Btn>
       {res && (
@@ -192,7 +196,7 @@ function KeyPoolEditor({
           return (
             <div key={k.id} className="flex items-center gap-2">
               <span className={`h-2 w-2 shrink-0 rounded-full ${benched ? "bg-blood" : k.key.trim() ? "bg-moss" : "bg-dust/40"}`} />
-              <input
+              <input data-tip="Paste one key here. It stays on this computer and the forge uses it to ask for pictures."
                 value={k.key}
                 type="password"
                 placeholder="paste key…"
@@ -209,7 +213,7 @@ function KeyPoolEditor({
                   </button>
                 </span>
               ) : (
-                <button
+                <button data-tip="Takes this key out of the list. The last key can't be removed."
                   onClick={() => onChange(pool.filter((x) => x.id !== k.id))}
                   disabled={pool.length === 1}
                   className="btn-press shrink-0 rounded-md p-1.5 text-dust hover:bg-blood/15 hover:text-blood disabled:opacity-30"
@@ -223,8 +227,8 @@ function KeyPoolEditor({
         })}
       </div>
       <div className="mt-3 flex gap-2">
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} type="password" placeholder="add another key — more keys, more daily allowance" className={`${field} font-mono !text-[12px]`} />
-        <Btn
+        <input data-tip="Paste another key here, then press Add key. More keys means more pictures a day, because the forge moves to the next key when one runs out." value={draft} onChange={(e) => setDraft(e.target.value)} type="password" placeholder="add another key — more keys, more daily allowance" className={`${field} font-mono !text-[12px]`} />
+        <Btn data-tip="Puts the key you pasted into the list so the forge can use it."
           variant="primary"
           disabled={!draft.trim()}
           onClick={() => {
@@ -246,13 +250,13 @@ function KeyPoolEditor({
               return (
                 <div key={k.id} className="flex flex-wrap items-center gap-2">
                   <span className="w-14 shrink-0 font-mono text-[10px] text-dust">#{i + 1}</span>
-                  <input
+                  <input data-tip="A short note so you remember what this credit is, like Free trial."
                     value={k.creditLabel ?? ""}
                     onChange={(e) => onChange(pool.map((x) => (x.id === k.id ? { ...x, creditLabel: e.target.value } : x)))}
                     placeholder="what is this credit?"
                     className={`${field} !w-auto min-w-[9rem] flex-1 !py-1.5 !text-[12px]`}
                   />
-                  <input
+                  <input data-tip="The day this credit stops working. The forge warns you as it gets close."
                     type="date"
                     value={k.creditEndsOn ?? ""}
                     onChange={(e) => onChange(pool.map((x) => (x.id === k.id ? { ...x, creditEndsOn: e.target.value } : x)))}
@@ -275,9 +279,9 @@ function KeyPoolEditor({
       )}
       {test && settings && (
         <div className="mt-2 flex flex-wrap items-start gap-2">
-          <TestButton target={test} settings={settings} label="Check the first key" />
+          <TestButton data-tip="Checks that the first key in the list works." target={test} settings={settings} label="Check the first key" />
           {(test === "gemini-free" || test === "gemini-paid" || test === "openai") && pool.filter((k) => k.key.trim()).length > 1 && (
-            <Btn
+            <Btn data-tip="Tries every key in the list one by one and tells you which ones work."
               onClick={async () => {
                 setPoolBusy("checking…");
                 setPoolResults([]);
@@ -369,11 +373,11 @@ function HealthCheck({
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Btn variant="primary" onClick={() => setFindings(checkForge(settings, rows))}>
+        <Btn data-tip="Looks over your setup for quiet problems, like a key pasted twice. It only looks and changes nothing." variant="primary" onClick={() => setFindings(checkForge(settings, rows))}>
           Check the forge
         </Btn>
         {findings && fixable.length > 0 && (
-          <Btn
+          <Btn data-tip="Fixes the problems from the check that are safe to fix automatically."
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -448,7 +452,7 @@ function PauseSwitch({
           </p>
           <p className="mt-1 max-w-2xl text-[12px] text-dust">{note}</p>
         </div>
-        <Btn variant={paused ? "primary" : undefined} onClick={toggle}>
+        <Btn data-tip={`${paused ? `Turns ${label} back on so the forge uses it again.` : `Stops the forge using ${label} for now. Your keys stay saved.`}`} variant={paused ? "primary" : undefined} onClick={toggle}>
           {paused ? `Switch ${label} back on` : `Pause ${label}`}
         </Btn>
       </div>
@@ -500,8 +504,8 @@ function SaveBar({
         </span>
         <span className="font-mono text-[10.5px] text-dust">{describeCensus(census)}</span>
         <span className="ml-auto flex flex-wrap gap-2">
-          <Btn onClick={() => onSaveNow?.()}>Save now</Btn>
-          <Btn
+          <Btn data-tip="Saves your settings again right now. They already save by themselves as you type." onClick={() => onSaveNow?.()}>Save now</Btn>
+          <Btn data-tip="Saves a file with all your settings and keys. The keys are in plain text, so keep it somewhere private."
             onClick={() => {
               // The file holds the keys in plain text, so it is never written
               // without a deliberate click and never written anywhere on its own.
@@ -511,7 +515,7 @@ function SaveBar({
           >
             <IDownload size={13} /> Back up to a file
           </Btn>
-          <Btn onClick={() => fileRef.current?.click()}>
+          <Btn data-tip="Loads your settings back from a backup file you saved earlier." onClick={() => fileRef.current?.click()}>
             <IUpload size={13} /> Restore
           </Btn>
           <input
@@ -622,7 +626,7 @@ export default function SettingsView({
         <p className="mb-3 font-mono text-[10px] tracking-[0.28em] text-dust uppercase">settings</p>
         <div className="space-y-1">
           {SECTIONS.map((s) => (
-            <button
+            <button data-tip={`${`Jumps to the ${s.label} settings (${s.hint}).`}`}
               key={s.id}
               onClick={() => onSection(s.id)}
               className={`btn-press flex w-full items-baseline justify-between rounded-lg px-3 py-2 text-left ${
@@ -648,7 +652,7 @@ export default function SettingsView({
         {/* mobile rail */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:hidden">
           {SECTIONS.map((s) => (
-            <button
+            <button data-tip={`${`Jumps to the ${s.label} settings (${s.hint}).`}`}
               key={s.id}
               onClick={() => onSection(s.id)}
               className={`shrink-0 rounded-lg border px-3 py-1.5 font-mono text-[10.5px] uppercase ${
@@ -674,7 +678,7 @@ export default function SettingsView({
                 const active = settings.provider === id;
                 return (
                   <BorderGlow key={id} radius={14} glow={active ? "rgba(242,163,60,0.65)" : "color-mix(in srgb, var(--color-ember) 40%, transparent)"} idle={active ? "rgba(242,163,60,0.55)" : "#3e2f21"} innerClassName={active ? "bg-[var(--color-panel2)]" : "bg-[var(--color-panel)]"}>
-                    <button onClick={() => patchSettings({ provider: id })} className="btn-press w-full p-4 text-left">
+                    <button data-tip={`${`Makes ${m.name} the default painter for rows that don't name their own model.`}`} onClick={() => patchSettings({ provider: id })} className="btn-press w-full p-4 text-left">
                       <span className="flex items-center gap-2.5">
                         <span className="h-2.5 w-2.5 rounded-full" style={{ background: m.dot }} />
                         <span className="font-display text-[15px] tracking-wide text-cream">{m.name}</span>
@@ -699,7 +703,7 @@ export default function SettingsView({
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">server address</label>
-                  <input
+                  <input data-tip="The web address of the picture program running on your own computer."
                     value={settings.localBase}
                     onChange={(e) => patchSettings({ localBase: e.target.value.trim() })}
                     placeholder="http://localhost:8080/v1"
@@ -709,7 +713,7 @@ export default function SettingsView({
                 <div>
                   <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">model</label>
                   {localModels.length > 0 ? (
-                    <select
+                    <select data-tip="Pick the model your own server has ready. Press Find my models to fill this list."
                       value={settings.localModel}
                       onChange={(e) => patchSettings({ localModel: e.target.value })}
                       className={field}
@@ -724,7 +728,7 @@ export default function SettingsView({
                       ))}
                     </select>
                   ) : (
-                    <input
+                    <input data-tip="Type the model's name exactly the way your own server calls it."
                       value={settings.localModel}
                       onChange={(e) => patchSettings({ localModel: e.target.value.trim() })}
                       placeholder="flux.2-klein-4b"
@@ -734,7 +738,7 @@ export default function SettingsView({
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Btn
+                <Btn data-tip="Asks your own server which models it has so you can pick one."
                   onClick={async () => {
                     setLocalBusy(true);
                     setLocalNote("");
@@ -764,7 +768,7 @@ export default function SettingsView({
                 </Btn>
                 {localNote && <span className="text-[11.5px] text-dust">{localNote}</span>}
               </div>
-              <TestButton target="local" settings={settings} label="Check the connection" />
+              <TestButton data-tip="Checks that the forge can reach your own server." target="local" settings={settings} label="Check the connection" />
               <p className="mt-2 text-[11px] text-dust">
                 Leave the key blank unless your server asks for one. Local pictures are slow — the forge waits up to
                 fifteen minutes before giving up on one. A row's own <span className="font-mono text-cream">model</span>{" "}
@@ -785,7 +789,7 @@ export default function SettingsView({
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">account id</label>
-                  <input
+                  <input data-tip="Your Cloudflare account number. You can see it in the address bar when you are logged in to Cloudflare."
                     value={settings.cloudflare.accountId}
                     onChange={(e) => patchSettings({ cloudflare: { ...settings.cloudflare, accountId: e.target.value.trim() } })}
                     placeholder="a1b2c3d4e5f6…"
@@ -794,7 +798,7 @@ export default function SettingsView({
                 </div>
                 <div>
                   <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">api token</label>
-                  <input
+                  <input data-tip="Your Cloudflare key. It lets the app use Cloudflare's free picture engine."
                     type="password"
                     value={settings.cloudflare.token}
                     onChange={(e) => patchSettings({ cloudflare: { ...settings.cloudflare, token: e.target.value.trim() } })}
@@ -807,7 +811,7 @@ export default function SettingsView({
                 <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
                   quality · {settings.cloudflareSteps} steps
                 </label>
-                <input
+                <input data-tip="More steps gives a better picture but fewer pictures a day. Four is the usual setting."
                   type="range"
                   min={1}
                   max={8}
@@ -821,7 +825,7 @@ export default function SettingsView({
                   At 4 steps you get roughly 690 a day; at 8 steps roughly 380. Four is the model's intended setting.
                 </p>
               </div>
-              <TestButton target="cloudflare" settings={settings} label="Check the account and token" watch={settings.cloudflare.token} />
+              <TestButton data-tip="Checks that your Cloudflare account number and key work." target="cloudflare" settings={settings} label="Check the account and token" watch={settings.cloudflare.token} />
             </div>
 
             {/* ---- Pollinations: free, but needs a token now ---- */}
@@ -833,7 +837,7 @@ export default function SettingsView({
                 it and removes the watermark. Unlimited in total, but paced to one picture every few seconds.
               </p>
               <div className="mt-3">
-                <input
+                <input data-tip="Your free Pollinations key. Without it, Pollinations refuses every picture."
                   type="password"
                   value={settings.pollinationsToken}
                   onChange={(e) => patchSettings({ pollinationsToken: e.target.value.trim() })}
@@ -841,7 +845,7 @@ export default function SettingsView({
                   className={field}
                 />
               </div>
-              <TestButton target="pollinations" settings={settings} label="Check the token" watch={settings.pollinationsToken} />
+              <TestButton data-tip="Checks that your Pollinations key works." target="pollinations" settings={settings} label="Check the token" watch={settings.pollinationsToken} />
             </div>
 
             {/* ---- OVHcloud: free, nothing to set up ---- */}
@@ -853,7 +857,7 @@ export default function SettingsView({
                 seed — the same prompt twice gives two different pictures. Put{" "}
                 <span className="font-mono text-cream">ovh-sdxl</span> in a row's model column, or pick it as the engine.
               </p>
-              <TestButton target="ovh" settings={settings} label="Check it is up" />
+              <TestButton data-tip="Checks that the OVHcloud picture engine is up and answering." target="ovh" settings={settings} label="Check it is up" />
             </div>
 
             <PauseSwitch
@@ -897,7 +901,7 @@ export default function SettingsView({
                   <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
                     default Google model
                   </label>
-                  <select
+                  <select data-tip="The Google model used for rows that don't name one. The price per picture is shown next to each name."
                     value={settings.geminiModel}
                     onChange={(e) => patchSettings({ geminiModel: e.target.value })}
                     className={field}
@@ -911,7 +915,7 @@ export default function SettingsView({
                 </div>
                 <div>
                   <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">picture size</label>
-                  <select
+                  <select data-tip="How big Google paints each picture. Bigger pictures cost more."
                     value={settings.geminiImageSize}
                     onChange={(e) => patchSettings({ geminiImageSize: e.target.value })}
                     className={field}
@@ -937,11 +941,11 @@ export default function SettingsView({
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">endpoint base URL</label>
-                  <input value={settings.openaiBase} onChange={(e) => patchSettings({ openaiBase: e.target.value })} className={field} />
+                  <input data-tip="The web address of the OpenAI-style service the forge sends picture requests to." value={settings.openaiBase} onChange={(e) => patchSettings({ openaiBase: e.target.value })} className={field} />
                 </div>
                 <div>
                   <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">default model id</label>
-                  <input value={settings.openaiModel} onChange={(e) => patchSettings({ openaiModel: e.target.value })} className={field} />
+                  <input data-tip="The model name used when a row doesn't name one." value={settings.openaiModel} onChange={(e) => patchSettings({ openaiModel: e.target.value })} className={field} />
                 </div>
               </div>
             </div>
@@ -992,7 +996,7 @@ export default function SettingsView({
                 Google's models and DALL·E write real words reliably.
               </p>
               <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5">
-                <input
+                <input data-tip="When on, the forge tells models that can't spell not to draw words, so you don't get gibberish text. Your manifest is not changed."
                   type="checkbox"
                   checked={settings.suppressTextOnWeakModels}
                   onChange={(e) => patchSettings({ suppressTextOnWeakModels: e.target.checked })}
@@ -1013,7 +1017,7 @@ export default function SettingsView({
                 <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
                   how good is YOUR local model at writing?
                 </label>
-                <select
+                <select data-tip="Tells the forge how well your own model writes words, so it knows when to keep words out of pictures."
                   value={settings.localTextQuality}
                   onChange={(e) => patchSettings({ localTextQuality: e.target.value as typeof settings.localTextQuality })}
                   className={field}
@@ -1059,7 +1063,7 @@ export default function SettingsView({
                 manifest. If the text model is unreachable the original prompt is used and the forge says so.
               </p>
               <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5">
-                <input
+                <input data-tip="When on, your text model rewrites each prompt to suit the picture engine just before it is sent. Your manifest is not changed."
                   type="checkbox"
                   checked={settings.tailorPrompts}
                   onChange={(e) => patchSettings({ tailorPrompts: e.target.checked })}
@@ -1089,7 +1093,7 @@ export default function SettingsView({
                 moving on, so the risk is a slower run, not lost work.
               </p>
               <div className="mt-3 flex items-center gap-4">
-                <input
+                <input data-tip="How many pictures are made at the same time. Higher is faster but hits rate limits sooner."
                   type="range"
                   min={1}
                   max={6}
@@ -1114,7 +1118,7 @@ export default function SettingsView({
                       <span className="block truncate font-mono text-[11.5px] text-cream">{m.id}</span>
                       <span className="block font-mono text-[9px] text-dust">{m.free} · used {usedToday(settings.usage, m.id)}/day</span>
                     </span>
-                    <input
+                    <input data-tip={`${`Hours ${m.id} rests after all its keys are rate-limited. 0 means try again straight away.`}`}
                       type="number"
                       min={0}
                       value={settings.cooldowns[m.id] ?? m.defaultCooldownH}
@@ -1128,7 +1132,7 @@ export default function SettingsView({
             </div>
 
             <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-panel/50 px-4 py-3">
-              <input
+              <input data-tip="When on, a row that was waiting out a pause goes back in the queue by itself once the pause ends."
                 type="checkbox"
                 checked={settings.autoRetry}
                 onChange={(e) => patchSettings({ autoRetry: e.target.checked })}
@@ -1149,7 +1153,7 @@ export default function SettingsView({
           <>
             <H>Image styles</H>
             <P>Styles live in the library now — lock them, add your own languages, keep every batch consistent.</P>
-            <Btn variant="primary" onClick={onGoStyles}>Open the style library →</Btn>
+            <Btn data-tip="Opens the style library, where you pick, lock and add looks." variant="primary" onClick={onGoStyles}>Open the style library →</Btn>
             <P className="mt-1">
               {STYLE_CATALOGUE.length} looks, grouped. Each one knows which models suit it and which of those you have
               set up. The <span className="text-moss">green</span> model is what it will use if you change nothing — always
@@ -1191,7 +1195,7 @@ export default function SettingsView({
                               </p>
                               <p className="mt-0.5 text-[11.5px] leading-snug text-dust">{st.blurb}</p>
                             </div>
-                            <button
+                            <button data-tip={`${locked ? `${st.name} is added to every prompt now. Click to turn it off.` : `Adds the ${st.name} look to every prompt so the whole batch matches.`}`}
                               onClick={() => onLockStyle?.(st.id)}
                               className={`btn-press shrink-0 rounded-md px-2 py-1 font-mono text-[9.5px] tracking-wider uppercase ${
                                 locked ? "bg-ember text-[var(--color-on-accent)]" : "border border-line text-dust hover:text-cream"
@@ -1276,13 +1280,13 @@ export default function SettingsView({
                 <div className="flex items-center justify-between">
                   <p className="font-display text-[14px] tracking-wide text-cream">{label}</p>
                   {settings.metaPrompts[key] && (
-                    <button onClick={() => patchSettings({ metaPrompts: { ...settings.metaPrompts, [key]: "" } })} className="btn-press font-mono text-[10px] text-dust underline hover:text-blood">
+                    <button data-tip="Throws away your changes and goes back to the built-in instructions." onClick={() => patchSettings({ metaPrompts: { ...settings.metaPrompts, [key]: "" } })} className="btn-press font-mono text-[10px] text-dust underline hover:text-blood">
                       reset to built-in
                     </button>
                   )}
                 </div>
                 <p className="mt-0.5 text-[11.5px] text-dust">{hint}</p>
-                <textarea
+                <textarea data-tip={`${`Your own instructions for ${label}. Leave it empty to use the built-in ones.`}`}
                   value={settings.metaPrompts[key]}
                   onChange={(e) => patchSettings({ metaPrompts: { ...settings.metaPrompts, [key]: e.target.value } })}
                   rows={3}
@@ -1319,7 +1323,7 @@ export default function SettingsView({
                       <span className="mt-0.5 block text-[11.5px] leading-snug text-dust">{rule.why}</span>
                     </span>
                     {rule.optional ? (
-                      <button
+                      <button data-tip={`${`Turns the rule "${rule.label}" on or off.`}`}
                         onClick={() =>
                           patchSettings({
                             filenameRules: { ...settings.filenameRules, [rule.id]: !on },
@@ -1370,11 +1374,11 @@ export default function SettingsView({
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  {fsSupported() && <Btn variant="primary" onClick={onLinkFolder}>{folder.linked ? "Change" : folder.pendingName ? "Re-link" : "Link folder…"}</Btn>}
+                  {fsSupported() && <Btn data-tip={`${folder.linked ? `Pick a different folder for your finished pictures.` : `Pick the folder on your computer where finished pictures are saved automatically.`}`} variant="primary" onClick={onLinkFolder}>{folder.linked ? "Change" : folder.pendingName ? "Re-link" : "Link folder…"}</Btn>}
                   {folder.linked && (
                     <>
-                      <Btn onClick={onSyncAll}>Sync all now</Btn>
-                      <Btn variant="danger" onClick={onUnlinkFolder}>
+                      <Btn data-tip="Saves everything that is finished into the linked folder again." onClick={onSyncAll}>Sync all now</Btn>
+                      <Btn data-tip="Stops saving into this folder. The files already in it stay where they are." variant="danger" onClick={onUnlinkFolder}>
                         <IX size={12} /> Unlink
                       </Btn>
                     </>
@@ -1388,7 +1392,7 @@ export default function SettingsView({
               )}
             </div>
             <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-parch">
-              <input type="checkbox" checked={settings.writeCsvOnSync} onChange={(e) => patchSettings({ writeCsvOnSync: e.target.checked })} className="accent-[var(--color-ember)]" />
+              <input data-tip="When on, the forge updates the manifest CSV file inside your folder after each run." type="checkbox" checked={settings.writeCsvOnSync} onChange={(e) => patchSettings({ writeCsvOnSync: e.target.checked })} className="accent-[var(--color-ember)]" />
               refresh marketplace-images.csv inside the folder after each run
             </label>
           </>
@@ -1407,15 +1411,15 @@ export default function SettingsView({
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
                 <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">site URL</label>
-                <input value={settings.wp.url} onChange={(e) => patchSettings({ wp: { ...settings.wp, url: e.target.value } })} placeholder="https://example.com" className={field} />
+                <input data-tip="The web address of your WordPress site." value={settings.wp.url} onChange={(e) => patchSettings({ wp: { ...settings.wp, url: e.target.value } })} placeholder="https://example.com" className={field} />
               </div>
               <div>
                 <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">username</label>
-                <input value={settings.wp.user} onChange={(e) => patchSettings({ wp: { ...settings.wp, user: e.target.value } })} className={field} />
+                <input data-tip="Your WordPress login name." value={settings.wp.user} onChange={(e) => patchSettings({ wp: { ...settings.wp, user: e.target.value } })} className={field} />
               </div>
               <div>
                 <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">application password</label>
-                <input type="password" value={settings.wp.appPassword} onChange={(e) => patchSettings({ wp: { ...settings.wp, appPassword: e.target.value } })} placeholder="xxxx xxxx xxxx xxxx" className={field} />
+                <input data-tip="A special password WordPress makes for apps like this one. It is not your normal login password." type="password" value={settings.wp.appPassword} onChange={(e) => patchSettings({ wp: { ...settings.wp, appPassword: e.target.value } })} placeholder="xxxx xxxx xxxx xxxx" className={field} />
               </div>
             </div>
             <p className="text-[12px] text-dust">
@@ -1481,7 +1485,7 @@ export default function SettingsView({
                 to <span className="font-mono text-parch">pending</span>, duplicate filenames get a suffix, the
                 shops/items/events/npcs structure in your linked folder is re-created, and a fresh CSV is written there.
               </p>
-              <Btn
+              <Btn data-tip="Fixes the usual problems in one go: stuck rows go back to waiting and duplicate filenames get a number added."
                 variant="primary"
                 className="mt-3"
                 disabled={repairBusy}
@@ -1508,25 +1512,25 @@ export default function SettingsView({
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div>
                   <label className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">repo owner</label>
-                  <input value={settings.github.owner} onChange={(e) => patchSettings({ github: { ...settings.github, owner: e.target.value } })} placeholder="your-github-name" className={`${field} font-mono !text-[12px]`} />
+                  <input data-tip="The GitHub account or group that owns the repository." value={settings.github.owner} onChange={(e) => patchSettings({ github: { ...settings.github, owner: e.target.value } })} placeholder="your-github-name" className={`${field} font-mono !text-[12px]`} />
                 </div>
                 <div>
                   <label className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">repo name</label>
-                  <input value={settings.github.repo} onChange={(e) => patchSettings({ github: { ...settings.github, repo: e.target.value } })} placeholder="image-forge" className={`${field} font-mono !text-[12px]`} />
+                  <input data-tip="The name of the repository on GitHub." value={settings.github.repo} onChange={(e) => patchSettings({ github: { ...settings.github, repo: e.target.value } })} placeholder="image-forge" className={`${field} font-mono !text-[12px]`} />
                 </div>
                 <div>
                   <label className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">branch</label>
-                  <input value={settings.github.branch} onChange={(e) => patchSettings({ github: { ...settings.github, branch: e.target.value } })} placeholder="main" className={`${field} font-mono !text-[12px]`} />
+                  <input data-tip="The branch to read from, like main." value={settings.github.branch} onChange={(e) => patchSettings({ github: { ...settings.github, branch: e.target.value } })} placeholder="main" className={`${field} font-mono !text-[12px]`} />
                 </div>
                 <div>
                   <label className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">manifest path in repo</label>
-                  <input value={settings.github.csvPath} onChange={(e) => patchSettings({ github: { ...settings.github, csvPath: e.target.value } })} placeholder="marketplace-images.csv" className={`${field} font-mono !text-[12px]`} />
+                  <input data-tip="Where the manifest CSV file sits inside the repository." value={settings.github.csvPath} onChange={(e) => patchSettings({ github: { ...settings.github, csvPath: e.target.value } })} placeholder="marketplace-images.csv" className={`${field} font-mono !text-[12px]`} />
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <div className="flex overflow-hidden rounded-lg border border-line">
                   {(["merge", "replace"] as const).map((m) => (
-                    <button
+                    <button data-tip={`${m === "merge" ? `Adds the pulled rows to the ones you already have.` : `Swaps your rows for the pulled ones.`}`}
                       key={m}
                       onClick={() => setPullMode(m)}
                       className={`btn-press px-3 py-2 font-mono text-[10.5px] uppercase ${pullMode === m ? "bg-ember/15 text-ember" : "text-dust hover:text-cream"}`}
@@ -1535,7 +1539,7 @@ export default function SettingsView({
                     </button>
                   ))}
                 </div>
-                <Btn
+                <Btn data-tip="Downloads the manifest from the repository and loads it into the forge."
                   onClick={async () => {
                     setPullBusy(true);
                     try {
@@ -1548,7 +1552,7 @@ export default function SettingsView({
                 >
                   <IDownload size={13} /> {pullBusy ? "Pulling…" : "Pull manifest"}
                 </Btn>
-                <Btn
+                <Btn data-tip="Checks whether a newer version of the app has been published."
                   variant="moss"
                   onClick={async () => {
                     setUpdateBusy(true);
@@ -1588,7 +1592,7 @@ export default function SettingsView({
                   ] as const
                 ).map((o) => (
                   <label key={o.key} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5">
-                    <input
+                    <input data-tip={`${`Tick to erase: ${o.label}.`}`}
                       type="checkbox"
                       checked={resetChecks[o.key]}
                       onChange={(e) => {
@@ -1605,10 +1609,10 @@ export default function SettingsView({
                 ))}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Btn onClick={onBackup}>
+                <Btn data-tip="Saves a backup file first so you can get things back after a reset." onClick={onBackup}>
                   <IDownload size={13} /> Download backup first
                 </Btn>
-                <Btn
+                <Btn data-tip="Erases the things you ticked. It asks you to click twice because it can't be undone."
                   variant="danger"
                   disabled={!resetChecks.rows && !resetChecks.recipes && !resetChecks.settings && !resetChecks.market}
                   onClick={() => {
@@ -1635,7 +1639,7 @@ export default function SettingsView({
                 your data survives either way until you opt in.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <a
+                <a data-tip="Opens the Windows list of installed apps, where you can uninstall Image Forge."
                   href="ms-settings:appsfeatures"
                   target="_blank"
                   rel="noreferrer"

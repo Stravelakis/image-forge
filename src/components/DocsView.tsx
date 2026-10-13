@@ -85,7 +85,7 @@ export default function DocsView({
           <h3 className="font-display text-lg text-cream">01 · Two-minute quickstart</h3>
           <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-[13.5px] leading-relaxed text-parch marker:font-mono marker:text-ember">
             <li>
-              Open <button onClick={onOpenSettings} className="font-mono text-ember underline decoration-ember/40 underline-offset-2">Settings → Image engines</button> and pick a painter.{" "}
+              Open <button data-tip="Opens Settings on the Image engines page, where you pick a painter." onClick={onOpenSettings} className="font-mono text-ember underline decoration-ember/40 underline-offset-2">Settings → Image engines</button> and pick a painter.{" "}
               <span className="font-mono text-moss">flux</span> works instantly with no key;{" "}
               <span className="font-mono text-lagoon">imagen-4-ultra</span> wants a free Gemini key (add several — rotation is automatic).
             </li>
@@ -160,13 +160,13 @@ export default function DocsView({
                 Chrome/Edge. Auto-writes into {CATEGORIES.map((c) => CATEGORY_META[c].folder + "/").join(" ")} — your pre-made folders are used as-is. {folderLinked ? `Currently: ${folderName}.` : "Not linked yet."}
               </p>
               {fsSupported() && !folderLinked && (
-                <button onClick={onLinkFolder} className="btn-press mt-2.5 font-mono text-[11px] text-ember underline decoration-ember/40 underline-offset-2">link one now →</button>
+                <button data-tip="Lets you pick the folder where finished pictures are saved automatically." onClick={onLinkFolder} className="btn-press mt-2.5 font-mono text-[11px] text-ember underline decoration-ember/40 underline-offset-2">link one now →</button>
               )}
             </div>
             <div className="plaque rounded-xl p-4">
               <p className="flex items-center gap-2 font-mono text-[10px] tracking-[0.2em] text-lagoon uppercase"><IDownload size={12} /> zip</p>
               <p className="mt-2 text-[12px] leading-relaxed text-parch">Works everywhere. Full folder structure + CSV. Point it at a Google Drive sync folder for free cloud backup.</p>
-              <div className="mt-3"><Btn onClick={onZip}><IDownload size={12} /> download zip</Btn></div>
+              <div className="mt-3"><Btn data-tip="Downloads all finished pictures and the spreadsheet as one ZIP file." onClick={onZip}><IDownload size={12} /> download zip</Btn></div>
             </div>
             <div className="plaque rounded-xl p-4">
               <p className="font-mono text-[10px] tracking-[0.2em] text-ember uppercase">row by row</p>
@@ -183,7 +183,7 @@ export default function DocsView({
             from your current manifest — does it with WP-CLI so Imagify optimizes everything:
           </p>
           <div className="mt-3"><CodeBlock code={script} /></div>
-          <div className="mt-2 flex justify-end"><CopyBtn text={script} label="copy script" /></div>
+          <div className="mt-2 flex justify-end"><CopyBtn data-tip="Copies this script so you can paste it into your WordPress server." text={script} label="copy script" /></div>
         </li>
 
         <li className="reveal">

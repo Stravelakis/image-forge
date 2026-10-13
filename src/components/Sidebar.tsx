@@ -63,7 +63,7 @@ export default function Sidebar(p: SidebarProps) {
         <ul className="mt-3 space-y-0.5">
           {counts.map(({ s, n }) => (
             <li key={s}>
-              <button
+              <button data-tip={`Shows only the rows that are ${s}. Click again to show all rows.`}
                 onClick={() => p.setStatusFilter(p.statusFilter === s ? "all" : s)}
                 className={`btn-press flex w-full items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-left transition ${
                   p.statusFilter === s ? "bg-raise text-cream" : "text-parch hover:bg-raise/50 hover:text-cream"
@@ -91,7 +91,7 @@ export default function Sidebar(p: SidebarProps) {
             const Ic = CAT_ICON[c];
             const active = p.catFilter === c;
             return (
-              <button
+              <button data-tip={`Shows only the ${c} rows. Click again to show all rows.`}
                 key={c}
                 onClick={() => p.setCatFilter(active ? "all" : c)}
                 className={`btn-press flex items-center gap-2 rounded-lg border px-2.5 py-2 text-[12px] transition ${
@@ -119,7 +119,7 @@ export default function Sidebar(p: SidebarProps) {
             {modelsUsed.map(({ id, label, n }) => {
               const active = p.modelFilter === id;
               return (
-                <button
+                <button data-tip={`Shows only the rows made with ${label}. Click again to show all rows.`}
                   key={id}
                   onClick={() => p.setModelFilter(active ? "all" : id)}
                   className={`btn-press flex w-full items-center gap-2 rounded-lg border px-2.5 py-1.5 text-[12px] transition ${
@@ -156,7 +156,7 @@ export default function Sidebar(p: SidebarProps) {
           {p.isRunning ? (
             <div>
               <div className="stripes-live mb-2 h-2.5 rounded-full" />
-              <button
+              <button data-tip="Stops the queue. The picture being drawn right now may still finish."
                 onClick={p.onStop}
                 className="btn-press flex w-full items-center justify-center gap-2 rounded-lg border border-blood/40 bg-blood/10 py-2 text-[13px] font-semibold text-blood hover:bg-blood/20"
               >
@@ -168,7 +168,7 @@ export default function Sidebar(p: SidebarProps) {
             </div>
           ) : (
             <div>
-              <button
+              <button data-tip="Starts making all the waiting pictures, one after another. You are asked first if any of them cost money."
                 onClick={p.onRun}
                 disabled={queueLen === 0}
                 className={`btn-press flex w-full items-center justify-center gap-2 rounded-lg bg-ember py-2 text-[13px] font-semibold text-[var(--color-on-accent)] shadow-[0_2px_0_#8a5a17,0_10px_24px_rgba(242,163,60,0.2)] hover:bg-[var(--color-accent-lift)] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none ${
@@ -218,14 +218,14 @@ export default function Sidebar(p: SidebarProps) {
             </p>
           </div>
           {(p.drift > 0 || p.violations > 0) && (
-            <Btn variant="subtle" className="w-full justify-center" onClick={p.onJumpSpec}>
+            <Btn data-tip="Jumps to the page that lists the rows with problems and how to fix them." variant="subtle" className="w-full justify-center" onClick={p.onJumpSpec}>
               open rules &amp; fixes →
             </Btn>
           )}
         </div>
       </section>
 
-      <a
+      <a data-tip="Opens the Image Forge project page on GitHub in your web browser."
         href="https://github.com/Stravelakis/image-forge"
         target="_blank"
         rel="noreferrer"

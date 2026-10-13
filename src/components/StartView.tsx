@@ -129,7 +129,7 @@ export default function StartView({
       <p className="mt-2 text-[14px] text-parch">Describe it once. Say how many. Press the button.</p>
 
       <div className="mt-6 rounded-2xl border border-line bg-panel/60 p-5">
-        <textarea
+        <textarea data-tip="Say what you need in plain words, for example 12 potion bottle icons. Ctrl+Enter starts it."
           value={text}
           onChange={(e) => {
             setText(e.target.value);
@@ -150,7 +150,7 @@ export default function StartView({
         <div className="mt-4 flex flex-wrap items-end gap-4">
           <label className="flex flex-col gap-1 text-[12px] text-dust">
             How many
-            <input
+            <input data-tip="How many pictures to make. Typing a number in your sentence fills this in."
               type="number"
               min={1}
               max={MAX_START}
@@ -172,7 +172,7 @@ export default function StartView({
             >
               Style
             </button>
-            <select
+            <select data-tip="The look the pictures should have, for example watercolour or pixel art."
               value={style}
               onChange={(e) => setStyle(e.target.value)}
               className="rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[14px] text-cream"
@@ -201,7 +201,7 @@ export default function StartView({
             Shape
             <div className="flex gap-1">
               {SHAPES.map((s) => (
-                <button
+                <button data-tip={`Makes the pictures ${s.label.toLowerCase()} (${s.id}).`}
                   key={s.id}
                   onClick={() => setShape(s.id)}
                   aria-pressed={shape === s.id}
@@ -217,7 +217,7 @@ export default function StartView({
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <Btn variant="primary" onClick={() => void go()} disabled={!text.trim() || busy} className="!px-6 !py-3 !text-[15px]">
+          <Btn data-tip="Plans the pictures from your description and puts them on the workbench, ready to make." variant="primary" onClick={() => void go()} disabled={!text.trim() || busy} className="!px-6 !py-3 !text-[15px]">
             <IHammer size={15} /> {busy ? "Planning…" : count === 1 ? "Make it" : `Make ${count}`}
           </Btn>
           {/* The engine: only what is set up and working, and "Add more…"

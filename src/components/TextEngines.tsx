@@ -179,7 +179,7 @@ export default function TextEngines({
               {preset.free && <span className="ml-1.5 font-mono text-[9.5px] text-moss">free</span>}
             </button>
           ))}
-          <button
+          <button data-tip="Adds an empty account you fill in yourself, for a text service that is not in the list above."
             onClick={() => addProvider()}
             className="rounded-lg border border-dashed border-line px-2.5 py-1 text-[12px] text-dust transition hover:text-cream"
           >
@@ -198,19 +198,19 @@ export default function TextEngines({
           {providers.map((p) => (
             <div key={p.id} className="rounded-lg border border-line bg-[var(--color-field)] p-3">
               <div className="grid gap-2 sm:grid-cols-[140px_1fr_1fr]">
-                <input
+                <input data-tip="A name for this account, so you can tell it apart later."
                   value={p.label}
                   onChange={(e) => patchProvider(p.id, { label: e.target.value })}
                   placeholder="a name for it"
                   className={field}
                 />
-                <input
+                <input data-tip="The web address of this text service. It usually ends in /v1."
                   value={p.base}
                   onChange={(e) => patchProvider(p.id, { base: e.target.value.trim() })}
                   placeholder="https://api.example.com/v1"
                   className={field}
                 />
-                <input
+                <input data-tip="Your key for this service. It stays on this computer."
                   type="password"
                   value={p.key}
                   onChange={(e) => patchProvider(p.id, { key: e.target.value.trim() })}
@@ -219,7 +219,7 @@ export default function TextEngines({
                 />
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Btn onClick={() => void loadModels(p)} disabled={busy === p.id || !p.base.trim()}>
+                <Btn data-tip="Asks this account which models it offers so you can pick one below." onClick={() => void loadModels(p)} disabled={busy === p.id || !p.base.trim()}>
                   {busy === p.id ? "asking…" : "Load its models"}
                 </Btn>
                 <button
@@ -243,7 +243,7 @@ export default function TextEngines({
         {allModels.length > 0 && (
           <div className="mt-3 rounded-lg border border-line bg-[var(--color-field)] p-3">
             <label className="flex cursor-pointer items-center gap-2.5">
-              <input
+              <input data-tip="When on, the list shows only models that cost nothing. It needs the account to publish prices."
                 type="checkbox"
                 checked={hidePaid}
                 onChange={(e) => setHidePaid(e.target.checked)}
@@ -291,7 +291,7 @@ export default function TextEngines({
 
             <div className="mt-3">
               <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">model</label>
-              <select
+              <select data-tip="Pick which model does this job. Load an account's models first to fill the list."
                 value={engine.model}
                 onChange={(e) => {
                   const picked = offered.find((m) => m.model === e.target.value);
@@ -341,7 +341,7 @@ export default function TextEngines({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-2">
-              <Btn onClick={() => void runTest(job.id)} disabled={busy === job.id || !engine.key.trim()}>
+              <Btn data-tip={`${`Sends a tiny test to this model to see if it can do this job: ${job.testLabel}`}`} onClick={() => void runTest(job.id)} disabled={busy === job.id || !engine.key.trim()}>
                 {busy === job.id ? "trying…" : job.testLabel}
               </Btn>
               {result && (

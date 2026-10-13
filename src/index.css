@@ -580,3 +580,12 @@ html[data-forge] .btn-press.rounded-lg:not(.shrink-0):not([class*="h-"]), html[d
 html[data-forge] .btn-press.bg-ember {
   background: linear-gradient(100deg, color-mix(in srgb, var(--color-ember) 35%, #1d2350), color-mix(in srgb, var(--color-ember) 75%, #3f4fa0) 45%, var(--color-ember)) !important;
   box-shadow: 0 0 22px -8px var(--color-ember) !important; }
+
+/* THE HOVER HELP (components/TipLayer.tsx — the same file as Video Forge's).
+   Violet glass to match the Forge look; drawn over everything. */
+.forge-tip { padding: 9px 12px; border-radius: 14px; background: rgba(14, 10, 28, .96); border: 1px solid rgba(168, 151, 255, .38);
+  color: #ece8ff; font: 400 12.5px/1.5 "Sora", system-ui, sans-serif; letter-spacing: 0; text-transform: none; white-space: normal;
+  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, .9), 0 0 24px -12px rgba(168, 151, 255, .7); backdrop-filter: blur(10px);
+  animation: forge-tip-in .14s ease-out; }
+@keyframes forge-tip-in { from { opacity: 0; translate: 0 3px; } }
+.forge-tip-more { display: block; margin-top: 6px; color: #c9bdff; text-decoration: underline; text-underline-offset: 2px; font-weight: 500; }

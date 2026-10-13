@@ -262,7 +262,7 @@ export default function PromptFactory({
             { id: "file", label: "⇪ upload CSV / TXT" },
           ] as { id: typeof mode; label: string }[]
         ).map((m) => (
-          <button
+          <button data-tip={m.id === "write" ? "The AI writes a list of picture descriptions for you from a theme." : m.id === "paste" ? "Paste a list you already have and turn it into rows." : "Load a list from a CSV or TXT file (a plain spreadsheet or text file)."}
             key={m.id}
             onClick={() => setMode(m.id)}
             className={`btn-press rounded-lg border px-3.5 py-2 text-[12.5px] font-semibold transition ${
@@ -279,14 +279,14 @@ export default function PromptFactory({
           <div className="grid gap-3 sm:grid-cols-[1fr_120px_auto]">
             <div>
               <label className="mb-1 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">theme</label>
-              <input value={theme} onChange={(e) => setTheme(e.target.value)} placeholder={kind.id === "none" ? "e.g. a harbour district" : "e.g. the night market"} className={field} />
+              <input data-tip="What the pictures are about, for example a harbour district. The AI writes ideas that fit it." value={theme} onChange={(e) => setTheme(e.target.value)} placeholder={kind.id === "none" ? "e.g. a harbour district" : "e.g. the night market"} className={field} />
             </div>
             <div>
               <label className="mb-1 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">how many</label>
-              <input type="number" min={1} max={40} value={count} onChange={(e) => setCount(Math.max(1, Math.min(40, Number(e.target.value) || 1)))} className={field} />
+              <input data-tip="How many picture ideas to write, from 1 to 40." type="number" min={1} max={40} value={count} onChange={(e) => setCount(Math.max(1, Math.min(40, Number(e.target.value) || 1)))} className={field} />
             </div>
             <div className="flex items-end gap-2">
-              <Btn variant="primary" onClick={runAi} disabled={busy || !settings.scribe.key.trim()}>
+              <Btn data-tip="Your text AI writes the picture descriptions. It needs a text engine set up in Settings." variant="primary" onClick={runAi} disabled={busy || !settings.scribe.key.trim()}>
                 <IWand size={13} /> {busy ? "writing…" : "Write prompts"}
               </Btn>
               <Btn onClick={runOffline} disabled={busy} title="no text engine needed">
@@ -311,9 +311,9 @@ export default function PromptFactory({
             <span className="font-mono text-[11px] text-cream">item_potion.png | a healing potion | no text</span> ·{" "}
             <span className="font-mono text-[11px] text-cream">shop_forge.png → the forge at dawn → no smoke</span>
           </p>
-          <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={6} placeholder={"the forge at dawn\nitem_rope.png | fifty feet of hempen rope\nshop_tavern.png | a tavern called The Tipsy Griffin | no neon"} className={field + " resize-y font-mono text-[12px]"} />
+          <textarea data-tip="Paste your list here, one picture per line. Put a bar between the file name, the description and what to avoid." value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={6} placeholder={"the forge at dawn\nitem_rope.png | fifty feet of hempen rope\nshop_tavern.png | a tavern called The Tipsy Griffin | no neon"} className={field + " resize-y font-mono text-[12px]"} />
           <div className="mt-3">
-            <Btn variant="primary" onClick={parsePaste} disabled={!pasteText.trim()}>
+            <Btn data-tip="Turns each line you pasted into a row in the list below." variant="primary" onClick={parsePaste} disabled={!pasteText.trim()}>
               <ICheck size={13} /> Turn into rows
             </Btn>
           </div>
@@ -329,7 +329,7 @@ export default function PromptFactory({
           </p>
           <input ref={fileRef} type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
           <div className="mt-4">
-            <Btn variant="primary" onClick={() => fileRef.current?.click()}>
+            <Btn data-tip="Pick a CSV or TXT file from your computer to load as a list." variant="primary" onClick={() => fileRef.current?.click()}>
               Choose file…
             </Btn>
           </div>
@@ -344,16 +344,16 @@ export default function PromptFactory({
               The list <span className="font-mono text-[11px] text-moss">· {valid} ready</span>
             </h3>
             <div className="flex gap-2">
-              <Btn onClick={addManual}>
+              <Btn data-tip="Adds one empty row to the list so you can type it in yourself." onClick={addManual}>
                 <IPlus size={13} /> Add row
               </Btn>
               <Btn onClick={() => void copyForSheets()} disabled={valid === 0} title="Copy the list, then paste it into Google Sheets — the columns land in place">
                 Copy for Google Sheets
               </Btn>
-              <Btn onClick={() => void exportXlsx()} disabled={valid === 0}>
+              <Btn data-tip="Saves this list as an Excel file you can open in a spreadsheet." onClick={() => void exportXlsx()} disabled={valid === 0}>
                 Excel
               </Btn>
-              <Btn onClick={exportCsv} disabled={valid === 0}>
+              <Btn data-tip="Saves this list as a CSV file, a simple table that any spreadsheet can open." onClick={exportCsv} disabled={valid === 0}>
                 <IWand size={12} /> CSV
               </Btn>
             </div>
@@ -375,10 +375,10 @@ export default function PromptFactory({
                   return (
                     <tr key={i} className="border-b border-line/60 align-top transition-colors last:border-0 hover:bg-raise/30">
                       <td className="px-3.5 py-2.5">
-                        <input value={it.filename} onChange={(e) => patch(i, { filename: e.target.value })} className={field + " font-mono text-[11px]"} />
+                        <input data-tip="The file name this picture will be saved under." value={it.filename} onChange={(e) => patch(i, { filename: e.target.value })} className={field + " font-mono text-[11px]"} />
                       </td>
                       <td className="px-3.5 py-3">
-                        <select value={cat} onChange={(e) => patch(i, { category: e.target.value as Category, filename: autoFixFilename(it.filename, e.target.value as Category) })} className={field + " w-[92px] font-mono text-[11px]"}>
+                        <select data-tip="What kind of picture this is. Changing it also fixes the start of the file name to match." value={cat} onChange={(e) => patch(i, { category: e.target.value as Category, filename: autoFixFilename(it.filename, e.target.value as Category) })} className={field + " w-[92px] font-mono text-[11px]"}>
                           {CATEGORIES.map((c) => (
                             <option key={c} value={c}>{c}</option>
                           ))}
@@ -388,10 +388,10 @@ export default function PromptFactory({
                         </div>
                       </td>
                       <td className="px-3.5 py-2.5">
-                        <textarea value={it.prompt} onChange={(e) => patch(i, { prompt: e.target.value })} rows={2} className={field + " resize-y"} placeholder="what should the picture show…" />
+                        <textarea data-tip="What this picture should show." value={it.prompt} onChange={(e) => patch(i, { prompt: e.target.value })} rows={2} className={field + " resize-y"} placeholder="what should the picture show…" />
                       </td>
                       <td className="px-3.5 py-2.5">
-                        <textarea value={it.negative_prompt ?? ""} onChange={(e) => patch(i, { negative_prompt: e.target.value || undefined })} rows={2} placeholder={kind.negative} className={field + " resize-y text-blood/80"} />
+                        <textarea data-tip="Things this picture must not show. Leave it empty if there is nothing to avoid." value={it.negative_prompt ?? ""} onChange={(e) => patch(i, { negative_prompt: e.target.value || undefined })} rows={2} placeholder={kind.negative} className={field + " resize-y text-blood/80"} />
                       </td>
                       <td className="px-3.5 py-3">
                         <button onClick={() => remove(i)} className="btn-press rounded-md p-1.5 text-dust hover:bg-blood/15 hover:text-blood" title="remove">

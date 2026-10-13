@@ -85,6 +85,7 @@ import { SparkField } from "./components/SparkField";
 import { loadThumbs, saveThumb, makeThumb } from "./lib/thumbStore";
 import { flushVault } from "./lib/vault";
 import MadeView from "./components/MadeView";
+import { TipLayer } from "./components/TipLayer";
 import type { PuppetTemplate } from "./lib/batches";
 import { DEFAULT_SETUP } from "./lib/batches";
 import { CATEGORY_FOLDER } from "./lib/output";
@@ -205,10 +206,13 @@ const nowTime = () => new Date().toLocaleTimeString("en-GB", { hour12: false });
 
 export default function App() {
   const [mode, setMode] = useState<"forge" | "market">("forge");
-  if (mode === "market") {
-    return <MarketApp onOpenForge={() => setMode("forge")} />;
-  }
-  return <ForgeApp onOpenMarket={() => setMode("market")} />;
+  // The hover help bubble, over everything (components/TipLayer.tsx).
+  return (
+    <>
+      {mode === "market" ? <MarketApp onOpenForge={() => setMode("forge")} /> : <ForgeApp onOpenMarket={() => setMode("market")} />}
+      <TipLayer />
+    </>
+  );
 }
 
 function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
@@ -1951,7 +1955,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               </button>
             )}
           </div>
-          <button onClick={() => nav("workbench")} className="btn-press text-left">
+          <button data-tip="Takes you back to the main workbench, the home screen of Image Forge." onClick={() => nav("workbench")} className="btn-press text-left">
             <span className="block font-display text-[19px] leading-none tracking-wide text-cream">
               IMAGE <span className="text-ember">FORGE</span>
             </span>
@@ -2151,7 +2155,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
             />
             <main className="relative flex min-w-0 flex-1 flex-col">
               <div className="flex shrink-0 items-center gap-2 border-b border-line px-5 py-2">
-                <button onClick={() => setTableMode(false)} className="btn-press font-mono text-[11px] text-dust hover:text-cream">
+                <button data-tip="Goes back to the Made screen, where all your finished pictures are." onClick={() => setTableMode(false)} className="btn-press font-mono text-[11px] text-dust hover:text-cream">
                   ← back to Made
                 </button>
               </div>
@@ -2160,7 +2164,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
                   <span className="font-mono text-[10px] tracking-[0.2em] text-dust uppercase">showing batch</span>
                   <span className="rounded-md border border-ember/40 bg-ember/10 px-2 py-0.5 font-mono text-[11px] text-ember">{activeBatch.name}</span>
                   <span className="font-mono text-[10px] text-dust">{activeBatch.rowIds.length} pictures</span>
-                  <button onClick={() => setBatchFilter(null)} className="btn-press ml-auto flex items-center gap-1 font-mono text-[10px] text-dust hover:text-cream">
+                  <button data-tip="Stops showing only this batch and shows all your pictures again." onClick={() => setBatchFilter(null)} className="btn-press ml-auto flex items-center gap-1 font-mono text-[10px] text-dust hover:text-cream">
                     <IX size={10} /> show everything
                   </button>
                 </div>
@@ -2240,7 +2244,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
                   <p className="font-mono text-[11px] text-dust">
                     {factoryItems.filter((i) => i.filename.trim() && i.prompt.trim()).length} pictures ready · style “{styleLock}” will be appended
                   </p>
-                  <Btn
+                  <Btn data-tip="Puts all these prompts on the workbench as rows, ready to make. Nothing is made until you press Run queue."
                     variant="moss"
                     onClick={() => {
                       const ready = factoryItems.map((i) => ({

@@ -225,11 +225,11 @@ export default function MadeView({
       {/* filters */}
       <div className="flex flex-wrap items-center gap-2">
         {(["all", "pictures", "sheets", "motion", "vectors", "puppets"] as Kind[]).map((k) => (
-          <button key={k} className={chip(kind === k)} onClick={() => setKind(k)}>
+          <button data-tip={k === "all" ? "Shows everything you have made." : `Shows only your ${k === "motion" ? "GIFs" : k}. Press Everything to see all again.`} key={k} className={chip(kind === k)} onClick={() => setKind(k)}>
             {k === "all" ? "Everything" : k === "motion" ? "GIFs" : k[0].toUpperCase() + k.slice(1)} · {count(k)}
           </button>
         ))}
-        <select value={status} onChange={(e) => setStatus(e.target.value as Status | "all")} className="rounded-full border border-white/12 bg-[var(--color-field)] px-3 py-1.5 text-[12px] text-cream">
+        <select data-tip="Shows only pictures in one state, such as finished or failed." value={status} onChange={(e) => setStatus(e.target.value as Status | "all")} className="rounded-full border border-white/12 bg-[var(--color-field)] px-3 py-1.5 text-[12px] text-cream">
           <option value="all">any status</option>
           {(["done", "pending", "failed", "skipped", "imported"] as Status[]).map((s) => (
             <option key={s} value={s}>
@@ -247,13 +247,13 @@ export default function MadeView({
             ))}
           </select>
         )}
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="search names and prompts" className="ml-auto w-56 rounded-full border border-white/12 bg-[var(--color-field)] px-3 py-1.5 text-[12px] text-cream placeholder:text-dust" />
+        <input data-tip="Type a word to find pictures by their file name or by what you asked for." value={search} onChange={(e) => setSearch(e.target.value)} placeholder="search names and prompts" className="ml-auto w-56 rounded-full border border-white/12 bg-[var(--color-field)] px-3 py-1.5 text-[12px] text-cream placeholder:text-dust" />
       </div>
 
       {missingThumbs > 0 && onBackfill && (
         <p className="text-[12px] text-dust">
           {missingThumbs} made before pictures were kept here have no picture.{" "}
-          <button
+          <button data-tip="Looks in your linked folder for the missing pictures and brings them back here."
             className="text-[var(--color-ember)] underline"
             onClick={async () => {
               setFilling("looking in your folder…");
@@ -272,7 +272,7 @@ export default function MadeView({
         {showPuppets &&
           puppetsShown.map((p) => (
             <div key={`p-${p.slug}`} className="overflow-hidden rounded-[20px] border border-white/10 bg-panel">
-              <button
+              <button data-tip="Shows this puppet picture larger."
                 className="block aspect-square w-full bg-[radial-gradient(circle_at_50%_35%,#1a2a52,#0a1122_70%)] cursor-zoom-in"
                 onClick={() => puppetThumbs[p.slug] && setZoom({ url: puppetThumbs[p.slug], caption: `${p.name} — a puppet for Video Forge` })}
               >
@@ -346,8 +346,8 @@ export default function MadeView({
       {!shown.length && !(showPuppets && puppetsShown.length) && <p className="py-10 text-center text-[13px] text-dust">Nothing here yet.</p>}
 
       {zoom && (
-        <div className="forge-zoom" onClick={() => setZoom(null)} role="dialog" aria-label="Picture, large">
-          <div onClick={(e) => e.stopPropagation()} className="cursor-default">
+        <div data-tip="Click anywhere outside the picture to close it." className="forge-zoom" onClick={() => setZoom(null)} role="dialog" aria-label="Picture, large">
+          <div data-tip="The picture, shown large. Click outside it or press Esc to close." onClick={(e) => e.stopPropagation()} className="cursor-default">
             <img src={zoom.url} alt="" />
             <p>{zoom.caption} · Esc or click outside to close</p>
           </div>

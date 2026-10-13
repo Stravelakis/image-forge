@@ -82,10 +82,10 @@ export function ImageLibrary({
           </p>
         </div>
         <div className="flex gap-2">
-          <Btn variant="ghost" onClick={() => setRating(rating === "like" ? "all" : "like")}>
+          <Btn data-tip="Shows only the pictures you gave a thumbs-up. Click again to show everything." variant="ghost" onClick={() => setRating(rating === "like" ? "all" : "like")}>
             <IThumbUp size={13} /> liked · {liked}
           </Btn>
-          <Btn variant="moss" disabled={marked.length === 0} onClick={() => onRedo(marked.map((r) => r.id))}>
+          <Btn data-tip="Paints again every picture you marked. Your notes are added to the new prompt." variant="moss" disabled={marked.length === 0} onClick={() => onRedo(marked.map((r) => r.id))}>
             <IRetry size={13} /> Redo marked · {marked.length}
           </Btn>
         </div>
@@ -95,15 +95,15 @@ export function ImageLibrary({
       <div className="mb-5 flex flex-wrap items-center gap-2">
         <div className="relative">
           <ISearch size={13} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-dust" />
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="search names, prompts, notes…" className={sel + " w-[240px] !pl-8"} />
+          <input data-tip="Type a few letters to find pictures by name, prompt or note." value={search} onChange={(e) => setSearch(e.target.value)} placeholder="search names, prompts, notes…" className={sel + " w-[240px] !pl-8"} />
         </div>
-        <select value={cat} onChange={(e) => setCat(e.target.value as Category | "all")} className={sel}>
+        <select data-tip="Show only one kind of picture, like shops or items." value={cat} onChange={(e) => setCat(e.target.value as Category | "all")} className={sel}>
           <option value="all">all categories</option>
           {CATEGORIES.map((c) => (
             <option key={c} value={c}>{c}</option>
           ))}
         </select>
-        <select value={status} onChange={(e) => setStatus(e.target.value as Status | "all")} className={sel}>
+        <select data-tip="Show only pictures in one stage, like done or failed." value={status} onChange={(e) => setStatus(e.target.value as Status | "all")} className={sel}>
           <option value="all">all statuses</option>
           {STATUSES.map((s) => (
             <option key={s} value={s}>{s}</option>
@@ -118,7 +118,7 @@ export function ImageLibrary({
               { id: "none", label: "unrated" },
             ] as { id: typeof rating; label: string }[]
           ).map((r) => (
-            <button key={r.id} onClick={() => setRating(r.id)} className={`btn-press rounded-lg border px-2.5 py-1.5 font-mono text-[10.5px] ${rating === r.id ? "border-ember/60 bg-ember/12 text-ember" : "border-line bg-panel/50 text-parch hover:border-line2"}`}>
+            <button data-tip={`${`Show ${r.label} pictures.`}`} key={r.id} onClick={() => setRating(r.id)} className={`btn-press rounded-lg border px-2.5 py-1.5 font-mono text-[10.5px] ${rating === r.id ? "border-ember/60 bg-ember/12 text-ember" : "border-line bg-panel/50 text-parch hover:border-line2"}`}>
               {r.label}
             </button>
           ))}
@@ -164,7 +164,7 @@ export function ImageLibrary({
                   {r.kind && r.kind !== "none" && <span className="rounded border border-potion/30 px-1 py-px text-potion">{kindById(r.kind).tag || r.kind}</span>}
                   {batchName(r.id) ? <span className="truncate">· {batchName(r.id)}</span> : null}
                 </p>
-                <input
+                <input data-tip="Write what should be better, like warmer light. It is added to the prompt when you redo this picture."
                   value={r.note ?? ""}
                   onChange={(e) => updateRow(r.id, { note: e.target.value || undefined })}
                   placeholder="✎ what should be better…"
@@ -172,11 +172,11 @@ export function ImageLibrary({
                 />
                 <div className="mt-2 flex gap-1.5">
                   {(r.status === "done" || r.status === "imported") && (
-                    <Btn variant="danger" className="flex-1 justify-center !px-2 !py-1.5 !text-[11px]" onClick={() => updateRow(r.id, { status: "failed", error: "marked by hand", rating: undefined })}>
+                    <Btn data-tip="Marks this picture as failed so it can be painted again." variant="danger" className="flex-1 justify-center !px-2 !py-1.5 !text-[11px]" onClick={() => updateRow(r.id, { status: "failed", error: "marked by hand", rating: undefined })}>
                       <IX size={11} /> Mark failed
                     </Btn>
                   )}
-                  <Btn variant="ghost" className="flex-1 justify-center !px-2 !py-1.5 !text-[11px]" onClick={() => onRedo([r.id])}>
+                  <Btn data-tip="Paints this picture again, using your note if you wrote one." variant="ghost" className="flex-1 justify-center !px-2 !py-1.5 !text-[11px]" onClick={() => onRedo([r.id])}>
                     <IHammer size={11} /> Redo
                   </Btn>
                   {onAddText && (r.status === "done" || r.status === "imported") && (
@@ -289,11 +289,11 @@ export function StyleLibrary({
           </div>
           <p className="mt-2 font-mono text-[10.5px] leading-relaxed text-dust">{s.block}</p>
           <div className="mt-3 flex gap-2">
-            <Btn variant={active ? "ghost" : "primary"} className="!px-2.5 !py-1.5 !text-[11px]" onClick={() => setStyleLock(s.id)}>
+            <Btn data-tip={`${active ? `${s.name} is added to every prompt now.` : `Adds the ${s.name} look to every prompt so the whole batch matches.`}`} variant={active ? "ghost" : "primary"} className="!px-2.5 !py-1.5 !text-[11px]" onClick={() => setStyleLock(s.id)}>
               {active ? "locked ✓" : "Lock this style"}
             </Btn>
             {settings.customStyles.some((c) => c.id === s.id) && (
-              <Btn
+              <Btn data-tip="Deletes this style you added from the library."
                 variant="danger"
                 className="!px-2.5 !py-1.5 !text-[11px]"
                 onClick={() =>
@@ -369,10 +369,10 @@ export function StyleLibrary({
       <div className="mt-8 rounded-2xl border border-line bg-panel/50 p-5">
         <p className="font-display text-[15px] tracking-wide text-cream">Add your own style</p>
         <div className="mt-3 grid gap-3">
-          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="name — e.g. Ink & Wash" className="w-full rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5 text-[13px] text-cream placeholder:text-dust/60" />
-          <textarea value={block} onChange={(e) => setBlock(e.target.value)} rows={2} placeholder="the style block appended to every prompt — e.g. ink and brush wash style, muted earth tones…" className="w-full resize-y rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5 text-[12.5px] text-cream placeholder:text-dust/60" />
+          <input data-tip="A name for your new style, like Ink and Wash." value={name} onChange={(e) => setName(e.target.value)} placeholder="name — e.g. Ink & Wash" className="w-full rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5 text-[13px] text-cream placeholder:text-dust/60" />
+          <textarea data-tip="The words added to the end of every prompt to give pictures this look." value={block} onChange={(e) => setBlock(e.target.value)} rows={2} placeholder="the style block appended to every prompt — e.g. ink and brush wash style, muted earth tones…" className="w-full resize-y rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5 text-[12.5px] text-cream placeholder:text-dust/60" />
           <div className="flex flex-wrap gap-2">
-            <Btn
+            <Btn data-tip="Saves your new style to the library so you can use it."
               variant="primary"
               disabled={!name.trim() || !block.trim()}
               onClick={() => {
@@ -389,8 +389,8 @@ export function StyleLibrary({
         <div className="mt-4 border-t border-line pt-4">
           <p className="font-mono text-[10px] tracking-[0.2em] text-potion uppercase">or let the text model invent one</p>
           <div className="mt-2 flex gap-2">
-            <input value={craft} onChange={(e) => setCraft(e.target.value)} placeholder="describe the look — e.g. old woodblock prints with rough edges" className="min-w-0 flex-1 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5 text-[12.5px] text-cream placeholder:text-dust/60" />
-            <Btn variant="ghost" onClick={aiCraft} disabled={crafting || !settings.scribe.key.trim() || !craft.trim()}>
+            <input data-tip="Describe the look in plain words and the text model writes the style for you." value={craft} onChange={(e) => setCraft(e.target.value)} placeholder="describe the look — e.g. old woodblock prints with rough edges" className="min-w-0 flex-1 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5 text-[12.5px] text-cream placeholder:text-dust/60" />
+            <Btn data-tip="Asks your text model to turn your description into a ready style. It needs a text key in Settings." variant="ghost" onClick={aiCraft} disabled={crafting || !settings.scribe.key.trim() || !craft.trim()}>
               <IWand size={12} /> {crafting ? "crafting…" : "Craft with AI"}
             </Btn>
           </div>
@@ -438,7 +438,7 @@ export function TemplateLibrary({
               <div className="p-4">
                 <div className="flex items-center justify-between gap-2">
                   <p className="font-display text-[16px] tracking-wide text-cream">{t.name}</p>
-                  <button onClick={() => onDelete(t.id)} className="btn-press rounded-md p-1.5 text-dust hover:bg-blood/15 hover:text-blood">
+                  <button data-tip={`${`Deletes the recipe ${t.name}.`}`} onClick={() => onDelete(t.id)} className="btn-press rounded-md p-1.5 text-dust hover:bg-blood/15 hover:text-blood">
                     <ITrash size={13} />
                   </button>
                 </div>
@@ -453,11 +453,11 @@ export function TemplateLibrary({
                 )}
                 <div className="mt-3">
                   {t.type === "puppet" ? (
-                    <Btn variant="primary" onClick={() => onUsePuppet?.(t)}>
+                    <Btn data-tip="Starts making a puppet from this recipe." variant="primary" onClick={() => onUsePuppet?.(t)}>
                       <IPlay size={12} /> Make a puppet from this
                     </Btn>
                   ) : (
-                    <Btn variant="primary" onClick={() => onUse(t)}>
+                    <Btn data-tip="Opens the wizard with this recipe's choices already filled in." variant="primary" onClick={() => onUse(t)}>
                       <IPlay size={12} /> Start wizard from here
                     </Btn>
                   )}
@@ -535,14 +535,14 @@ export function BatchLibrary({
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    <Btn onClick={() => onOpen(b.id)}>Open</Btn>
-                    <Btn variant="ghost" onClick={() => onExport(b.id)} disabled={bRows.length === 0}>
+                    <Btn data-tip="Opens this batch's pictures on the workbench." onClick={() => onOpen(b.id)}>Open</Btn>
+                    <Btn data-tip="Saves this batch's rows as a spreadsheet (CSV) file." variant="ghost" onClick={() => onExport(b.id)} disabled={bRows.length === 0}>
                       <IDownload size={12} /> Export CSV
                     </Btn>
-                    <Btn variant="ghost" onClick={() => onRerun(b.id)} disabled={!bRows.some((r) => r.status === "failed" || r.status === "pending")}>
+                    <Btn data-tip="Paints again the pictures in this batch that failed or are still waiting." variant="ghost" onClick={() => onRerun(b.id)} disabled={!bRows.some((r) => r.status === "failed" || r.status === "pending")}>
                       <IRetry size={12} /> Rerun
                     </Btn>
-                    <Btn variant="danger" onClick={() => onDelete(b.id)}>
+                    <Btn data-tip="Deletes this batch from the history." variant="danger" onClick={() => onDelete(b.id)}>
                       <ITrash size={12} />
                     </Btn>
                   </div>

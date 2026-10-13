@@ -113,7 +113,7 @@ export default function AgentsView() {
 
       <section className="reveal mb-10">
         <h3 className="mb-3 font-display text-lg text-cream">The raw recipes</h3>
-        <div className="mb-2 flex justify-end"><CopyBtn text={CURL} label="copy both" /></div>
+        <div className="mb-2 flex justify-end"><CopyBtn data-tip="Copies both recipes so you can paste them into your own tool." text={CURL} label="copy both" /></div>
         <CodeBlock code={CURL} />
       </section>
 

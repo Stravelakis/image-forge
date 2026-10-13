@@ -254,7 +254,7 @@ export default function Letterer({
             <p className="font-display text-[17px] tracking-wide text-cream">Add lettering</p>
             <p className="font-mono text-[10.5px] text-dust">{row.filename}</p>
           </div>
-          <button onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
+          <button data-tip="Closes the lettering window without saving." onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
             <IX size={16} />
           </button>
         </div>
@@ -274,8 +274,8 @@ export default function Letterer({
               Drag inside the box to move it. Drag a corner to bend the letters onto a surface.
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <Btn onClick={findQuiet}>Find a quiet spot</Btn>
-              <Btn variant="primary" onClick={askVision} disabled={busy === "vision"}>
+              <Btn data-tip="Moves the text box to the calmest part of the picture, where it will not cover anything busy." onClick={findQuiet}>Find a quiet spot</Btn>
+              <Btn data-tip="Sends a small copy of the picture to a vision AI (one that can look at pictures) and asks where the text fits best." variant="primary" onClick={askVision} disabled={busy === "vision"}>
                 {busy === "vision" ? "looking…" : "Ask a model where"}
               </Btn>
               <Btn
@@ -295,7 +295,7 @@ export default function Letterer({
             <div className="flex items-center gap-2">
               <div className="flex flex-1 flex-wrap gap-1.5">
                 {layers.map((l, i) => (
-                  <button
+                  <button data-tip="Picks this line of text so you can change it. Each line of lettering is its own layer."
                     key={l.id}
                     onClick={() => setActiveId(l.id)}
                     className={`btn-press rounded-md px-2 py-1 font-mono text-[10.5px] ${
@@ -306,7 +306,7 @@ export default function Letterer({
                   </button>
                 ))}
               </div>
-              <Btn
+              <Btn data-tip="Adds another line of text on top of the picture."
                 onClick={() => {
                   const l = newTextLayer("NEW LINE");
                   setLayers((ls) => [...ls, l]);
@@ -316,7 +316,7 @@ export default function Letterer({
                 + layer
               </Btn>
               {layers.length > 1 && (
-                <button
+                <button data-tip="Deletes the line of text you are editing."
                   onClick={() => {
                     setLayers((ls) => ls.filter((l) => l.id !== active?.id));
                     setActiveId("");
@@ -332,7 +332,7 @@ export default function Letterer({
               <>
                 <div>
                   <label className={label}>the words</label>
-                  <textarea
+                  <textarea data-tip="The words that go on the picture."
                     value={active.text}
                     onChange={(e) => patch({ text: e.target.value })}
                     rows={2}
@@ -343,7 +343,7 @@ export default function Letterer({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={label}>font</label>
-                    <select value={active.font} onChange={(e) => patch({ font: e.target.value })} className={field}>
+                    <select data-tip="The style of the letters." value={active.font} onChange={(e) => patch({ font: e.target.value })} className={field}>
                       {FONT_CHOICES.map((f) => (
                         <option key={f.id} value={f.stack}>{f.label}</option>
                       ))}
@@ -351,7 +351,7 @@ export default function Letterer({
                   </div>
                   <div>
                     <label className={label}>alignment</label>
-                    <select
+                    <select data-tip="Where lines of text sit inside the box: left, middle or right."
                       value={active.align}
                       onChange={(e) => patch({ align: e.target.value as TextLayer["align"] })}
                       className={field}
@@ -366,7 +366,7 @@ export default function Letterer({
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={label}>colour</label>
-                    <input
+                    <input data-tip="The main colour of the letters."
                       type="color"
                       value={active.color}
                       onChange={(e) => patch({ color: e.target.value })}
@@ -375,7 +375,7 @@ export default function Letterer({
                   </div>
                   <div>
                     <label className={label}>outline</label>
-                    <input
+                    <input data-tip="The colour of the thin line around each letter."
                       type="color"
                       value={active.strokeColor}
                       onChange={(e) => patch({ strokeColor: e.target.value })}
@@ -397,7 +397,7 @@ export default function Letterer({
                     <label className={label}>
                       {name} · {Number(active[key]).toFixed(2)}
                     </label>
-                    <input
+                    <input data-tip={`Drag to change the ${name}. The number next to the name shows the current setting.`}
                       type="range"
                       min={min}
                       max={max}
@@ -411,7 +411,7 @@ export default function Letterer({
 
                 <div className="flex flex-wrap gap-3 text-[12px] text-parch">
                   <label className="flex cursor-pointer items-center gap-2">
-                    <input
+                    <input data-tip="Turns every letter into a capital."
                       type="checkbox"
                       checked={active.uppercase}
                       onChange={(e) => patch({ uppercase: e.target.checked })}
@@ -420,7 +420,7 @@ export default function Letterer({
                     CAPITALS
                   </label>
                   <label className="flex cursor-pointer items-center gap-2">
-                    <input
+                    <input data-tip="Slants the letters."
                       type="checkbox"
                       checked={active.italic}
                       onChange={(e) => patch({ italic: e.target.checked })}
@@ -429,7 +429,7 @@ export default function Letterer({
                     italic
                   </label>
                   <label className="flex cursor-pointer items-center gap-2">
-                    <input
+                    <input data-tip="Makes the letters thick and heavy."
                       type="checkbox"
                       checked={active.weight >= 700}
                       onChange={(e) => patch({ weight: e.target.checked ? 700 : 400 })}
@@ -441,7 +441,7 @@ export default function Letterer({
 
                 <div>
                   <label className={label}>what is this caption for? (helps the model place it)</label>
-                  <input
+                  <input data-tip="Say what this text is, for example the shop name on the sign. It helps the AI choose where to put it."
                     value={what}
                     onChange={(e) => setWhat(e.target.value)}
                     placeholder="the shop name, on the hanging sign"
@@ -452,7 +452,7 @@ export default function Letterer({
             )}
 
             <div className="flex items-center gap-2 border-t border-line pt-3">
-              <Btn variant="primary" onClick={save} disabled={busy === "save"}>
+              <Btn data-tip="Saves the picture with the lettering as a new file next to the original. The original is never changed." variant="primary" onClick={save} disabled={busy === "save"}>
                 {busy === "save" ? "saving…" : "Save the lettered picture"}
               </Btn>
               <span className="text-[11px] text-dust">saved alongside the original, never over it</span>

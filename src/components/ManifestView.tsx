@@ -152,14 +152,14 @@ export default function ManifestView(p: ManifestViewProps) {
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-line bg-coal/50 px-4 py-2.5">
         <div className="flex items-center gap-2 rounded-lg border border-line bg-[var(--color-field)] px-2.5 py-1.5">
           <ISearch size={13} className="text-dust" />
-          <input
+          <input data-tip="Type a few letters to show only the rows that match, like part of a filename or prompt."
             value={p.search}
             onChange={(e) => p.setSearch(e.target.value)}
             placeholder="search manifest…"
             className="w-40 bg-transparent text-[12.5px] text-cream placeholder:text-dust/70"
           />
         </div>
-        <select
+        <select data-tip="Show only rows in one stage, like waiting, done or failed."
           value={p.statusFilter}
           onChange={(e) => p.setStatusFilter(e.target.value as Status | "all")}
           className="rounded-lg border border-line bg-[var(--color-field)] px-2 py-1.5 font-mono text-[11.5px] text-parch"
@@ -169,7 +169,7 @@ export default function ManifestView(p: ManifestViewProps) {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-        <select
+        <select data-tip="Show only rows from one kind of picture, like shops or items."
           value={p.catFilter}
           onChange={(e) => p.setCatFilter(e.target.value as Category | "all")}
           className="rounded-lg border border-line bg-[var(--color-field)] px-2 py-1.5 font-mono text-[11.5px] text-parch"
@@ -204,13 +204,13 @@ export default function ManifestView(p: ManifestViewProps) {
               Start with the wizard — it walks you through one easy choice at a time and lays out a whole batch of pictures for you.
             </p>
             <div className="flex gap-2">
-              <Btn variant="primary" onClick={p.startWizard}>
+              <Btn data-tip="Starts the wizard. It asks one easy question at a time and builds a whole batch of rows for you." variant="primary" onClick={p.startWizard}>
                 <IHammer size={13} /> Start the wizard
               </Btn>
-              <Btn onClick={p.addRow}>
+              <Btn data-tip="Adds one empty row to the list that you fill in yourself." onClick={p.addRow}>
                 <IPlus size={13} /> Add a row
               </Btn>
-              <Btn onClick={() => setImportOpen(true)}>
+              <Btn data-tip="Loads rows from a spreadsheet file (CSV) into the list." onClick={() => setImportOpen(true)}>
                 <IUpload size={13} /> Import CSV
               </Btn>
             </div>
@@ -228,7 +228,7 @@ export default function ManifestView(p: ManifestViewProps) {
             </thead>
             <tbody>
               {p.rows.map((row) => (
-                <tr
+                <tr data-tip="Click to open this row's details on the right."
                   key={row.id}
                   onClick={() => p.onSelect(row.id)}
                   className={`cursor-pointer border-b border-line/50 transition-colors ${
@@ -332,7 +332,7 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
         <h3 className="font-display text-[15px] tracking-wide text-cream">Row #{row.id}</h3>
         <div className="flex items-center gap-2">
           <StatusChip status={row.status} pulse={row.status === "generating"} />
-          <button onClick={() => onSelect(null)} className="btn-press rounded-lg p-1.5 text-dust hover:bg-raise hover:text-cream">
+          <button data-tip="Closes the details panel." onClick={() => onSelect(null)} className="btn-press rounded-lg p-1.5 text-dust hover:bg-raise hover:text-cream">
             <IX size={14} />
           </button>
         </div>
@@ -343,7 +343,7 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
         <div className="flex flex-col items-center gap-2 rounded-xl border border-line bg-[var(--color-field)] p-3">
           <Thumb row={row} width={272} onOpen={row.preview ? () => setZoom({ src: row.preview!, label: row.filename }) : undefined} />
           {row.preview && (
-            <button
+            <button data-tip="Opens the picture in a big window."
               onClick={() => setZoom({ src: row.preview!, label: row.filename })}
               className="btn-press font-mono text-[10px] text-ember underline decoration-ember/40 underline-offset-2"
             >
@@ -356,14 +356,14 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
         <div>
           <div className="mb-1.5 flex items-center justify-between">
             <label className="font-mono text-[10px] tracking-[0.2em] text-dust uppercase">filename</label>
-            <button
+            <button data-tip="Fixes this filename to follow the naming rules, like lowercase and no spaces."
               onClick={() => updateRow(row.id, { filename: autoFixFilename(row.filename, row.category) })}
               className="btn-press font-mono text-[10px] text-ember underline decoration-ember/40 underline-offset-2"
             >
               auto-fix
             </button>
           </div>
-          <input value={row.filename} onChange={(e) => updateRow(row.id, { filename: e.target.value })} className={field} />
+          <input data-tip="The name this picture is saved under. The green and red tags below show which naming rules it passes." value={row.filename} onChange={(e) => updateRow(row.id, { filename: e.target.value })} className={field} />
           <div className="mt-2 flex flex-wrap gap-1.5">
             {checks.map((c) => (
               <span
@@ -383,7 +383,7 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
         <div className="grid grid-cols-2 gap-2.5">
           <div>
             <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">category</label>
-            <select value={row.category} onChange={(e) => updateRow(row.id, { category: e.target.value as Category })} className={field}>
+            <select data-tip="What kind of picture this row is. It decides things like the folder it is saved in." value={row.category} onChange={(e) => updateRow(row.id, { category: e.target.value as Category })} className={field}>
               {CATEGORIES.map((c) => (
                 <option key={c} value={c}>{c}</option>
               ))}
@@ -391,7 +391,7 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
           </div>
           <div>
             <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">aspect</label>
-            <select value={row.aspect_ratio} onChange={(e) => updateRow(row.id, { aspect_ratio: e.target.value as (typeof ASPECT_KEYS)[number] })} className={field}>
+            <select data-tip="The shape of the picture, like square or wide." value={row.aspect_ratio} onChange={(e) => updateRow(row.id, { aspect_ratio: e.target.value as (typeof ASPECT_KEYS)[number] })} className={field}>
               {ASPECT_KEYS.map((a) => (
                 <option key={a} value={a}>{a}</option>
               ))}
@@ -402,9 +402,9 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
         {/* prompt */}
         <div>
           <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">prompt</label>
-          <textarea value={row.prompt} onChange={(e) => updateRow(row.id, { prompt: e.target.value })} rows={4} className={`${field} resize-y`} />
+          <textarea data-tip="The words that tell the painter what to draw." value={row.prompt} onChange={(e) => updateRow(row.id, { prompt: e.target.value })} rows={4} className={`${field} resize-y`} />
           <label className="mt-2 flex cursor-pointer items-center gap-2 text-[11px] text-dust">
-            <input type="checkbox" checked={p.appendStyle} onChange={(e) => p.setAppendStyle(e.target.checked)} className="accent-[var(--color-ember)]" />
+            <input data-tip="When on, your chosen style's wording is added to this prompt as the picture is made." type="checkbox" checked={p.appendStyle} onChange={(e) => p.setAppendStyle(e.target.checked)} className="accent-[var(--color-ember)]" />
             append the “{p.styleLock}” style block when generating
           </label>
         </div>
@@ -412,7 +412,7 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
         {/* negative prompt */}
         <div>
           <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">negative prompt · what to avoid</label>
-          <textarea
+          <textarea data-tip="Things you do not want in the picture, like words or a watermark."
             value={row.negative_prompt ?? ""}
             onChange={(e) => updateRow(row.id, { negative_prompt: e.target.value || undefined })}
             rows={2}
@@ -425,7 +425,7 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
         <div className="grid grid-cols-[1fr_92px] gap-2.5">
           <div>
             <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">model · blank = default engine</label>
-            <input value={row.model} onChange={(e) => updateRow(row.id, { model: e.target.value })} list="forge-models" placeholder="imagen-4-ultra, flux…" className={field} />
+            <input data-tip="Which painter draws this row. Leave it empty to use your default engine." value={row.model} onChange={(e) => updateRow(row.id, { model: e.target.value })} list="forge-models" placeholder="imagen-4-ultra, flux…" className={field} />
             <datalist id="forge-models">
               {modelOptions.map((m) => (
                 <option key={m} value={m} />
@@ -434,14 +434,14 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
           </div>
           <div>
             <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">seed</label>
-            <input type="number" value={row.seed} onChange={(e) => updateRow(row.id, { seed: parseInt(e.target.value, 10) || 0 })} className={field} />
+            <input data-tip="A number that picks one particular drawing. Using the same number again can give the same picture on engines that support it." type="number" value={row.seed} onChange={(e) => updateRow(row.id, { seed: parseInt(e.target.value, 10) || 0 })} className={field} />
           </div>
         </div>
 
         {/* note */}
         <div>
           <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">note · becomes an instruction on redo</label>
-          <input
+          <input data-tip="A short note for the chat to use when you redo this picture, like warmer light."
             value={row.note ?? ""}
             onChange={(e) => updateRow(row.id, { note: e.target.value || undefined })}
             placeholder="e.g. warmer light, bigger goat"
@@ -462,7 +462,7 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
             <p className="mt-1 text-[12px] text-parch">
               the queue retries in <span className="font-mono text-ember">{formatCountdown(Date.parse(row.retry_at))}</span>
             </p>
-            <button
+            <button data-tip="Skips the wait and tries this row again right now."
               onClick={() => forceRetry(row.id)}
               className="btn-press mt-2 rounded-md border border-ember/50 bg-ember/12 px-2.5 py-1 font-mono text-[10.5px] tracking-wide text-ember uppercase hover:bg-ember/25"
             >
@@ -476,7 +476,7 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
           <div className="rounded-xl border border-potion/40 bg-potion/6 p-3">
             <div className="mb-2 flex items-center justify-between">
               <p className="font-mono text-[10px] tracking-[0.2em] text-potion uppercase">variant · seed {compare.variantSeed}</p>
-              <button onClick={discardVariant} className="btn-press font-mono text-[10px] text-dust hover:text-cream">✕ dismiss</button>
+              <button data-tip="Throws away the new version and keeps the original." onClick={discardVariant} className="btn-press font-mono text-[10px] text-dust hover:text-cream">✕ dismiss</button>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <figure>
@@ -502,10 +502,10 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
               </figure>
             </div>
             <div className="mt-2.5 flex gap-2">
-              <Btn variant="moss" className="flex-1 justify-center" onClick={() => keepVariant(row.id)}>
+              <Btn data-tip="Replaces the original picture with the new version." variant="moss" className="flex-1 justify-center" onClick={() => keepVariant(row.id)}>
                 <ICheck size={13} /> Keep variant
               </Btn>
-              <Btn className="flex-1 justify-center" onClick={discardVariant}>
+              <Btn data-tip="Throws away the new version and keeps the original." className="flex-1 justify-center" onClick={discardVariant}>
                 <IX size={13} /> Keep original
               </Btn>
             </div>
@@ -514,37 +514,37 @@ function RowDrawer(p: ManifestViewProps & { row: ManifestRow }) {
 
         {/* actions */}
         <div className="grid grid-cols-2 gap-2">
-          <Btn variant="primary" className="justify-center" disabled={p.isRunning} onClick={() => generateOne(row.id)}>
+          <Btn data-tip="Paints this one row now." variant="primary" className="justify-center" disabled={p.isRunning} onClick={() => generateOne(row.id)}>
             <IHammer size={13} /> Generate
           </Btn>
-          <Btn className="justify-center" disabled={!row.preview} onClick={() => strikeVariant(row.id)}>
+          <Btn data-tip="Paints a second version with a different seed so you can compare it with the first." className="justify-center" disabled={!row.preview} onClick={() => strikeVariant(row.id)}>
             <IRetry size={13} /> Variant
           </Btn>
-          <Btn className="justify-center" disabled={!row.preview} onClick={() => downloadRow(row.id)}>
+          <Btn data-tip="Saves this picture as a file on your computer." className="justify-center" disabled={!row.preview} onClick={() => downloadRow(row.id)}>
             <IDownload size={13} /> Save picture
           </Btn>
           <Btn className="justify-center" onClick={() => openScribe(row.id)} title="Open the chat with this row, to rewrite its prompt, rename it or change its look">
             <IQuill size={13} /> Ask the chat
           </Btn>
-          <Btn className="justify-center" onClick={() => duplicateRow(row.id)}>
+          <Btn data-tip="Makes a copy of this row right below it." className="justify-center" onClick={() => duplicateRow(row.id)}>
             <IPlus size={13} /> Duplicate
           </Btn>
           {(row.status === "failed" || row.status === "skipped" || row.status === "done") && (
-            <Btn className="justify-center" onClick={() => setToPending(row.id)}>
+            <Btn data-tip="Puts this row back in the waiting line so it gets painted again." className="justify-center" onClick={() => setToPending(row.id)}>
               <IRetry size={13} /> To pending
             </Btn>
           )}
           {row.status !== "skipped" && row.status !== "imported" && (
-            <Btn className="justify-center" onClick={() => markSkipped(row.id)}>
+            <Btn data-tip="Leaves this row out of the batch. You can put it back later." className="justify-center" onClick={() => markSkipped(row.id)}>
               <IX size={13} /> Skip
             </Btn>
           )}
           {row.status === "done" && (
-            <Btn variant="moss" className="justify-center" onClick={() => markImported(row.id)}>
+            <Btn data-tip="Marks this picture as already used on your site, so you don't do it twice." variant="moss" className="justify-center" onClick={() => markImported(row.id)}>
               <ICheck size={13} /> Mark imported
             </Btn>
           )}
-          <Btn variant="danger" className="justify-center" onClick={() => deleteRow(row.id)}>
+          <Btn data-tip="Removes this row from the list." variant="danger" className="justify-center" onClick={() => deleteRow(row.id)}>
             <ITrash size={13} /> Delete
           </Btn>
         </div>

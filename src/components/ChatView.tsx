@@ -371,7 +371,7 @@ ${manifestDigest(rows)}`,
             One free Mistral key covers writing, code and vision: add it once under Your accounts in Text engines,
             then pick a model for each job. The Start screen works without one.
           </p>
-          <Btn variant="primary" className="mt-3" onClick={onOpenSettings}>
+          <Btn data-tip="Opens the screen where you add the free account that lets the chat answer." variant="primary" className="mt-3" onClick={onOpenSettings}>
             Open Text engines
           </Btn>
         </div>
@@ -394,7 +394,7 @@ ${manifestDigest(rows)}`,
             request in the box; it is not sent until you press Send, so you can
             still change it.
           */}
-          <Btn
+          <Btn data-tip="Starts a fresh, empty chat. Your old chats stay in the list."
             variant="primary"
             className="w-full justify-center"
             onClick={() => startFresh("")}
@@ -415,7 +415,7 @@ ${manifestDigest(rows)}`,
           </div>
           <div className="mt-2 flex gap-1">
             {(["date", "model"] as const).map((g) => (
-              <button
+              <button data-tip={`Sorts your old chats ${g === "date" ? "by the day you had them" : "by which AI model answered"}.`}
                 key={g}
                 onClick={() => setGroupBy(g)}
                 className={`flex-1 rounded-lg border px-2 py-1 font-mono text-[10px] tracking-wide uppercase transition ${
@@ -480,7 +480,7 @@ ${manifestDigest(rows)}`,
         {turns.length === 0 && (
           <Stagger level={motion} className="space-y-2">
             {OPENERS.map((o) => (
-              <button
+              <button data-tip={`Sends "${o}" to the chat as your first message, as an example to try.`}
                 key={o}
                 onClick={() => void send(o)}
                 className="w-full rounded-xl border border-line bg-panel/50 p-3 text-left text-[13px] text-parch transition hover:border-ember/50 hover:text-cream"
@@ -555,7 +555,7 @@ ${manifestDigest(rows)}`,
         }}
         className="mt-3 rounded-xl border border-line bg-[var(--color-field)] p-2"
       >
-        <textarea
+        <textarea data-tip="Type what picture you want, or ask about the app. Enter sends it; Shift+Enter starts a new line."
           ref={taRef}
           rows={3}
           value={draft}
@@ -618,7 +618,7 @@ ${manifestDigest(rows)}`,
           >
             {probing ? `${probing.done}/${probing.total}` : working ? `${working.length} work` : "check"}
           </button>
-          <Btn variant="primary" disabled={busy || !draft.trim()}>
+          <Btn data-tip="Sends your message to the chat." variant="primary" disabled={busy || !draft.trim()}>
             <ISparkle size={13} /> Send
           </Btn>
         </div>
@@ -674,7 +674,7 @@ function EditCard({
       {applied ? (
         <p className="mt-2 font-mono text-[10.5px] text-moss">✓ applied to the manifest</p>
       ) : (
-        <Btn className="mt-2.5" disabled={busy} onClick={onApply}>
+        <Btn data-tip="Makes the changes listed above to the rows in your manifest. Nothing is drawn yet." className="mt-2.5" disabled={busy} onClick={onApply}>
           {busy ? "changing…" : `Apply ${total === 1 ? "this change" : "these changes"}`}
         </Btn>
       )}
@@ -717,7 +717,7 @@ function BatchCard({
         {total > 0 ? `About $${total.toFixed(2)} to make them all — you will be asked before anything is spent.` : "Free to make."}
       </p>
 
-      <button onClick={() => setOpen((o) => !o)} className="mt-1.5 text-[11.5px] text-ember underline">
+      <button data-tip="Shows or hides every picture description on this list, so you can read them before adding." onClick={() => setOpen((o) => !o)} className="mt-1.5 text-[11.5px] text-ember underline">
         {open ? "hide the list" : "read the list first"}
       </button>
       {open && (
@@ -731,7 +731,7 @@ function BatchCard({
       {added !== undefined ? (
         <p className="mt-2 font-mono text-[10.5px] text-moss">✓ {added} added to the manifest — press Run queue there</p>
       ) : (
-        <Btn className="mt-2.5" disabled={busy} onClick={onAdd}>
+        <Btn data-tip="Adds every picture on this list to your manifest as new rows. Press Run queue there to actually make them." className="mt-2.5" disabled={busy} onClick={onAdd}>
           {busy ? "adding…" : "Add all to the manifest"}
         </Btn>
       )}
@@ -780,7 +780,7 @@ function ProposalCard({
       ) : row ? (
         <p className="mt-2 font-mono text-[11.5px] text-ember">forging…</p>
       ) : (
-        <Btn variant="primary" className="mt-2.5" disabled={busy} onClick={onForge}>
+        <Btn data-tip="Draws this picture now. If the engine is paid, you are asked before any money is spent." variant="primary" className="mt-2.5" disabled={busy} onClick={onForge}>
           <IPlay size={12} /> {busy ? "forging…" : free ? "Make it — free" : "Make it"}
         </Btn>
       )}

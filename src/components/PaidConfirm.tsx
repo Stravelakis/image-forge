@@ -34,7 +34,7 @@ export default function PaidConfirm({
             <p className="font-display text-[17px] tracking-wide text-cream">This one costs money</p>
             <p className="font-mono text-[10.5px] text-dust">everything else in the forge is free</p>
           </div>
-          <button onClick={onCancel} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
+          <button data-tip="Closes this question. Nothing is spent." onClick={onCancel} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
             <IX size={16} />
           </button>
         </div>
@@ -51,10 +51,10 @@ export default function PaidConfirm({
           )}
 
           <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3.5">
-            <Btn variant="primary" onClick={onApprove}>
+            <Btn data-tip="This spends real money from your account, the amount shown above. Press it only if you agree to pay." variant="primary" onClick={onApprove}>
               Spend it — go ahead
             </Btn>
-            <Btn onClick={onCancel}>Cancel</Btn>
+            <Btn data-tip="Does not spend anything and does not make the pictures." onClick={onCancel}>Cancel</Btn>
           </div>
 
           {check.freeAlternatives.length > 0 && (
@@ -62,7 +62,7 @@ export default function PaidConfirm({
               <p className="mb-2 font-mono text-[10px] tracking-[0.2em] text-moss uppercase">or use one of these, free</p>
               <div className="flex flex-wrap gap-2">
                 {check.freeAlternatives.map((a) => (
-                  <button
+                  <button data-tip={`Uses ${a.label} instead. It is free, so no money is spent.`}
                     key={a.id}
                     onClick={() => onUseFree(a.id)}
                     className="btn-press rounded-lg border border-line bg-[var(--color-field)] px-3 py-1.5 text-[12px] text-parch hover:border-moss/50 hover:text-moss"

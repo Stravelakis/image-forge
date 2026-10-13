@@ -52,7 +52,7 @@ function Dropdown({
   }, []);
   return (
     <div ref={ref} className="relative">
-      <button
+      <button data-tip={`Opens the ${label} menu.`}
         onClick={() => setOpen((o) => !o)}
         className={`btn-press flex items-center gap-1 rounded-lg px-3 py-2 font-display text-[13px] tracking-wide transition-colors ${
           active || open ? "text-cream" : "text-dust hover:text-parch"
@@ -83,7 +83,7 @@ const Item = ({
   hint?: string;
   badge?: string;
 }) => (
-  <button
+  <button data-tip={hint ? `${title}: ${hint}` : title}
     onClick={onClick}
     className="btn-press flex w-full items-center gap-3 border-b border-line/50 px-3.5 py-2.5 text-left transition-colors last:border-0 hover:bg-raise/60"
   >
@@ -185,7 +185,7 @@ function ModelSelector({
           {options.map((o) => {
             if (!o.ok) return null;
             return (
-              <button
+              <button data-tip={`Makes pictures with ${o.label}. ${o.sub}`}
                 key={o.id}
                 onClick={() => {
                   onProvider(o.id);

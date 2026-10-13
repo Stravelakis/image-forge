@@ -136,7 +136,7 @@ export default function GifMaker({
             <p className="font-display text-[17px] tracking-wide text-cream">Turn into a GIF</p>
             <p className="font-mono text-[10.5px] text-dust">{row.filename}</p>
           </div>
-          <button onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
+          <button data-tip="Closes the GIF maker without saving." onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
             <IX size={16} />
           </button>
         </div>
@@ -166,7 +166,7 @@ export default function GifMaker({
               <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
                 what should it do?
               </label>
-              <textarea
+              <textarea data-tip="Say in plain words how the picture should move, for example the lantern flickers. The AI turns it into camera and light moves."
                 value={wish}
                 onChange={(e) => setWish(e.target.value)}
                 rows={2}
@@ -174,7 +174,7 @@ export default function GifMaker({
                 className={`${field} resize-y`}
               />
               <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Btn variant="primary" onClick={askForPlan} disabled={thinking || !wish.trim()}>
+                <Btn data-tip="Asks your text AI to plan the movement from your sentence. You can still tweak the numbers after." variant="primary" onClick={askForPlan} disabled={thinking || !wish.trim()}>
                   {thinking ? "thinking…" : "Work out the movement"}
                 </Btn>
                 {!settings.scribe.key.trim() && (
@@ -218,7 +218,7 @@ export default function GifMaker({
                 <label className="mb-1 block font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">
                   frames · {plan.frames}
                 </label>
-                <input
+                <input data-tip="How many pictures the GIF is made of. More frames look smoother but make a bigger file."
                   type="range"
                   min={4}
                   max={48}
@@ -231,7 +231,7 @@ export default function GifMaker({
                 <label className="mb-1 block font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">
                   speed · {plan.frameMs}ms
                 </label>
-                <input
+                <input data-tip="How long each frame stays on screen. A smaller number plays faster."
                   type="range"
                   min={40}
                   max={300}
@@ -244,7 +244,7 @@ export default function GifMaker({
             </div>
 
             <label className="flex cursor-pointer items-center gap-2.5 text-[12px] text-parch">
-              <input
+              <input data-tip="Plays the movement forward and then back, so the GIF repeats without a jump."
                 type="checkbox"
                 checked={plan.pingPong}
                 onChange={(e) => setPlan({ ...plan, pingPong: e.target.checked })}
@@ -260,10 +260,10 @@ export default function GifMaker({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Btn variant="primary" onClick={build} disabled={building}>
+              <Btn data-tip="Builds the GIF from your picture and the movement above. This takes a few seconds." variant="primary" onClick={build} disabled={building}>
                 {building ? `building… ${progress}%` : gifUrl ? "Build again" : "Build the GIF"}
               </Btn>
-              {gifUrl && <Btn onClick={save}>Save it</Btn>}
+              {gifUrl && <Btn data-tip="Saves the finished GIF to your computer." onClick={save}>Save it</Btn>}
             </div>
 
             <p className="text-[11px] leading-relaxed text-dust">

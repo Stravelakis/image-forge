@@ -347,7 +347,7 @@ export default function PuppetMaker({
           </div>
           <div className="flex items-center gap-3">
             <Steps step={step} />
-            <button onClick={close} className="btn-press rounded-lg p-2 text-[#8f98ab] hover:bg-raise hover:text-[#eef1f8]" aria-label="Close">
+            <button data-tip="Closes the puppet maker." onClick={close} className="btn-press rounded-lg p-2 text-[#8f98ab] hover:bg-raise hover:text-[#eef1f8]" aria-label="Close">
               <IX size={16} />
             </button>
           </div>
@@ -365,11 +365,11 @@ export default function PuppetMaker({
               <div className="grid gap-3 sm:grid-cols-[200px_1fr]">
                 <div>
                   <label className={label} title="What the puppet is called. Becomes its file name.">name</label>
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Hoolio" className={field} />
+                  <input data-tip="What your puppet is called. It also becomes the file name." value={name} onChange={(e) => setName(e.target.value)} placeholder="Hoolio" className={field} />
                 </div>
                 <div>
                   <label className={label} title="Who the character is: what they are, what they wear, their colours. One or two sentences.">describe the character</label>
-                  <textarea
+                  <textarea data-tip="Say who the character is: what they are, what they wear, their colours. One or two sentences is enough."
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     rows={2}
@@ -435,8 +435,8 @@ export default function PuppetMaker({
                 >
                   {inspo.map((p, i) => (
                     <div key={p.url} className="relative">
-                      <img src={p.url} alt="" className="zoomable h-20 w-20 rounded-[14px] object-cover" onClick={() => setZoom({ url: p.url, caption: "Inspiration picture" })} />
-                      <button onClick={() => setInspo((x) => x.filter((_, j) => j !== i))} className="absolute -right-2 -top-2 rounded-full bg-panel p-1 text-[#8f98ab] hover:text-[#eef1f8]" aria-label="Remove">
+                      <img data-tip="Click to see this inspiration picture larger." src={p.url} alt="" className="zoomable h-20 w-20 rounded-[14px] object-cover" onClick={() => setZoom({ url: p.url, caption: "Inspiration picture" })} />
+                      <button data-tip="Takes this picture out of the inspiration pictures." onClick={() => setInspo((x) => x.filter((_, j) => j !== i))} className="absolute -right-2 -top-2 rounded-full bg-panel p-1 text-[#8f98ab] hover:text-[#eef1f8]" aria-label="Remove">
                         <IX size={12} />
                       </button>
                     </div>

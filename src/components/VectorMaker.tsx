@@ -109,7 +109,7 @@ export default function VectorMaker({
             <p className="font-display text-[17px] tracking-wide text-cream">Make a vector</p>
             <p className="font-mono text-[10.5px] text-dust">drawn as code · sharp at any size</p>
           </div>
-          <button onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
+          <button data-tip="Closes the vector maker." onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
             <IX size={16} />
           </button>
         </div>
@@ -120,7 +120,7 @@ export default function VectorMaker({
               <label className={label}>what to make</label>
               <div className="grid gap-2 sm:grid-cols-3">
                 {KINDS.map((k) => (
-                  <button
+                  <button data-tip={`${k.label}: ${k.blurb}`}
                     key={k.id}
                     onClick={() => setKind(k.id)}
                     className={`btn-press rounded-lg border p-3 text-left ${
@@ -136,7 +136,7 @@ export default function VectorMaker({
 
             <div>
               <label className={label}>describe it</label>
-              <textarea
+              <textarea data-tip="Say what the drawing should show, in plain words."
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={2}
@@ -147,7 +147,7 @@ export default function VectorMaker({
 
             <div>
               <label className={label}>file name (optional)</label>
-              <input value={name} onChange={(e) => setName(e.target.value)} placeholder="icon_anvil" className={field} />
+              <input data-tip="What to call the saved file. Leave it empty and a name is made from your description." value={name} onChange={(e) => setName(e.target.value)} placeholder="icon_anvil" className={field} />
             </div>
 
             <div className="rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5">
@@ -163,10 +163,10 @@ export default function VectorMaker({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Btn variant="primary" onClick={make} disabled={busy || !description.trim()}>
+              <Btn data-tip="Your text AI writes the drawing as code. It takes a few seconds." variant="primary" onClick={make} disabled={busy || !description.trim()}>
                 {busy ? "writing…" : "Make it"}
               </Btn>
-              {asset?.code && <Btn onClick={make}>Try again</Btn>}
+              {asset?.code && <Btn data-tip="Writes a fresh version from the same description." onClick={make}>Try again</Btn>}
             </div>
 
             {asset?.problem && (
@@ -206,17 +206,17 @@ export default function VectorMaker({
             {asset?.code && (
               <>
                 <div className="flex flex-wrap gap-2">
-                  <Btn variant="primary" onClick={save}>
+                  <Btn data-tip={`Saves the drawing to your computer as a ${kind === "lottie" ? "JSON" : "SVG"} file.`} variant="primary" onClick={save}>
                     Save
                   </Btn>
-                  <Btn onClick={copy}>Copy</Btn>
-                  <Btn onClick={() => setShowCode((s) => !s)}>{showCode ? "Hide code" : "Show code"}</Btn>
+                  <Btn data-tip="Copies the code of the drawing so you can paste it somewhere else." onClick={copy}>Copy</Btn>
+                  <Btn data-tip="Shows or hides the code the drawing is made of." onClick={() => setShowCode((s) => !s)}>{showCode ? "Hide code" : "Show code"}</Btn>
                 </div>
                 <p className="font-mono text-[10px] text-dust">
                   {(asset.code.length / 1024).toFixed(1)} KB · {kind === "lottie" ? "JSON" : "SVG"}
                 </p>
                 {showCode && (
-                  <textarea
+                  <textarea data-tip="The code of the drawing. Click to select all of it, then copy."
                     readOnly
                     value={asset.code}
                     rows={12}

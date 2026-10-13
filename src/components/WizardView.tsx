@@ -52,7 +52,7 @@ function AccordionItem({
   const cat: Category = item.category ?? "image";
   return (
     <div className={`overflow-hidden rounded-xl border transition-colors ${open ? "border-line2 bg-panel/70" : "border-line bg-panel/40"}`}>
-      <button onClick={onToggle} className="btn-press flex w-full items-center gap-3 px-4 py-3 text-left">
+      <button data-tip="Opens or closes this picture so you can read and change its prompt." onClick={onToggle} className="btn-press flex w-full items-center gap-3 px-4 py-3 text-left">
         <span
           className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border font-mono text-[10px] transition-transform duration-300 ${
             open ? "rotate-90 border-ember/60 text-ember" : "border-line2 text-dust"
@@ -73,9 +73,9 @@ function AccordionItem({
       {open && (
         <div className="rise-in border-t border-line/70 px-4 py-3.5">
           <label className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">prompt — the full instructions</label>
-          <textarea value={item.prompt} onChange={(e) => onPatch({ prompt: e.target.value })} rows={3} className={field + " resize-y text-[12.5px]"} />
+          <textarea data-tip="The full words that tell the painter what to draw for this picture." value={item.prompt} onChange={(e) => onPatch({ prompt: e.target.value })} rows={3} className={field + " resize-y text-[12.5px]"} />
           <label className="mb-1 mt-3 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">negative prompt — things to avoid</label>
-          <textarea value={item.negative_prompt ?? ""} onChange={(e) => onPatch({ negative_prompt: e.target.value || undefined })} rows={2} className={field + " resize-y text-[12px] text-blood/80"} />
+          <textarea data-tip="Things you do not want in this picture, like words or a watermark." value={item.negative_prompt ?? ""} onChange={(e) => onPatch({ negative_prompt: e.target.value || undefined })} rows={2} className={field + " resize-y text-[12px] text-blood/80"} />
         </div>
       )}
     </div>
@@ -195,7 +195,7 @@ export default function WizardView({
             const active = i === step;
             return (
               <li key={s.name}>
-                <button
+                <button data-tip="Goes back to a step you already finished."
                   onClick={() => i < step && setStep(i)}
                   className={`btn-press flex w-full items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition ${
                     active ? "border-ember/55 bg-ember/8" : done ? "border-line bg-panel/40 hover:border-line2" : "border-transparent opacity-55"
@@ -222,7 +222,7 @@ export default function WizardView({
             <p className="font-mono text-[9.5px] tracking-[0.2em] text-potion uppercase">start from a recipe</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {setups.slice(0, 4).map((t) => (
-                <button key={t.id} onClick={() => setSetup({ ...t.data })} className="btn-press rounded-md border border-line bg-panel/60 px-2 py-1 font-mono text-[10px] text-parch hover:border-potion/50 hover:text-potion">
+                <button data-tip={`${`Fills in the wizard with the choices saved in the recipe ${t.name}.`}`} key={t.id} onClick={() => setSetup({ ...t.data })} className="btn-press rounded-md border border-line bg-panel/60 px-2 py-1 font-mono text-[10px] text-parch hover:border-potion/50 hover:text-potion">
                   {t.name}
                 </button>
               ))}
@@ -240,7 +240,7 @@ export default function WizardView({
             </p>
             <h2 className="mt-1 font-display text-3xl text-cream">{STEPS[step].name}</h2>
           </div>
-          <button onClick={onExit} className="btn-press rounded-lg border border-line px-3 py-1.5 font-mono text-[11px] text-dust hover:border-line2 hover:text-cream">
+          <button data-tip="Leaves the wizard without making a batch." onClick={onExit} className="btn-press rounded-lg border border-line px-3 py-1.5 font-mono text-[11px] text-dust hover:border-line2 hover:text-cream">
             exit wizard
           </button>
         </header>
@@ -252,7 +252,7 @@ export default function WizardView({
               <p className="text-[15px] leading-relaxed text-parch">
                 Give this batch a name so you can find it later. Think of it like labeling a box of pictures before you fill it.
               </p>
-              <input
+              <input data-tip="A name for this batch so you can find it later. It never appears inside the pictures."
                 value={setup.name}
                 onChange={(e) => patch({ name: e.target.value })}
                 placeholder="e.g. Spring shop fronts"
@@ -277,7 +277,7 @@ export default function WizardView({
                   const active = setup.kind === k.id;
                   return (
                     <BorderGlow key={k.id} radius={13} glow={active ? "rgba(177,140,224,0.6)" : "rgba(177,140,224,0.35)"} idle={active ? "rgba(177,140,224,0.5)" : "#3e2f21"} innerClassName={active ? "bg-[#241b26]" : "bg-[var(--color-panel)]"}>
-                      <button onClick={() => patch({ kind: k.id })} className="btn-press w-full p-4 text-left">
+                      <button data-tip={`${`Choose ${k.label} as what this batch is made of.`}`} onClick={() => patch({ kind: k.id })} className="btn-press w-full p-4 text-left">
                         <span className="flex items-center justify-between gap-2">
                           <span className={`font-display text-[15px] tracking-wide ${active ? "text-potion" : "text-cream"}`}>{k.label}</span>
                           {active && <ICheck size={14} className="text-potion" />}
@@ -327,7 +327,7 @@ export default function WizardView({
                   const starred = favoriteStyles.includes(s.id);
                   return (
                     <BorderGlow key={s.id} radius={13} glow={active ? "color-mix(in srgb, var(--color-ember) 60%, transparent)" : "rgba(242,163,60,0.35)"} idle={active ? "color-mix(in srgb, var(--color-ember) 50%, transparent)" : "var(--color-line)"} innerClassName={active ? "bg-[var(--color-panel2)]" : "bg-[var(--color-panel)]"}>
-                      <button onClick={() => patch({ styleId: s.id })} className="btn-press w-full p-4 text-left">
+                      <button data-tip={`${`Paints every picture in the ${s.name} look.`}`} onClick={() => patch({ styleId: s.id })} className="btn-press w-full p-4 text-left">
                         <span className="flex items-center gap-3">
                           <span className="flex shrink-0 overflow-hidden rounded-md border border-line">
                             {s.swatch.map((c) => (
@@ -363,7 +363,7 @@ export default function WizardView({
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
                 {/* simulated */}
                 <BorderGlow radius={13} glow={setup.model === "" && settings.provider === "simulated" ? "rgba(151,135,109,0.55)" : "rgba(151,135,109,0.3)"} idle="var(--color-line)" innerClassName="bg-[var(--color-panel)]">
-                  <button onClick={() => patch({ model: "" })} className="btn-press w-full p-4 text-left">
+                  <button data-tip="Makes quick placeholder pictures on your computer. Good for trying things out because it costs nothing." onClick={() => patch({ model: "" })} className="btn-press w-full p-4 text-left">
                     <span className="flex items-center justify-between">
                       <span className="font-display text-[15px] text-cream">The practice forge</span>
                       <span className="rounded-md border border-moss/40 bg-moss/10 px-2 py-0.5 font-mono text-[9.5px] tracking-widest text-moss uppercase">free · no key</span>
@@ -381,7 +381,7 @@ export default function WizardView({
                     <span className="mt-1.5 block text-[12px] text-parch">Real AI pictures over the internet, free, unlimited-ish. A bit slow (5–40 seconds each) but costs nothing.</span>
                     <span className="mt-3 flex gap-1.5">
                       {["flux", "turbo"].map((m) => (
-                        <button key={m} onClick={() => patch({ model: m })} className={`btn-press rounded-lg border px-2.5 py-1.5 font-mono text-[11px] ${setup.model === m ? "border-lagoon/60 bg-lagoon/12 text-lagoon" : "border-line text-parch hover:border-line2"}`}>
+                        <button data-tip={`${`Draws with the free ${m} model on Pollinations.`}`} key={m} onClick={() => patch({ model: m })} className={`btn-press rounded-lg border px-2.5 py-1.5 font-mono text-[11px] ${setup.model === m ? "border-lagoon/60 bg-lagoon/12 text-lagoon" : "border-line text-parch hover:border-line2"}`}>
                           {m} {setup.model === m && "✓"}
                         </button>
                       ))}
@@ -400,7 +400,7 @@ export default function WizardView({
                         <span className="mt-1.5 block text-[12px] text-moss">✓ a key is already saved in Settings</span>
                         <span className="mt-3 flex flex-wrap gap-1.5">
                           {MODELS.filter((m) => m.engine === "gemini").map((m) => (
-                            <button key={m.id} onClick={() => patch({ model: m.id })} className={`btn-press rounded-lg border px-2.5 py-1.5 font-mono text-[11px] ${setup.model === m.id ? "border-ember/60 bg-ember/12 text-ember" : "border-line text-parch hover:border-line2"}`}>
+                            <button data-tip={`${`Draws with ${m.id}, using the Google key you already saved.`}`} key={m.id} onClick={() => patch({ model: m.id })} className={`btn-press rounded-lg border px-2.5 py-1.5 font-mono text-[11px] ${setup.model === m.id ? "border-ember/60 bg-ember/12 text-ember" : "border-line text-parch hover:border-line2"}`}>
                               {m.id} {setup.model === m.id && "✓"}
                             </button>
                           ))}
@@ -408,14 +408,14 @@ export default function WizardView({
                       </>
                     ) : (
                       <div className="mt-2.5 space-y-2">
-                        <input value={geminiUrl} onChange={(e) => setGeminiUrl(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"} placeholder="endpoint url" />
-                        <input value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} type="password" className={field + " !py-2 font-mono !text-[11px]"} placeholder="API key (free at aistudio.google.com)" />
-                        <select value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"}>
+                        <input data-tip="The web address of the Google picture service. The usual one is already filled in." value={geminiUrl} onChange={(e) => setGeminiUrl(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"} placeholder="endpoint url" />
+                        <input data-tip="Your Google key. It lets the forge ask Google to paint your pictures." value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} type="password" className={field + " !py-2 font-mono !text-[11px]"} placeholder="API key (free at aistudio.google.com)" />
+                        <select data-tip="The Google model to paint with." value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"}>
                           {MODELS.filter((m) => m.engine === "gemini").map((m) => (
                             <option key={m.id} value={m.id}>{m.id} · {m.free}</option>
                           ))}
                         </select>
-                        <Btn variant="primary" disabled={!geminiKey.trim()} onClick={applyGemini}>
+                        <Btn data-tip="Saves this key in Settings and picks Google as your painter." variant="primary" disabled={!geminiKey.trim()} onClick={applyGemini}>
                           Save &amp; pick this painter
                         </Btn>
                       </div>
@@ -432,7 +432,7 @@ export default function WizardView({
                     {openaiReady ? (
                       <>
                         <span className="mt-1.5 block text-[12px] text-moss">✓ endpoint + key already saved in Settings</span>
-                        <input value={setup.model} onChange={(e) => patch({ model: e.target.value })} list="wiz-models" placeholder={`model — currently “${settings.openaiModel}”`} className={field + " mt-3 !py-2 font-mono !text-[11px]"} />
+                        <input data-tip="The model to paint with. Leave it as it is to use the one saved in Settings." value={setup.model} onChange={(e) => patch({ model: e.target.value })} list="wiz-models" placeholder={`model — currently “${settings.openaiModel}”`} className={field + " mt-3 !py-2 font-mono !text-[11px]"} />
                         <datalist id="wiz-models">
                           {modelOptions.map((m) => (
                             <option key={m} value={m} />
@@ -441,10 +441,10 @@ export default function WizardView({
                       </>
                     ) : (
                       <div className="mt-2.5 space-y-2">
-                        <input value={oaiUrl} onChange={(e) => setOaiUrl(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"} placeholder="base url — https://api.openai.com/v1" />
-                        <input value={oaiKey} onChange={(e) => setOaiKey(e.target.value)} type="password" className={field + " !py-2 font-mono !text-[11px]"} placeholder="API key" />
-                        <input value={oaiModel} onChange={(e) => setOaiModel(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"} placeholder="model — gpt-image-1, dall-e-3…" />
-                        <Btn variant="primary" disabled={!oaiKey.trim()} onClick={applyOpenai}>
+                        <input data-tip="The web address of your OpenAI-style picture service." value={oaiUrl} onChange={(e) => setOaiUrl(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"} placeholder="base url — https://api.openai.com/v1" />
+                        <input data-tip="Your key for that service. It stays on this computer." value={oaiKey} onChange={(e) => setOaiKey(e.target.value)} type="password" className={field + " !py-2 font-mono !text-[11px]"} placeholder="API key" />
+                        <input data-tip="The name of the model to paint with, like gpt-image-1." value={oaiModel} onChange={(e) => setOaiModel(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"} placeholder="model — gpt-image-1, dall-e-3…" />
+                        <Btn data-tip="Saves these details in Settings and picks this service as your painter." variant="primary" disabled={!oaiKey.trim()} onClick={applyOpenai}>
                           Save &amp; pick this painter
                         </Btn>
                       </div>
@@ -474,7 +474,7 @@ export default function WizardView({
                   const dims = a === "per-category" ? null : ASPECTS[a as AspectKey];
                   return (
                     <BorderGlow key={a} radius={13} glow={active ? "rgba(86,184,165,0.6)" : "rgba(86,184,165,0.3)"} idle={active ? "rgba(86,184,165,0.5)" : "#3e2f21"} innerClassName={active ? "bg-[#1d2422]" : "bg-[var(--color-panel)]"}>
-                      <button onClick={() => patch({ aspect: a })} className="btn-press flex w-full flex-col items-center p-4">
+                      <button data-tip={`${a === "per-category" ? `Lets the forge pick the best shape for each kind of picture.` : `Makes every picture in this batch ${a} shaped.`}`} onClick={() => patch({ aspect: a })} className="btn-press flex w-full flex-col items-center p-4">
                         <span
                           className={`rounded-md border-2 ${active ? "border-lagoon" : "border-line2"}`}
                           style={
@@ -510,7 +510,7 @@ export default function WizardView({
               </p>
               <div className="mt-5">
                 <BorderGlow radius={13} glow={setup.linkFolder ? "rgba(140,181,111,0.55)" : "rgba(140,181,111,0.3)"} idle={setup.linkFolder ? "rgba(140,181,111,0.45)" : "#3e2f21"} innerClassName={setup.linkFolder ? "bg-[#1f241b]" : "bg-[var(--color-panel)]"}>
-                  <button onClick={() => patch({ linkFolder: !setup.linkFolder })} className="btn-press w-full p-4 text-left">
+                  <button data-tip={`${setup.linkFolder ? `Turn this off to skip saving into a folder.` : `Saves finished pictures into a folder on this computer as they are made.`}`} onClick={() => patch({ linkFolder: !setup.linkFolder })} className="btn-press w-full p-4 text-left">
                     <span className="flex items-center gap-3">
                       <IFolder size={20} className={setup.linkFolder ? "text-moss" : "text-dust"} />
                       <span className="flex-1">
@@ -546,7 +546,7 @@ export default function WizardView({
             <div className="rise-in max-w-xl space-y-4">
               <p className="text-[15px] leading-relaxed text-parch">Two small choices. You can skip both.</p>
               <div className={card}>
-                <button onClick={() => setWantSave(!wantSave)} className="btn-press flex w-full items-center gap-3 text-left">
+                <button data-tip="Remembers these choices as a recipe so you can start the next batch from them in one click." onClick={() => setWantSave(!wantSave)} className="btn-press flex w-full items-center gap-3 text-left">
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${wantSave ? "border-ember bg-ember text-[var(--color-on-accent)]" : "border-line2"}`}>
                     {wantSave && <ICheck size={11} />}
                   </span>
@@ -556,11 +556,11 @@ export default function WizardView({
                   </span>
                 </button>
                 {wantSave && (
-                  <input autoFocus value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="recipe name — e.g. Shop fronts, clay look" className={field + " mt-3"} />
+                  <input data-tip="A name for your recipe so you can find it later." autoFocus value={saveName} onChange={(e) => setSaveName(e.target.value)} placeholder="recipe name — e.g. Shop fronts, clay look" className={field + " mt-3"} />
                 )}
               </div>
               <div className={card}>
-                <button onClick={() => patch({ runAfter: !setup.runAfter })} className="btn-press flex w-full items-center gap-3 text-left">
+                <button data-tip={`${setup.runAfter ? `Turn this off to look over the rows first.` : `Starts painting as soon as the batch is laid out.`}`} onClick={() => patch({ runAfter: !setup.runAfter })} className="btn-press flex w-full items-center gap-3 text-left">
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border ${setup.runAfter ? "border-ember bg-ember text-[var(--color-on-accent)]" : "border-line2"}`}>
                     {setup.runAfter && <ICheck size={11} />}
                   </span>
@@ -602,7 +602,7 @@ export default function WizardView({
                   every prompt — open one to read or edit it
                 </p>
                 <div className="flex gap-1.5">
-                  <button onClick={allOpen ? closeAll : openAll} className="btn-press rounded-md border border-line bg-panel/60 px-2.5 py-1 font-mono text-[10px] text-parch hover:border-ember/50 hover:text-ember">
+                  <button data-tip="Opens or closes every prompt in the list at once." onClick={allOpen ? closeAll : openAll} className="btn-press rounded-md border border-line bg-panel/60 px-2.5 py-1 font-mono text-[10px] text-parch hover:border-ember/50 hover:text-ember">
                     {allOpen ? "close all" : "open all"}
                   </button>
                 </div>
@@ -635,13 +635,13 @@ export default function WizardView({
 
         {/* footer */}
         <footer className="mt-2 flex items-center gap-3 border-t border-line pt-4">
-          <Btn onClick={() => (step === 0 ? onExit() : setStep((s) => s - 1))}>{step === 0 ? "Cancel" : "← Back"}</Btn>
+          <Btn data-tip={`${step === 0 ? `Leaves the wizard without making a batch.` : `Goes back one step. Your choices are kept.`}`} onClick={() => (step === 0 ? onExit() : setStep((s) => s - 1))}>{step === 0 ? "Cancel" : "← Back"}</Btn>
           {step < STEPS.length - 1 ? (
-            <Btn variant="primary" onClick={next} disabled={!canNext()}>
+            <Btn data-tip="Goes to the next step. It stays grey until this step has what it needs." variant="primary" onClick={next} disabled={!canNext()}>
               {step === 0 ? `Next · ${items.filter((i) => i.filename && i.prompt).length} pictures →` : "Next →"}
             </Btn>
           ) : (
-            <Btn
+            <Btn data-tip="Lays all the pictures out as rows on the workbench so you can start painting."
               variant="moss"
               onClick={() => {
                 const ready = items.map((i) => ({

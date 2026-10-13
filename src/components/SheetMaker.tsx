@@ -254,7 +254,7 @@ export default function SheetMaker({
             <p className="font-display text-[17px] tracking-wide text-cream">Make a sheet</p>
             <p className="font-mono text-[10.5px] text-dust">many frames of the same character</p>
           </div>
-          <button onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
+          <button data-tip="Closes the sheet maker." onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
             <IX size={16} />
           </button>
         </div>
@@ -266,7 +266,7 @@ export default function SheetMaker({
               <label className={label}>what kind of sheet</label>
               <div className="grid gap-2 sm:grid-cols-2">
                 {SHEET_DEFS.map((d) => (
-                  <button
+                  <button data-tip={`${d.label}: ${d.blurb} (${d.frames.length} frames)`}
                     key={d.kind}
                     onClick={() => setDef(d)}
                     className={`btn-press rounded-lg border p-3 text-left ${
@@ -283,7 +283,7 @@ export default function SheetMaker({
 
             <div>
               <label className={label}>describe the character</label>
-              <textarea
+              <textarea data-tip="Say who the character is and how it should look, for example a stout dwarf blacksmith in claymation style."
                 value={character}
                 onChange={(e) => setCharacter(e.target.value)}
                 rows={2}
@@ -295,7 +295,7 @@ export default function SheetMaker({
             <div>
               <label className={label}>how to make it</label>
               <div className="grid gap-2 sm:grid-cols-2">
-                <button
+                <button data-tip="Draws the character once, then changes that same picture into every pose. Slower, but the character stays the same in every frame."
                   onClick={() => setMethod("from-reference")}
                   disabled={!canReference}
                   className={`btn-press rounded-lg border p-3 text-left disabled:opacity-40 ${
@@ -308,7 +308,7 @@ export default function SheetMaker({
                     genuinely stays the same and each frame is usable on its own.
                   </span>
                 </button>
-                <button
+                <button data-tip="Draws the whole grid in one go. Quick and cheap, but the frames may drift and not match."
                   onClick={() => setMethod("one-shot")}
                   className={`btn-press rounded-lg border p-3 text-left ${
                     method === "one-shot" ? "border-ember/60 bg-ember/10" : "border-line bg-[var(--color-field)]"
@@ -343,11 +343,11 @@ export default function SheetMaker({
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Btn variant="primary" onClick={run} disabled={busy}>
+              <Btn data-tip="Makes the sheet: the engine draws every frame of the animation. This can take a few minutes." variant="primary" onClick={run} disabled={busy}>
                 {busy ? "drawing…" : "Make the sheet"}
               </Btn>
               {busy && (
-                <Btn variant="danger" onClick={() => (stopRef.current = true)}>
+                <Btn data-tip="Stops drawing. The frames already finished are kept." variant="danger" onClick={() => (stopRef.current = true)}>
                   Stop
                 </Btn>
               )}
@@ -402,15 +402,15 @@ export default function SheetMaker({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Btn onClick={assemble}>Save as one sheet</Btn>
-                  <Btn onClick={saveFrames}>Save each frame</Btn>
+                  <Btn data-tip="Joins all the finished frames into one picture file and saves it." onClick={assemble}>Save as one sheet</Btn>
+                  <Btn data-tip="Saves every finished frame as its own separate picture." onClick={saveFrames}>Save each frame</Btn>
                 </div>
 
                 <div className="rounded-lg border border-line bg-[var(--color-field)] p-3">
                   <p className={label}>play it</p>
                   <div className="flex flex-wrap gap-2">
                     {!playing ? (
-                      <Btn
+                      <Btn data-tip={`Plays the frames here as a small animation: ${stripFor(def).label}.`}
                         onClick={() => {
                           const s = stripFor(def);
                           play(s.order, s.frameMs, s.pingPong);
@@ -419,7 +419,7 @@ export default function SheetMaker({
                         ▶ {stripFor(def).label}
                       </Btn>
                     ) : (
-                      <Btn variant="danger" onClick={stopPlaying}>
+                      <Btn data-tip="Stops the preview." variant="danger" onClick={stopPlaying}>
                         ■ stop
                       </Btn>
                     )}
@@ -429,13 +429,13 @@ export default function SheetMaker({
                     <div className="mt-3">
                       <label className={label}>make it say something</label>
                       <div className="flex gap-2">
-                        <input
+                        <input data-tip="Type a few words and the mouth shapes will play along with them."
                           value={say}
                           onChange={(e) => setSay(e.target.value)}
                           placeholder="hello there"
                           className={field}
                         />
-                        <Btn
+                        <Btn data-tip="Plays the mouth shapes for the words you typed, like the character is talking."
                           onClick={() => {
                             const s = visemesForText(say || "hello");
                             play(s.order, s.frameMs, false);
