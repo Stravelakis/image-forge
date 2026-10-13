@@ -514,3 +514,7 @@ nine. Both apps now warn about this every time; see §12.
 
 The matching note is in `BYOK-Vid-Creator/docs/HANDOFF.md`; keep the two in
 step.
+
+## Next round (13 Oct 2026)
+
+The full review and work list for both forges lives in Video Forge's `docs/FORGES-PLAN.md` (private repo). Top item for this app: settings and keys must move out of the page storage (it is tied to the port, so a second copy opens with an empty box).
