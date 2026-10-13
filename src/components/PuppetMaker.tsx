@@ -721,7 +721,11 @@ function PuppetPreview({ rig, size = 320, onClick }: { rig: ForgePuppet; size?: 
         g.fillRect(0, 0, S, S);
         const pose = poseKeys.length ? poseKeys[Math.floor(t / 2.6) % (poseKeys.length + 1)] : undefined;
         const move = neck ? headMove(t) : { dy: 0, rot: 0 };
-        if (neck) {
+        // A whole-body pose replaces the body (rig.ts poseBody), exactly as
+        // Video Forge draws it; an old overlay pose goes over the body.
+        const poseLayer = pose ? rig.json.poses?.[pose] : undefined;
+        const swap = !!(poseLayer && rig.json.posesReplaceBody && neck);
+        if (neck && !swap) {
           // Body: everything below the neck line, still.
           g.save();
           g.beginPath();
@@ -730,7 +734,8 @@ function PuppetPreview({ rig, size = 320, onClick }: { rig: ForgePuppet; size?: 
           g.drawImage(baseBmp, 0, 0, S, S);
           g.restore();
         }
-        draw(pose ? rig.json.poses?.[pose] : undefined);
+        if (swap && poseLayer && bitmaps[poseLayer.file]) g.drawImage(bitmaps[poseLayer.file], 0, 0, S, S);
+        else draw(poseLayer);
         // Head: everything above the neck line (plus the overlap that hides the
         // join), turned about the neck, with its face parts riding along.
         g.save();
