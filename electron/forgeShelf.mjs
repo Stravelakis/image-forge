@@ -59,11 +59,15 @@ export function validateOrder(raw) {
     order: {
       id: o.id,
       kind: "puppet",
+      // Which forge it is for. Only Image Forge makes puppets today; the field
+      // is here so the Social and Content Forges can order from any forge
+      // without a new format (13 Oct 2026).
+      to: ["image-forge", "video-forge", "social-forge", "content-forge"].includes(o.to) ? o.to : "image-forge",
       from: String(o.from || "another app").slice(0, 40),
       name: String(o.name || "").trim().slice(0, 60) || "puppet",
       description,
       style: STYLES.has(o.style) ? o.style : "pixar",
-      framing: o.framing === "waist" ? "waist" : "head",
+      framing: o.framing === "waist" || o.framing === "full" ? o.framing : "head",
       // Make it with nobody there: the first face the checker likes is used.
       auto: o.auto === true,
       inspirations: (Array.isArray(o.inspirations) ? o.inspirations : []).filter((f) => FILE.test(f) && /\.png$/i.test(f)).slice(0, 3),

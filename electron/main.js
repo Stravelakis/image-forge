@@ -27,6 +27,7 @@ import {
 import { readMode, writeMode, writeHandover, takeHandover, isTrustedInstallerUrl, download, MODES } from "./appctl.mjs";
 import { sharedValues, putShared } from "./forgeKeys.mjs";
 import { openVault, HARVEST_PAGE } from "./vault.mjs";
+import { recordMade } from "./forgeHub.mjs";
 import { shelfRoot, openOrders, orderPicture, finishOrder, savePuppetFile, listPuppets, puppetFile, removePuppet } from "./forgeShelf.mjs";
 import os from "node:os";
 import { spawn } from "node:child_process";
@@ -274,6 +275,15 @@ async function handleApp(req, res) {
     }
     if (req.method === "PUT" && seg[2] === "puppets" && seg.length === 5) {
       const r = savePuppetFile(shelf, seg[3], seg[4], await readBody(req, 12 * 1024 * 1024));
+      // The rig file goes last: then the puppet is whole, and goes on the
+      // Forge hub's list of everything made (forgeHub.mjs).
+      if (r.ok && seg[4].endsWith(".rig.json")) {
+        try {
+          recordMade(shelf, { app: "image-forge", kind: "puppet", file: r.path, title: seg[3], madeWith: "Image Forge · puppet maker", aiMade: true });
+        } catch {
+          /* a convenience only */
+        }
+      }
       return json(res, r.ok ? 200 : 400, r.ok ? { ok: true } : r);
     }
     // Keys shared with Video Forge on this computer (electron/forgeKeys.mjs).
