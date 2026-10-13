@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cursor chasers</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600&display=swap" rel="stylesheet" />
+<style>
+  :root { --bg: #000; --ink: #ece8ff; --dim: #8f88b3; --v: #a897ff; --v2: #c9bdff; --line: rgba(168,151,255,.22); }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 400 15px/1.5 Sora, system-ui, sans-serif; }
+  header { padding: 40px 24px 8px; max-width: 1200px; margin: 0 auto; }
+  h1 { font-weight: 600; font-size: 30px; margin: 0; }
+  header p { color: var(--dim); max-width: 720px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; padding: 18px 24px 60px; max-width: 1200px; margin: 0 auto; }
+  @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+  .card { position: relative; height: 460px; border-radius: 26px; border: 1px solid var(--line); background: #07050f; overflow: hidden; cursor: none; }
+  .card canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .label { position: absolute; left: 20px; top: 16px; z-index: 3; pointer-events: none; }
+  .label b { display: block; font-size: 22px; font-weight: 600; }
+  .label span { color: var(--dim); font-size: 13px; }
+  .mock { position: absolute; left: 20px; right: 20px; bottom: 20px; z-index: 2; display: grid; gap: 10px; }
+  .mock .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pill { border: 1px solid rgba(255,255,255,.14); border-radius: 999px; padding: 9px 16px; color: var(--ink); background: rgba(255,255,255,.03); font: inherit; font-size: 13px; cursor: none; }
+  .pill.primary { background: linear-gradient(100deg, #7c6bff, var(--v)); color: #0c0820; font-weight: 600; border-color: transparent; }
+  .tile { border: 1px solid rgba(255,255,255,.12); border-radius: 18px; padding: 12px 14px; font-size: 13px; color: var(--dim); }
+  .tile b { color: var(--ink); display: block; font-size: 14px; }
+  .ring { position: absolute; z-index: 4; pointer-events: none; border: 2px solid var(--v2); border-radius: 14px; box-shadow: 0 0 22px -4px var(--v); transition: all .16s cubic-bezier(.2,.9,.3,1.2); opacity: 0; }
+  .dot { position: absolute; z-index: 5; width: 8px; height: 8px; border-radius: 50%; background: var(--v2); pointer-events: none; transform: translate(-50%,-50%); box-shadow: 0 0 12px var(--v); }
+  footer { color: var(--dim); text-align: center; padding: 0 24px 40px; font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cursor chasers — pick one</h1>
+  <p>Move the mouse over each panel. All three are drawn in the Forge violet on black, sit under every bubble and dialog, and switch themselves off for people whose computer asks for less motion. Image Forge only — Video Forge keeps its own look.</p>
+</header>
+<div class="grid">
+  <section class="card" id="a">
+    <canvas></canvas>
+    <div class="label"><b>A · Comet</b><span>a soft glow with a fading tail</span></div>
+    <div class="mock"><div class="row"><button class="pill primary">Make the sheet</button><button class="pill">Stop</button></div><div class="tile"><b>Walk cycle</b>Eight frames of a walk</div></div>
+  </section>
+  <section class="card" id="b">
+    <div class="ring"></div><div class="dot"></div>
+    <div class="label"><b>B · Target</b><span>a ring that snaps around anything clickable</span></div>
+    <div class="mock"><div class="row"><button class="pill primary">Make the sheet</button><button class="pill">Stop</button></div><div class="tile"><b>Walk cycle</b>Eight frames of a walk</div></div>
+  </section>
+  <section class="card" id="c">
+    <canvas></canvas>
+    <div class="label"><b>C · Smoke</b><span>violet ink that swirls behind the pointer</span></div>
+    <div class="mock"><div class="row"><button class="pill primary">Make the sheet</button><button class="pill">Stop</button></div><div class="tile"><b>Walk cycle</b>Eight frames of a walk</div></div>
+  </section>
+</div>
+<footer>Tell me A, B or C (or none). The chosen one goes on Start and the sheet page, and anywhere else you want it.</footer>
+<script>
+const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+function fit(c) { const r = c.getBoundingClientRect(); c.width = r.width * devicePixelRatio; c.height = r.height * devicePixelRatio; }
+
+// A · Comet
+(() => {
+  const card = document.getElementById("a"), c = card.querySelector("canvas"), g = c.getContext("2d");
+  fit(c); addEventListener("resize", () => fit(c));
+  const pts = []; let mx = -999, my = -999, x = -999, y = -999;
+  card.addEventListener("pointermove", (e) => { const r = card.getBoundingClientRect(); mx = (e.clientX - r.left) * devicePixelRatio; my = (e.clientY - r.top) * devicePixelRatio; if (x < -500) { x = mx; y = my; } });
+  card.addEventListener("pointerleave", () => { mx = my = -999; });
+  (function loop() {
+    g.clearRect(0, 0, c.width, c.height);
+    if (mx > -500) { x += (mx - x) * 0.22; y += (my - y) * 0.22; pts.push({ x, y, a: 1 }); }
+    if (pts.length > 26) pts.shift();
+    pts.forEach((p, i) => { p.a *= 0.92; const r = (6 + i * 1.3) * devicePixelRatio; const grd = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3);
+      grd.addColorStop(0, `rgba(201,189,255,${0.5 * p.a * i / pts.length})`); grd.addColorStop(1, "rgba(168,151,255,0)"); g.fillStyle = grd; g.beginPath(); g.arc(p.x, p.y, r * 3, 0, 7); g.fill(); });
+    if (mx > -500) { const grd = g.createRadialGradient(x, y, 0, x, y, 120 * devicePixelRatio); grd.addColorStop(0, "rgba(168,151,255,.32)"); grd.addColorStop(1, "rgba(168,151,255,0)"); g.fillStyle = grd; g.beginPath(); g.arc(x, y, 120 * devicePixelRatio, 0, 7); g.fill(); g.fillStyle = "#efeaff"; g.beginPath(); g.arc(x, y, 3.2 * devicePixelRatio, 0, 7); g.fill(); }
+    if (!reduced) requestAnimationFrame(loop);
+  })();
+})();
+
+// B · Target
+(() => {
+  const card = document.getElementById("b"), ring = card.querySelector(".ring"), dot = card.querySelector(".dot");
+  card.addEventListener("pointermove", (e) => {
+    const r = card.getBoundingClientRect(); dot.style.left = e.clientX - r.left + "px"; dot.style.top = e.clientY - r.top + "px";
+    const t = e.target.closest("button,.tile");
+    if (t && card.contains(t)) { const b = t.getBoundingClientRect(); Object.assign(ring.style, { left: b.left - r.left - 6 + "px", top: b.top - r.top - 6 + "px", width: b.width + 12 + "px", height: b.height + 12 + "px", borderRadius: getComputedStyle(t).borderRadius, opacity: 1 }); dot.style.opacity = 0; }
+    else { Object.assign(ring.style, { left: e.clientX - r.left - 16 + "px", top: e.clientY - r.top - 16 + "px", width: "32px", height: "32px", borderRadius: "50%", opacity: .8 }); dot.style.opacity = 1; }
+  });
+  card.addEventListener("pointerleave", () => { ring.style.opacity = 0; dot.style.opacity = 0; });
+})();
+
+// C · Smoke
+(() => {
+  const card = document.getElementById("c"), c = card.querySelector("canvas"), g = c.getContext("2d");
+  fit(c); addEventListener("resize", () => fit(c));
+  const parts = []; let lx = null, ly = null;
+  card.addEventListener("pointermove", (e) => {
+    const r = card.getBoundingClientRect(), x = (e.clientX - r.left) * devicePixelRatio, y = (e.clientY - r.top) * devicePixelRatio;
+    const vx = lx === null ? 0 : x - lx, vy = ly === null ? 0 : y - ly; lx = x; ly = y;
+    for (let i = 0; i < 3; i++) parts.push({ x, y, vx: vx * 0.15 + (Math.random() - .5) * 1.4, vy: vy * 0.15 + (Math.random() - .5) * 1.4, r: (10 + Math.random() * 16) * devicePixelRatio, a: .55, h: 250 + Math.random() * 30 });
+  });
+  card.addEventListener("pointerleave", () => { lx = ly = null; });
+  (function loop() {
+    g.globalCompositeOperation = "source-over"; g.fillStyle = "rgba(7,5,15,.18)"; g.fillRect(0, 0, c.width, c.height);
+    g.globalCompositeOperation = "lighter";
+    for (let i = parts.length - 1; i >= 0; i--) { const p = parts[i]; p.x += p.vx; p.y += p.vy - .25; p.vx *= .97; p.vy *= .97; p.r *= 1.018; p.a *= .955;
+      const grd = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r); grd.addColorStop(0, `hsla(${p.h},100%,78%,${p.a * .5})`); grd.addColorStop(1, `hsla(${p.h},100%,60%,0)`); g.fillStyle = grd; g.beginPath(); g.arc(p.x, p.y, p.r, 0, 7); g.fill();
+      if (p.a < .02) parts.splice(i, 1); }
+    if (!reduced) requestAnimationFrame(loop);
+  })();
+})();
+</script>
+</body>
+</html>

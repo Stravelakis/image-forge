@@ -576,7 +576,10 @@ html[data-forge] .bg-panel, html[data-forge] .bg-panel2, html[data-forge] [class
 html[data-forge] .rounded-xl.border, html[data-forge] .rounded-2xl.border { box-shadow: inset 0 1px 0 rgb(255 255 255 / .06); }
 /* Custom buttons across the app (not the shared Btn): pills, and the solid
    accent ones glow instead of standing on a 3D lip. */
-html[data-forge] .btn-press.rounded-lg:not(.shrink-0):not([class*="h-"]), html[data-forge] .btn-press.rounded-xl { border-radius: 999px; }
+html[data-forge] .btn-press.rounded-lg:not(.shrink-0):not([class*="h-"]):not(.text-left), html[data-forge] .btn-press.rounded-xl:not(.text-left) { border-radius: 999px; }
+/* Cards — a title and a few lines under it — are not pills: a pill's round
+   ends squeezed their words (Ak, 13 Oct 2026, the sheet page). */
+html[data-forge] .btn-press.text-left.rounded-lg, html[data-forge] .btn-press.text-left.rounded-xl { border-radius: 18px; padding: 14px 16px; }
 html[data-forge] .btn-press.bg-ember {
   background: linear-gradient(100deg, color-mix(in srgb, var(--color-ember) 35%, #1d2350), color-mix(in srgb, var(--color-ember) 75%, #3f4fa0) 45%, var(--color-ember)) !important;
   box-shadow: 0 0 22px -8px var(--color-ember) !important; }
