@@ -64,6 +64,8 @@ export function validateOrder(raw) {
       description,
       style: STYLES.has(o.style) ? o.style : "pixar",
       framing: o.framing === "waist" ? "waist" : "head",
+      // Make it with nobody there: the first face the checker likes is used.
+      auto: o.auto === true,
       inspirations: (Array.isArray(o.inspirations) ? o.inspirations : []).filter((f) => FILE.test(f) && /\.png$/i.test(f)).slice(0, 3),
       createdAt: String(o.createdAt || new Date().toISOString()),
     },

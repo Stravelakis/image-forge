@@ -62,6 +62,9 @@ export interface BaseRequest {
   count?: number;
   /** different every time "show me others" is pressed */
   round?: number;
+  /** picture size in pixels (square). Default PUPPET_SIZE; local engines use
+   *  768 — an 8 GB card took 5 min 40 s per edit at 1024 (12 Oct 2026). */
+  size?: number;
 }
 
 export function baseQuestion(framing: PuppetFraming): string {
@@ -79,14 +82,15 @@ export function baseQuestion(framing: PuppetFraming): string {
 
 export async function makeBaseOptions(req: BaseRequest, io: MakerIO, onEvent: (e: MakerEvent) => void, signal?: AbortSignal): Promise<Img[]> {
   const count = req.count ?? 4;
+  const size = req.size ?? PUPPET_SIZE;
   const prompt = basePrompt({ description: req.description, style: req.style, framing: req.framing, inspirations: req.inspirations.length });
   const out: Img[] = [];
   for (let i = 0; i < count; i++) {
     if (signal?.aborted) break;
     const picture = resize(
-      await io.generate({ prompt, negative: BASE_NEGATIVE, refs: req.inspirations.slice(0, 3), seed: seedFor((req.round ?? 0) * 100 + i + 1), width: PUPPET_SIZE, height: PUPPET_SIZE }, signal),
-      PUPPET_SIZE,
-      PUPPET_SIZE
+      await io.generate({ prompt, negative: BASE_NEGATIVE, refs: req.inspirations.slice(0, 3), seed: seedFor((req.round ?? 0) * 100 + i + 1), width: size, height: size }, signal),
+      size,
+      size
     );
     onEvent({ type: "picture" });
     const verdict = io.judge ? await io.judge(baseQuestion(req.framing), shrink(picture, 512), signal).catch(() => null) : null;
@@ -184,7 +188,7 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
         onEvent({ type: "part", report: { ...report } });
         continue;
       }
-      const candidate: CutPart = { layer: cut.layer, box: cut.box };
+      const candidate: CutPart = { layer: cut.layer, keyed: cut.keyed, box: cut.box };
       const view = viewBox(cut.box, req.base);
       const after = composite(req.base, cut.layer, cut.box.x, cut.box.y);
       const pair = shrink(sideBySide(crop(req.base, view), crop(after, view)), 768);

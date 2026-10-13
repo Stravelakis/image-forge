@@ -250,6 +250,35 @@ signtool" even so; `Get-AuthenticodeSignature` reports `NotSigned`.
   end of `index.css`.
 - **Test copy** — `IMAGEFORGE_USER_DATA=<folder>` runs on a separate profile.
 
+### The puppet maker (12–13 October 2026)
+
+The third kind of character art: a talking, blinking, nodding, waving puppet
+for Video Forge. **Read `docs/puppet-recipe.md`** — it is the method and every
+lesson learned. Map:
+
+| File | What |
+|---|---|
+| `src/lib/puppet/recipe.ts` | styles, framing, the 20 parts and their prompts, bands |
+| `src/lib/puppet/pixels.ts` | pure picture maths: cut a part (patches), key the background (flood fill), resize, composite |
+| `src/lib/puppet/maker.ts` | the run: 4 faces, then parts with ≤3 tries each; engine-agnostic (`generate`, `judge` passed in) |
+| `src/lib/puppet/rig.ts` | builds Video Forge's rig JSON: bust crop, neck, poses |
+| `src/lib/puppet/pageIO.ts` | the page's engines (LocalAI models by name, OVH, Cloudflare FLUX.2, Google), the checker, unload/rest for local |
+| `src/lib/puppet/shelf.ts` + `electron/forgeShelf.mjs` | orders and finished puppets on `%APPDATA%\Forge\` (same file as Video Forge's) |
+| `src/components/PuppetMaker.tsx` | the 4-step pop-up, Forge look (`.forge-*` in `index.css`), click-to-enlarge, live preview |
+| `electron/main.js` `proxyLocal` | `/local-api/<port>` → 127.0.0.1, because LocalAI refuses page requests (CSRF) |
+
+Engines gained **Cloudflare FLUX.2 dev/klein with reference pictures** (also
+unlocks free "from a reference" sheets) and the local engine takes an exact
+size. **Fixed:** Google reference pictures were silently dropped.
+
+Tests: `tests/puppet.test.ts` runs the real code on owl pictures in
+`tests/fixtures/puppet/` (no engine called).
+
+Open: the rest of the app still wears the old brown theme — it moves to the
+Forge look once Ak picks A/B/C on Video Forge's `docs/design/forge-twins-look.html`.
+The checker is over-strict about hats "cut off at the top".
+
+
 ## 10. Releasing
 
 0. Follow the owner's release gate (STANDARDS.md → repo standards §2): README

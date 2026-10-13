@@ -12,8 +12,11 @@ import { borderColour, crop, keyOut, type Box, type Img } from "./pixels";
 import type { PuppetFraming } from "./recipe";
 
 export interface CutPart {
+  /** the part as cut, background and all — what the checker is shown */
   layer: Img;
   box: Box;
+  /** the same part with the background removed — what the puppet uses */
+  keyed?: Img;
 }
 
 export interface ForgeLayer {
@@ -105,7 +108,7 @@ export function buildRig(o: { name: string; framing: PuppetFraming; base: Img; p
   const layer = (id: string): ForgeLayer | null => {
     const p = o.parts[id];
     if (!p) return null;
-    files[`${id}.png`] = keyOut(p.layer, bg);
+    files[`${id}.png`] = p.keyed ?? keyOut(p.layer, bg);
     return {
       file: `${id}.png`,
       x: (p.box.x - ox + p.box.w / 2) / frame - 0.5,

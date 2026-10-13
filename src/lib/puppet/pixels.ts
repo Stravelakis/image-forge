@@ -82,36 +82,145 @@ export function borderColour(img: Img): [number, number, number] {
 }
 
 /**
- * Make the background transparent, and take its colour back out of soft edges.
+ * Make the background transparent — ONLY the background.
  *
- * A feathered edge over pink is part pink. Leaving it gives a pink halo that is
- * invisible on the pink and glaring on a park (course, Sep 2026). So an edge
- * pixel is treated as a mix of character and background: its opacity is how
- * far it is from the background colour, and the background's share is
- * subtracted from its colour.
+ * FLOOD-FILLED FROM THE EDGES. The first version keyed every pixel near the
+ * background colour, anywhere in the picture. Z-Image drew its "magenta" as a
+ * pastel pink (12 Oct 2026), close enough to a fox's red fur and white chef's
+ * hat that the face was riddled with holes, and the edge clean-up below
+ * "subtracted pink" from what was left — the fox came out green. Now a pixel
+ * only goes if it is background-coloured AND joined to the picture's border
+ * through other background pixels. Pink inside the character stays.
  *
- * `inner`/`outer` are colour distances (0–441): nearer than inner is fully
- * background; further than outer is fully character.
+ * Then the soft edge: a feathered edge over pink is part pink, which is a halo
+ * invisible on the pink and glaring on a park (course, Sep 2026). Pixels within
+ * a few of the cleared area are treated as a mix of character and background —
+ * opacity from how far they are from the background colour, and the
+ * background's share taken out of their colour. Only those; the inside of the
+ * character is never touched.
+ *
+ * `tolerance` is a colour distance (0–441) still counted as background.
  */
-export function keyOut(img: Img, bg = borderColour(img), inner = 60, outer = 150): Img {
+export function keyOut(img: Img, bg = borderColour(img), tolerance?: number): Img {
+  // Strict first: 30 kept a fox's pink-lit hat whole where 60 bit holes in
+  // it (12 Oct 2026). A patchy background that strict leaves standing along
+  // the border gets one looser pass at a time.
+  if (tolerance !== undefined) return keyWith(img, bg, tolerance);
+  let out = keyWith(img, bg, 30);
+  for (const t of [45, 60]) {
+    if (borderLeft(out) < 0.2) break;
+    out = keyWith(img, bg, t);
+  }
+  return out;
+}
+
+/** Share of the picture's border still opaque after keying. */
+function borderLeft(img: Img): number {
+  let n = 0;
+  let all = 0;
+  const at = (x: number, y: number) => {
+    all++;
+    if (img.data[(y * img.width + x) * 4 + 3] > 128) n++;
+  };
+  for (let x = 0; x < img.width; x += 2) {
+    at(x, 0);
+    at(x, 1);
+  }
+  for (let y = 0; y < img.height * 0.6; y += 2) {
+    at(0, y);
+    at(img.width - 1, y);
+  }
+  return n / all;
+}
+
+function keyWith(img: Img, bg: [number, number, number], tolerance: number): Img {
   const out: Img = { width: img.width, height: img.height, data: new Uint8ClampedArray(img.data) };
   const d = out.data;
-  for (let i = 0; i < d.length; i += 4) {
+  const W = img.width;
+  const H = img.height;
+  const dist = (p: number) => {
+    const i = p * 4;
     const dr = d[i] - bg[0];
     const dg = d[i + 1] - bg[1];
     const db = d[i + 2] - bg[2];
-    const dist = Math.sqrt(dr * dr + dg * dg + db * db);
-    if (dist <= inner) {
+    return Math.sqrt(dr * dr + dg * dg + db * db);
+  };
+  // 1. the background: everything background-coloured reachable from the border
+  const gone = new Uint8Array(W * H);
+  const stack: number[] = [];
+  const seed = (p: number) => {
+    if (!gone[p] && dist(p) <= tolerance) {
+      gone[p] = 1;
+      stack.push(p);
+    }
+  };
+  for (let x = 0; x < W; x++) {
+    seed(x);
+    seed((H - 1) * W + x);
+  }
+  for (let y = 0; y < H; y++) {
+    seed(y * W);
+    seed(y * W + W - 1);
+  }
+  while (stack.length) {
+    const p = stack.pop()!;
+    const x = p % W;
+    const y = (p / W) | 0;
+    if (x > 0) seed(p - 1);
+    if (x < W - 1) seed(p + 1);
+    if (y > 0) seed(p - W);
+    if (y < H - 1) seed(p + W);
+  }
+  // 2. the soft edge: up to EDGE pixels in from the cleared area
+  const EDGE = Math.max(2, Math.round(W / 300));
+  const near = new Uint8Array(W * H);
+  for (let p = 0; p < W * H; p++) {
+    if (!gone[p]) continue;
+    const x = p % W;
+    const y = (p / W) | 0;
+    for (let dy = -EDGE; dy <= EDGE; dy++) {
+      const yy = y + dy;
+      if (yy < 0 || yy >= H) continue;
+      for (let dx = -EDGE; dx <= EDGE; dx++) {
+        const xx = x + dx;
+        if (xx >= 0 && xx < W && !gone[yy * W + xx]) near[yy * W + xx] = 1;
+      }
+    }
+  }
+  const outer = tolerance * 2.2;
+  for (let p = 0; p < W * H; p++) {
+    const i = p * 4;
+    if (gone[p]) {
       d[i + 3] = 0;
       continue;
     }
-    if (dist >= outer) continue;
-    const a = (dist - inner) / (outer - inner);
+    if (!near[p]) continue;
+    const e = dist(p);
+    if (e >= outer) continue;
+    const a = Math.max(0.05, (e - tolerance * 0.5) / (outer - tolerance * 0.5));
     // colour = a*fg + (1-a)*bg  →  fg = (colour - (1-a)*bg) / a
     for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, (d[i + c] - (1 - a) * bg[c]) / a));
     d[i + 3] = Math.round(d[i + 3] * a);
   }
   return out;
+}
+
+/** A soft rectangular edge, multiplied into whatever alpha the picture has. */
+export function featherEdges(img: Img, feather: number): Img {
+  for (let y = 0; y < img.height; y++) {
+    for (let x = 0; x < img.width; x++) {
+      const e = Math.min(x, y, img.width - 1 - x, img.height - 1 - y);
+      if (e < feather) img.data[(y * img.width + x) * 4 + 3] = Math.round((img.data[(y * img.width + x) * 4 + 3] * e) / feather);
+    }
+  }
+  return img;
+}
+
+/** How much of a keyed picture is left — a sanity check on the keying. */
+export function opaqueShare(img: Img): number {
+  let n = 0;
+  for (let i = 3; i < img.data.length; i += 4) if (img.data[i] > 128) n++;
+  return n / (img.width * img.height);
 }
 
 export function crop(img: Img, box: Box): Img {
@@ -183,7 +292,7 @@ export interface CutOptions {
 }
 
 export type CutResult =
-  | { ok: true; layer: Img; box: Box; areaPct: number; boxPct: number }
+  | { ok: true; layer: Img; keyed: Img; box: Box; areaPct: number; boxPct: number }
   | { ok: false; reason: "same-size" | "nothing-changed" | "redrawn" | "outside" | "over-eyes"; detail: string };
 
 /**
@@ -309,13 +418,11 @@ export function cutPart(base: Img, edit: Img, o: CutOptions): CutResult {
   x1 = Math.min(W - 1, x1 + pad);
   y1 = Math.min(H - 1, y1 + pad);
   const box: Box = { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 };
-  const layer = crop(edit, box);
   // Feather the rectangle's edge so the part blends instead of showing a seam.
-  for (let y = 0; y < box.h; y++) {
-    for (let x = 0; x < box.w; x++) {
-      const e = Math.min(x, y, box.w - 1 - x, box.h - 1 - y);
-      if (e < FEATHER) layer.data[(y * box.w + x) * 4 + 3] = Math.round((layer.data[(y * box.w + x) * 4 + 3] * e) / FEATHER);
-    }
-  }
-  return { ok: true, layer, box, areaPct, boxPct };
+  const layer = featherEdges(crop(edit, box), FEATHER);
+  // The same part with the background taken out of the WHOLE edit first, so
+  // the keying sees the picture's real border (an arm reaching past the base's
+  // outline still keeps its own edge). What the puppet is built from.
+  const keyed = featherEdges(crop(keyOut(edit, borderColour(base)), box), FEATHER);
+  return { ok: true, layer, keyed, box, areaPct, boxPct };
 }

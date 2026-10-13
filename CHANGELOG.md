@@ -21,9 +21,23 @@ helps nobody decide whether to update.
 - **The Forge ground:** tiny sparks on black, and a small burst on each click
   (off when motion is off).
 
+- **Make a puppet** (Wizards, or Animate): describe a character (and add
+  inspiration pictures), pick one of 4 faces, and it is made into a puppet
+  that talks, blinks, raises its brows, nods and — waist up — waves and points,
+  for Video Forge. Each part gets at most 3 tries and is checked by a free
+  picture checker; nothing loops forever. Two engines: one for faces, one for
+  parts, including your own LocalAI models by name.
+- **Cloudflare FLUX.2** (dev and klein) as engines that work from a picture —
+  free reference sheets on Cloudflare.
+
 ### Changed
 
 - New icon: the camera-on-anvil mark on a transparent background.
+
+### Fixed
+
+- Google models were sent your reference picture's request without the
+  picture: "from a reference" sheets on Google were really from nothing.
 
 ## [1.0.4] - 2026-09-26
 

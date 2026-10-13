@@ -919,9 +919,24 @@ async function cloudflare(row, apiModel, s, signal, exhaust, cooldownMs, refImag
  * them wants a key, so this is the OpenAI path with the key made optional and
  * a much longer patience (a laptop GPU takes 20s–5min per picture).
  */
-async function local(row, apiModel, s, signal, refImages) {
-  const base = (s.localBase || "http://localhost:8080/v1").replace(/\/+$/, "");
-  const { w, h } = dimsFor(row.aspect_ratio);
+/**
+ * In the desktop app, a server on this computer is reached through the app's
+ * own /local-api proxy (electron/main.js proxyLocal): LocalAI refuses picture
+ * requests straight from a page. Elsewhere — Node, the MCP server, `npm run
+ * dev` — the address is used as it is.
+ */
+export function localRoute(base) {
+  const b = String(base || "http://localhost:8080/v1").replace(/\/+$/, "");
+  const m = /^https?:\/\/(localhost|127\.0\.0\.1)(?::(\d+))?(\/.*)?$/i.exec(b);
+  const desktop = inBrowser() && typeof location !== "undefined" && /^http:\/\/127\.0\.0\.1:\d+$/.test(location.origin);
+  if (!m || !desktop) return { base: b, headers: {} };
+  return { base: `/local-api/${m[2] || "80"}${m[3] || ""}`, headers: { "X-Forge-App": "1" } };
+}
+
+async function local(row, apiModel, s, signal, refImages, size) {
+  const route = localRoute(s.localBase);
+  const base = route.base;
+  const { w, h } = size ?? dimsFor(row.aspect_ratio);
   const prompt = row.negative_prompt ? `${row.prompt}\n\nAvoid: ${row.negative_prompt}` : row.prompt;
   let res;
   try {
@@ -931,6 +946,7 @@ async function local(row, apiModel, s, signal, refImages) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...route.headers,
           ...(s.localKey?.trim() ? { Authorization: `Bearer ${s.localKey.trim()}` } : {}),
         },
         body: JSON.stringify({
@@ -1039,7 +1055,7 @@ async function generateBytesRaw(rawRow, s, signal, exhaust, cooldownMs, opts = {
         "Pollinations and the other Cloudflare models cannot do it."
     );
   }
-  if (engine === "local") return local(row, apiModel, s, signal, refImages);
+  if (engine === "local") return local(row, apiModel, s, signal, refImages, opts.size);
   if (engine === "pollinations") return pollinations(row, apiModel, s, signal);
   if (engine === "ovh") return ovh(row, s, signal);
   if (engine === "gemini") return gemini(row, apiModel, s, signal, exhaust, cooldownMs, refImages);

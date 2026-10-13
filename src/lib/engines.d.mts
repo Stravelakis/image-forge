@@ -141,6 +141,7 @@ export interface GenerateOptions {
 }
 
 export declare const isFlux2: (apiModel: string) => boolean;
+export declare function localRoute(base: string): { base: string; headers: Record<string, string> };
 export declare const b64Mime: (b64: string) => string;
 
 export declare function generateBytes(

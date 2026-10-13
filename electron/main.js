@@ -280,6 +280,43 @@ async function handleApp(req, res) {
   }
 }
 
+/**
+ * Your own machine's picture server (LocalAI and friends), reached from the
+ * page through here: /local-api/<port>/v1/... → http://127.0.0.1:<port>/v1/...
+ *
+ * LocalAI refuses picture requests that come from a web page ("missing csrf
+ * token", 12 Oct 2026) — rightly, so a website you visit cannot use it behind
+ * your back. Forwarded from here they carry no page origin. Two guards keep
+ * this from becoming that same hole: it only ever reaches this computer
+ * (127.0.0.1), and only the app's own page can call it (the X-Forge-App
+ * header forces a browser preflight that this server never approves).
+ */
+function proxyLocal(req, res) {
+  const m = /^\/local-api\/(\d{2,5})(\/.*)?$/.exec(req.url || "");
+  if (!m || req.headers["x-forge-app"] !== "1") return json(res, 403, { error: "forbidden" });
+  const upstream = http.request(
+    {
+      hostname: "127.0.0.1",
+      port: Number(m[1]),
+      path: m[2] || "/",
+      method: req.method,
+      headers: {
+        ...(req.headers.authorization ? { authorization: req.headers.authorization } : {}),
+        ...(req.headers["content-type"] ? { "content-type": req.headers["content-type"] } : {}),
+        ...(req.headers["content-length"] ? { "content-length": req.headers["content-length"] } : {}),
+      },
+    },
+    (up) => {
+      res.writeHead(up.statusCode || 502, { "Content-Type": up.headers["content-type"] || "application/json" });
+      up.pipe(res);
+    }
+  );
+  // A local picture can take many minutes; never give up on our side.
+  upstream.setTimeout(0);
+  upstream.on("error", (e) => json(res, 502, { error: `could not reach your local server on port ${m[1]}: ${e.message}` }));
+  req.pipe(upstream);
+}
+
 function startServer(distDir) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
@@ -289,6 +326,10 @@ function startServer(distDir) {
       const proxied = Object.keys(PROXIED).find((p) => (req.url || "").startsWith(p + "/"));
       if (proxied) {
         proxyUpstream(proxied, req, res);
+        return;
+      }
+      if ((req.url || "").startsWith("/local-api/")) {
+        proxyLocal(req, res);
         return;
       }
       if ((req.url || "").startsWith("/link/")) {

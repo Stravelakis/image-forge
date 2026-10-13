@@ -11,21 +11,19 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { formatUsd } from "../lib/providers";
-import { findModel } from "../lib/engines.mjs";
 import { PUPPET_STYLES, partsFor, type PuppetFraming } from "../lib/puppet/recipe";
 import { baseQuestion, makeBaseOptions, makeParts, pictureBudget, PUPPET_SIZE, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
-import { blobToImg, imgToPng, imgToUrl, judgeName, pageGenerate, pageJudge, PUPPET_ENGINES } from "../lib/puppet/pageIO";
+import { type PuppetEngine, sizeFor, blobToImg, describeInspiration, imgToPng, imgToUrl, judgeName, listLocalImageModels, pageGenerate, pageJudge, puppetEngines, unloadLocal } from "../lib/puppet/pageIO";
 import { finishOrder, orderPictures, shelfAvailable, shelvePuppet, type PuppetOrder } from "../lib/puppet/shelf";
 import { downloadBlob } from "../lib/output";
-import { Btn, IX } from "./ui";
+import { IX } from "./ui";
 
-const field =
-  "w-full rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[13px] text-cream placeholder:text-dust/60";
-const label = "mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase";
-const tile = (on: boolean) =>
-  `btn-press rounded-xl border p-3 text-left transition ${on ? "border-ember/60 bg-ember/10" : "border-line bg-[var(--color-field)] hover:border-line2"}`;
+// The Forge look (index.css, .forge-*): glass, Sora, round, two button kinds.
+const field = "forge-field";
+const label = "forge-label";
+const tile = (on: boolean) => `forge-tile ${on ? "on" : ""}`;
 
 type Step = "describe" | "pick" | "build" | "done";
 
@@ -65,10 +63,18 @@ export default function PuppetMaker({
   const [style, setStyle] = useState(order?.style ?? "pixar");
   const [framing, setFraming] = useState<PuppetFraming>(order?.framing ?? "head");
   const [inspo, setInspo] = useState<Pic[]>([]);
-  const [engineId, setEngineId] = useState(() => (settings.provider === "local" ? "local" : settings.cloudflare?.token ? "cloudflare-flux2-klein" : "local"));
+  // Two engines (Ak, 12 Oct 2026): one draws the faces, one makes the parts.
+  // The parts need one that works from a picture; the faces can come from any.
+  const [localModels, setLocalModels] = useState<string[]>([]);
+  const [faceId, setFaceId] = useState("");
+  const [partId, setPartId] = useState("");
+  // Pick the face automatically — for orders and overnight runs.
+  const [autoPick, setAutoPick] = useState(order?.auto ?? false);
   const [bases, setBases] = useState<Pic[]>([]);
   const [round, setRound] = useState(0);
   const [base, setBase] = useState<Pic | null>(null);
+  const baseRef = useRef(base);
+  baseRef.current = base;
   const [reports, setReports] = useState<PartReport[]>([]);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [parts, setParts] = useState<Record<string, CutPart>>({});
@@ -79,6 +85,13 @@ export default function PuppetMaker({
   const [canShelve, setCanShelve] = useState(false);
   const [shelved, setShelved] = useState("");
   const stopRef = useRef<AbortController | null>(null);
+  // Click any picture to see it large (Ak, 12 Oct 2026). "live" = the talking preview.
+  const [zoom, setZoom] = useState<{ url: string; caption: string } | "live" | null>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setZoom(null);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => void shelfAvailable().then(setCanShelve), []);
   // An order's inspiration pictures arrive from the shelf.
@@ -87,14 +100,25 @@ export default function PuppetMaker({
     void orderPictures(order).then(async (imgs) => setInspo(await Promise.all(imgs.map(async (img) => ({ img, url: await imgToUrl(img) })))));
   }, [order]);
 
-  const engine = PUPPET_ENGINES.find((e) => e.id === engineId) ?? PUPPET_ENGINES[0];
-  const price = findModel(engineId)?.priceUsd ?? 0;
+  useEffect(() => {
+    void listLocalImageModels(settings).then((ms) => {
+      setLocalModels(ms);
+      // Sensible first choice: Z-Image for faces and an editing model for parts
+      // when this computer has them; otherwise the first free ones.
+      const all = puppetEngines(ms);
+      setFaceId((v) => v || (all.find((e) => /z-?image/i.test(e.id)) ?? all[0]).id);
+      setPartId((v) => v || (all.find((e) => e.refs) ?? all[0]).id);
+    });
+  }, [settings]);
+  const engines = useMemo(() => puppetEngines(localModels), [localModels]);
+  const faceEng = engines.find((e) => e.id === faceId) ?? engines[0];
+  const partEng = engines.find((e) => e.id === partId && e.refs) ?? engines.find((e) => e.refs)!;
   const budget = pictureBudget(framing);
+  const nParts = partsFor(framing).length;
+  const cost = { best: faceEng.price * 4 + partEng.price * nParts, worst: faceEng.price * 4 + partEng.price * nParts * 3 };
   const checker = judgeName(settings);
-  const io = useMemo(
-    () => ({ generate: pageGenerate(settings, engineId, onExhaust as never), judge: pageJudge(settings) }),
-    [settings, engineId, onExhaust]
-  );
+  const faceIO = useMemo(() => ({ generate: pageGenerate(settings, faceEng.id, onExhaust as never), judge: pageJudge(settings) }), [settings, faceEng.id, onExhaust]);
+  const io = useMemo(() => ({ generate: pageGenerate(settings, partEng.id, onExhaust as never), judge: pageJudge(settings) }), [settings, partEng.id, onExhaust]);
   const slug = puppetSlug(name || description.split(/[,.]/)[0] || "puppet");
 
   const addInspo = useCallback(async (files: FileList | File[]) => {
@@ -123,30 +147,50 @@ export default function PuppetMaker({
     setBases([]);
     const ctrl = new AbortController();
     stopRef.current = ctrl;
+    const drawn: Pic[] = [];
     try {
+      // An engine that only draws from words cannot look at inspiration
+      // pictures, so the checker describes them and the words go in instead.
+      let words = description;
+      let pics = inspo.map((p) => p.img);
+      if (pics.length && !faceEng.refs) {
+        setBusy("Reading the inspiration pictures…");
+        const said = await describeInspiration(settings, pics);
+        if (said) words = `${description.trim()}. Inspired by: ${said}`;
+        pics = [];
+        setBusy("Drawing four faces…");
+      }
       await makeBaseOptions(
-        { description, style, framing, inspirations: inspo.map((p) => p.img), count: 4, round },
-        io,
+        { description: words, style, framing, inspirations: pics, count: 4, round, size: sizeFor(faceEng.id) },
+        faceIO,
         async (e) => {
           if (e.type === "picture") setPictures((n) => n + 1);
           if (e.type === "base") {
-            const url = await imgToUrl(e.picture);
-            setBases((p) => [...p, { img: e.picture, url, verdict: e.verdict }]);
+            const pic = { img: e.picture, url: await imgToUrl(e.picture), verdict: e.verdict };
+            drawn.push(pic);
+            setBases((p) => [...p, pic]);
           }
         },
         ctrl.signal
       );
       pushLog(`✓ puppet faces drawn for ${name || "a new character"}`, "ok");
+      if (autoPick && drawn.length) {
+        // The first face the checker liked; the first one if it liked none.
+        const pick = drawn.find((d) => d.verdict?.ok) ?? drawn[0];
+        setBase(pick);
+        pushLog(`↪ picked face ${drawn.indexOf(pick) + 1} automatically`, "info");
+        setTimeout(() => void buildRef.current?.(undefined, pick), 50);
+      }
     } catch (e) {
       setProblem(fail(e));
     } finally {
       setBusy("");
       setRound((r) => r + 1);
     }
-  }, [description, style, framing, inspo, round, io, name, pushLog]);
+  }, [description, style, framing, inspo, round, faceIO, faceEng.refs, settings, autoPick, name, pushLog]);
 
   const useOwnPicture = useCallback(async (f: File) => {
-    const img = resize(await blobToImg(f), PUPPET_SIZE, PUPPET_SIZE);
+    const img = resize(await blobToImg(f), sizeFor(partEng.id), sizeFor(partEng.id));
     const pic: Pic = { img, url: await imgToUrl(img), verdict: null };
     setBases((p) => [pic, ...p]);
     setBase(pic);
@@ -155,11 +199,12 @@ export default function PuppetMaker({
       const verdict = await io.judge(baseQuestion(framing), resize(img, 512, 512)).catch(() => null);
       setBases((p) => p.map((b) => (b.url === pic.url ? { ...b, verdict } : b)));
     }
-  }, [io, framing]);
+  }, [io, framing, partEng.id]);
 
   /* ---------- step 3: the parts ---------- */
   const build = useCallback(
-    async (only?: string[]) => {
+    async (only?: string[], picked?: Pic) => {
+      const base = picked ?? baseRef.current;
       if (!base) return;
       setProblem("");
       setStep("build");
@@ -168,6 +213,11 @@ export default function PuppetMaker({
       stopRef.current = ctrl;
       const keep = only ? Object.fromEntries(Object.entries(parts).filter(([k]) => !only.includes(k))) : parts;
       try {
+        // Two local models do not fit an 8 GB card together — let the face
+        // model go before the parts model loads.
+        if (faceEng.id.startsWith("local:") && partEng.id.startsWith("local:") && faceEng.id !== partEng.id) {
+          await unloadLocal(settings, faceEng.id.slice(6));
+        }
         const res = await makeParts(
           { base: base.img, framing, done: keep, only },
           io,
@@ -195,7 +245,7 @@ export default function PuppetMaker({
           framing,
           base: base.img,
           parts: all,
-          madeBy: { name: name || slug, description, style, framing, engine: engine.label, app: "Image Forge", madeAt: new Date().toISOString() },
+          madeBy: { name: name || slug, description, style, framing, engine: `faces: ${faceEng.label}; parts: ${partEng.label}`, app: "Image Forge", madeAt: new Date().toISOString() },
         });
         setRig(made);
         setStep("done");
@@ -209,10 +259,22 @@ export default function PuppetMaker({
         setBusy("");
       }
     },
-    [base, framing, io, parts, slug, name, description, style, engine.label, pushLog]
+    [framing, io, parts, slug, name, description, style, faceEng, partEng, settings, pushLog]
   );
+  const buildRef = useRef(build);
+  buildRef.current = build;
 
   const stop = () => stopRef.current?.abort();
+
+  // An order that says "nobody is here" starts by itself, once the engines are
+  // known (and once only — the inspiration pictures need a moment to arrive).
+  const autoStarted = useRef(false);
+  useEffect(() => {
+    if (!order?.auto || autoStarted.current || !faceId || !partId || step !== "describe") return;
+    if (order.inspirations.length && inspo.length < order.inspirations.length) return;
+    autoStarted.current = true;
+    void makeFaces();
+  }, [order, faceId, partId, step, inspo.length, makeFaces]);
 
   /* ---------- step 4: keep it ---------- */
   const sendToVideoForge = useCallback(async () => {
@@ -246,23 +308,23 @@ export default function PuppetMaker({
   const redo = reports.filter((r) => r.status === "unsure" || r.status === "missing").map((r) => r.id);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/75 p-4 backdrop-blur-sm">
-      <div className="my-6 w-full max-w-5xl rounded-2xl border border-line bg-panel shadow-2xl">
-        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/70 p-4 backdrop-blur-md">
+      <div className="forge-pop my-6 w-full max-w-5xl">
+        <div className="forge-head flex items-center justify-between px-6 py-4">
           <div>
-            <p className="font-display text-[17px] tracking-wide text-cream">Make a puppet</p>
-            <p className="font-mono text-[10.5px] text-dust">a character that talks, blinks and moves — for Video Forge</p>
+            <h2>Make a puppet</h2>
+            <p className="forge-sub">a character that talks, blinks and moves — for Video Forge</p>
           </div>
           <div className="flex items-center gap-3">
             <Steps step={step} />
-            <button onClick={close} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream" aria-label="Close">
+            <button onClick={close} className="btn-press rounded-lg p-2 text-[#8f98ab] hover:bg-raise hover:text-[#eef1f8]" aria-label="Close">
               <IX size={16} />
             </button>
           </div>
         </div>
 
         {order && (
-          <p className="mx-5 mt-4 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-[12px] text-ember">
+          <p className="forge-note mx-6 mt-4 border border-[color-mix(in_srgb,var(--color-ember)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-ember)_10%,transparent)] text-[var(--color-ember)]">
             Ordered by {order.from}. When it is finished it goes straight back there.
           </p>
         )}
@@ -292,8 +354,8 @@ export default function PuppetMaker({
                 <div className="grid gap-2 sm:grid-cols-3">
                   {PUPPET_STYLES.map((s) => (
                     <button key={s.id} onClick={() => setStyle(s.id)} className={tile(style === s.id)} title={s.prompt}>
-                      <span className="block text-[13px] font-semibold text-cream">{s.label}</span>
-                      <span className="mt-0.5 block text-[11.5px] leading-snug text-dust">{s.blurb}</span>
+                      <span className="t block">{s.label}</span>
+                      <span className="d mt-0.5 block">{s.blurb}</span>
                     </button>
                   ))}
                 </div>
@@ -303,12 +365,12 @@ export default function PuppetMaker({
                 <label className={label}>how much of them</label>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <button onClick={() => setFraming("head")} className={tile(framing === "head")} title="Face and shoulders fill the frame. Talks, blinks, raises its brows.">
-                    <span className="block text-[13px] font-semibold text-cream">Head and shoulders</span>
-                    <span className="mt-0.5 block text-[11.5px] text-dust">Talks, blinks, raises its brows · {partsFor("head").length} parts</span>
+                    <span className="t block">Head and shoulders</span>
+                    <span className="d mt-0.5 block">Talks, blinks, raises its brows · {partsFor("head").length} parts</span>
                   </button>
                   <button onClick={() => setFraming("waist")} className={tile(framing === "waist")} title="Waist up, with arms. Adds a wave, pointing, a shrug and explaining hands.">
-                    <span className="block text-[13px] font-semibold text-cream">Waist up, with arms</span>
-                    <span className="mt-0.5 block text-[11.5px] text-dust">All that, plus wave · point · shrug · explain · {partsFor("waist").length} parts</span>
+                    <span className="t block">Waist up, with arms</span>
+                    <span className="d mt-0.5 block">All that, plus wave · point · shrug · explain · {partsFor("waist").length} parts</span>
                   </button>
                 </div>
               </div>
@@ -321,19 +383,19 @@ export default function PuppetMaker({
                     e.preventDefault();
                     void addInspo(e.dataTransfer.files);
                   }}
-                  className="flex min-h-[92px] flex-wrap items-center gap-3 rounded-xl border border-dashed border-line2 bg-[var(--color-field)] p-3"
+                  className="flex min-h-[92px] flex-wrap items-center gap-3 rounded-[20px] border border-dashed border-white/15 bg-black/30 p-3"
                 >
                   {inspo.map((p, i) => (
                     <div key={p.url} className="relative">
-                      <img src={p.url} alt="" className="h-20 w-20 rounded-lg object-cover" />
-                      <button onClick={() => setInspo((x) => x.filter((_, j) => j !== i))} className="absolute -right-2 -top-2 rounded-full bg-panel p-1 text-dust hover:text-cream" aria-label="Remove">
+                      <img src={p.url} alt="" className="zoomable h-20 w-20 rounded-[14px] object-cover" onClick={() => setZoom({ url: p.url, caption: "Inspiration picture" })} />
+                      <button onClick={() => setInspo((x) => x.filter((_, j) => j !== i))} className="absolute -right-2 -top-2 rounded-full bg-panel p-1 text-[#8f98ab] hover:text-[#eef1f8]" aria-label="Remove">
                         <IX size={12} />
                       </button>
                     </div>
                   ))}
                   {inspo.length < 3 && (
-                    <label className="cursor-pointer text-[12px] text-dust">
-                      Drop pictures here, or <span className="text-ember underline">choose</span>
+                    <label className="cursor-pointer text-[12px] text-[#8f98ab]">
+                      Drop pictures here, or <span className="text-[var(--color-ember)] underline">choose</span>
                       <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && void addInspo(e.target.files)} />
                     </label>
                   )}
@@ -342,39 +404,45 @@ export default function PuppetMaker({
             </div>
 
             <div className="space-y-4">
-              <div>
-                <label className={label} title="Which picture engine makes it. It must be able to work FROM a picture.">engine</label>
-                <div className="space-y-2">
-                  {PUPPET_ENGINES.map((e) => (
-                    <button key={e.id} onClick={() => setEngineId(e.id)} className={`${tile(engineId === e.id)} w-full`} title={e.note}>
-                      <span className="flex items-center justify-between text-[13px] font-semibold text-cream">
-                        {e.label}
-                        <span className={`font-mono text-[10px] ${e.free ? "text-emerald-300" : "text-amber-300"}`}>{e.free ? "free" : "paid"}</span>
-                      </span>
-                      <span className="mt-0.5 block text-[11.5px] leading-snug text-dust">{e.note}</span>
-                    </button>
-                  ))}
-                </div>
+              <div className="space-y-3">
+                <EnginePick
+                  title="faces drawn by"
+                  tip="The 4 faces you choose from. Any engine works here; one that cannot look at pictures gets your inspiration pictures described in words."
+                  engines={engines}
+                  value={faceEng.id}
+                  onChange={setFaceId}
+                />
+                <EnginePick
+                  title="parts made by"
+                  tip="The mouths, eyelids, brows and arms. Each is an edit of the chosen face, so this engine must work FROM a picture."
+                  engines={engines.filter((e) => e.refs)}
+                  value={partEng.id}
+                  onChange={setPartId}
+                />
+                <label className="flex cursor-pointer items-start gap-2 text-[12px] text-[#c3c9d6]" title="For orders and overnight runs: the first face the checker likes is used, and the parts start straight away.">
+                  <input type="checkbox" checked={autoPick} onChange={(e) => setAutoPick(e.target.checked)} className="mt-0.5" />
+                  <span>Pick the face for me and carry on <span className="text-[#8f98ab]">— nobody needs to be here</span></span>
+                </label>
               </div>
-              <div className="rounded-xl border border-line bg-[var(--color-field)] px-3 py-2.5 text-[12px] leading-relaxed text-parch">
+              <div className="forge-tile text-[12px] leading-relaxed text-[#c3c9d6]">
                 <p>
-                  <b className="text-cream">{budget.best}–{budget.worst} pictures.</b> {budget.best} if every part works first time; each part gets at most 3 tries, then it is marked missing and the
+                  <b className="text-[#eef1f8]">{budget.best}–{budget.worst} pictures.</b> {budget.best} if every part works first time; each part gets at most 3 tries, then it is marked missing and the
                   puppet still works without it.
                 </p>
-                {price > 0 && (
+                {cost.worst > 0 && (
                   <p className="mt-1 text-amber-300">
-                    About {formatUsd(price * budget.best)}–{formatUsd(price * budget.worst)} on {engine.label}.
+                    About {formatUsd(cost.best)}–{formatUsd(cost.worst)} in all.
                   </p>
                 )}
-                <p className="mt-1 text-dust">
+                <p className="mt-1 text-[#8f98ab]">
                   {checker ? `Each part is checked by ${checker}.` : "No picture checker set up: parts are checked by their shape only. A Google key or a vision engine (Settings) adds a second look."}
                 </p>
               </div>
-              <Btn variant="primary" onClick={() => void makeFaces()} disabled={!description.trim()} className="w-full">
+              <button onClick={() => void makeFaces()} disabled={!description.trim()} className="forge-btn primary w-full">
                 Draw 4 faces to choose from
-              </Btn>
-              <label className="block cursor-pointer text-center text-[12px] text-dust">
-                …or <span className="text-ember underline">start from my own picture</span>
+              </button>
+              <label className="block cursor-pointer text-center text-[12px] text-[#8f98ab]">
+                …or <span className="text-[var(--color-ember)] underline">start from my own picture</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -391,32 +459,44 @@ export default function PuppetMaker({
 
         {step === "pick" && (
           <div className="space-y-4 p-5">
-            <p className="text-[13px] text-parch">
-              Pick the face. <span className="text-dust">Everything else is made from it, so choose the one you would be happy to see in every video. Look for a closed mouth and eyes that point the same way.</span>
+            <p className="text-[13px] text-[#c3c9d6]">
+              Pick the face. <span className="text-[#8f98ab]">Everything else is made from it, so choose the one you would be happy to see in every video. Look for a closed mouth and eyes that point the same way.</span>
             </p>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {bases.map((b, i) => (
                 <button key={b.url} onClick={() => setBase(b)} className={`${tile(base?.url === b.url)} p-2`}>
-                  <img src={b.url} alt={`option ${i + 1}`} className="aspect-square w-full rounded-lg object-cover" />
-                  <span className={`mt-1.5 block text-[11px] ${b.verdict == null ? "text-dust" : b.verdict.ok ? "text-emerald-300" : "text-amber-300"}`}>
+                  <img src={b.url} alt={`option ${i + 1}`} className="aspect-square w-full rounded-[14px] object-cover" />
+                  <span
+                    role="button"
+                    aria-label="See it large"
+                    title="See it large"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setZoom({ url: b.url, caption: `Face ${i + 1}${b.verdict ? ` — ${b.verdict.ok ? "looks right" : b.verdict.why}` : ""}` });
+                    }}
+                    className="absolute right-4 top-4 grid h-8 w-8 place-items-center rounded-full bg-black/60 text-[15px] text-white/90 backdrop-blur hover:bg-black/80"
+                  >
+                    ⤢
+                  </span>
+                  <span className={`mt-1.5 block text-[11px] ${b.verdict == null ? "text-[#8f98ab]" : b.verdict.ok ? "text-emerald-300" : "text-amber-300"}`}>
                     {b.verdict == null ? "not checked" : b.verdict.ok ? "✓ looks right" : `⚠ ${b.verdict.why}`}
                   </span>
                 </button>
               ))}
               {busy && Array.from({ length: Math.max(0, 4 - bases.length) }).map((_, i) => <div key={i} className="aspect-square animate-pulse rounded-xl border border-line bg-[var(--color-field)]" />)}
             </div>
-            {problem && <p className="rounded-lg border border-red-400/40 bg-red-400/10 px-3 py-2 text-[12px] text-red-300">{problem}</p>}
+            {problem && <p className="forge-note border border-red-400/40 bg-red-400/10 text-red-300">{problem}</p>}
             <div className="flex flex-wrap gap-2">
-              <Btn variant="primary" disabled={!base || !!busy} onClick={() => void build()}>
+              <button className="forge-btn primary" disabled={!base || !!busy} onClick={() => void build()}>
                 Make the puppet from this face
-              </Btn>
-              <Btn disabled={!!busy} onClick={() => void makeFaces()}>
+              </button>
+              <button className="forge-btn" disabled={!!busy} onClick={() => void makeFaces()}>
                 Draw 4 others
-              </Btn>
-              <Btn disabled={!!busy} onClick={() => setStep("describe")}>
+              </button>
+              <button className="forge-btn" disabled={!!busy} onClick={() => setStep("describe")}>
                 Change the description
-              </Btn>
-              {busy && <Btn onClick={stop}>Stop</Btn>}
+              </button>
+              {busy && <button className="forge-btn" onClick={stop}>Stop</button>}
             </div>
           </div>
         )}
@@ -424,46 +504,59 @@ export default function PuppetMaker({
         {(step === "build" || step === "done") && (
           <div className="grid gap-5 p-5 lg:grid-cols-[1fr_320px]">
             <div>
-              <div className="mb-2 flex items-center justify-between text-[12px] text-dust">
+              <div className="mb-2 flex items-center justify-between text-[12px] text-[#8f98ab]">
                 <span>
                   {counts.ok ?? 0} done · {counts.unsure ?? 0} unsure · {counts.missing ?? 0} missing · {pictures} pictures made
                 </span>
-                {busy && <span className="text-ember">{busy}</span>}
+                {busy && <span className="text-[var(--color-ember)]">{busy}</span>}
               </div>
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {(reports.length ? reports : partsFor(framing).map((p) => ({ id: p.id, label: p.label, status: "waiting" as const, tries: 0, why: "" }))).map((r) => (
-                  <div key={r.id} className="rounded-lg border border-line bg-[var(--color-field)] p-2" title={r.why}>
-                    {previews[r.id] ? <img src={previews[r.id]} alt="" className="mb-1.5 h-16 w-full rounded object-cover" /> : <div className="mb-1.5 h-16 rounded bg-black/30" />}
-                    <div className="flex items-center gap-1.5 text-[11.5px] text-cream">
+                  <div key={r.id} className="forge-tile !p-2" title={r.why}>
+                    {previews[r.id] ? (
+                      <img
+                        src={previews[r.id]}
+                        alt=""
+                        className="zoomable mb-1.5 h-16 w-full rounded-[12px] object-cover"
+                        onClick={() => setZoom({ url: previews[r.id], caption: `${r.label}: before and after${r.why && r.status !== "ok" ? ` — ${r.why}` : ""}` })}
+                      />
+                    ) : (
+                      <div className="mb-1.5 h-16 rounded-[12px] bg-black/30" />
+                    )}
+                    <div className="flex items-center gap-1.5 text-[11.5px] text-[#eef1f8]">
                       <span className={`h-2 w-2 rounded-full ${STATUS_LOOK[r.status].dot}`} />
                       {r.label}
-                      <span className="ml-auto font-mono text-[10px] text-dust">{STATUS_LOOK[r.status].word}{r.tries > 1 ? ` · try ${r.tries}` : ""}</span>
+                      <span className="ml-auto font-mono text-[10px] text-[#8f98ab]">{STATUS_LOOK[r.status].word}{r.tries > 1 ? ` · try ${r.tries}` : ""}</span>
                     </div>
-                    {(r.status === "unsure" || r.status === "missing") && r.why && <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-dust">{r.why}</p>}
+                    {(r.status === "unsure" || r.status === "missing") && r.why && <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-[#8f98ab]">{r.why}</p>}
                   </div>
                 ))}
               </div>
-              {problem && <p className="mt-3 rounded-lg border border-red-400/40 bg-red-400/10 px-3 py-2 text-[12px] text-red-300">{problem}</p>}
+              {problem && <p className="mt-3 forge-note border border-red-400/40 bg-red-400/10 text-red-300">{problem}</p>}
             </div>
 
             <div className="space-y-3">
-              {rig ? <PuppetPreview rig={rig} /> : base && <img src={base.url} alt="" className="aspect-square w-full rounded-xl object-cover opacity-70" />}
+              {rig ? (
+                <PuppetPreview rig={rig} onClick={() => setZoom("live")} />
+              ) : (
+                base && <img src={base.url} alt="" className="zoomable aspect-square w-full rounded-[20px] object-cover opacity-70" onClick={() => setZoom({ url: base.url, caption: "The chosen face" })} />
+              )}
               <div className="flex flex-col gap-2">
                 {busy ? (
-                  <Btn onClick={stop}>Stop</Btn>
+                  <button className="forge-btn" onClick={stop}>Stop</button>
                 ) : step === "build" ? (
-                  <Btn variant="primary" onClick={() => void build()}>
+                  <button className="forge-btn primary" onClick={() => void build()}>
                     Continue
-                  </Btn>
+                  </button>
                 ) : (
                   <>
                     {canShelve && (
-                      <Btn variant="primary" onClick={() => void sendToVideoForge()} disabled={!!shelved}>
+                      <button className="forge-btn primary" onClick={() => void sendToVideoForge()} disabled={!!shelved}>
                         {shelved ? "✓ In Video Forge" : "Send to Video Forge"}
-                      </Btn>
+                      </button>
                     )}
-                    <Btn onClick={() => void saveZip()}>Save the puppet (zip)</Btn>
-                    {redo.length > 0 && <Btn onClick={() => void build(redo)}>Try the {redo.length} unsure/missing again</Btn>}
+                    <button className="forge-btn" onClick={() => void saveZip()}>Save the puppet (zip)</button>
+                    {redo.length > 0 && <button className="forge-btn" onClick={() => void build(redo)}>Try the {redo.length} unsure/missing again</button>}
                   </>
                 )}
               </div>
@@ -471,6 +564,14 @@ export default function PuppetMaker({
           </div>
         )}
       </div>
+      {zoom && (
+        <div className="forge-zoom" onClick={() => setZoom(null)} role="dialog" aria-label="Picture, large">
+          <div onClick={(e) => e.stopPropagation()} className="cursor-default">
+            {zoom === "live" ? rig && <PuppetPreview rig={rig} size={720} /> : <img src={zoom.url} alt="" />}
+            <p>{zoom === "live" ? "talking, blinking, nodding, shaking and laughing in turn" : zoom.caption} · Esc or click outside to close</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -484,9 +585,9 @@ function Steps({ step }: { step: Step }) {
   ];
   const at = all.findIndex(([s]) => s === step);
   return (
-    <ol className="hidden items-center gap-1.5 font-mono text-[10px] md:flex">
+    <ol className="forge-steps hidden items-center gap-1 md:flex">
       {all.map(([s, t], i) => (
-        <li key={s} className={`rounded-full px-2.5 py-1 ${i === at ? "bg-ember/20 text-ember" : i < at ? "text-parch" : "text-dust"}`}>
+        <li key={s} className={i === at ? "at" : i < at ? "past" : ""}>
           {i + 1} {t}
         </li>
       ))}
@@ -499,7 +600,7 @@ function Steps({ step }: { step: Step }) {
  * brows moving, and — waist-up — cycling its arm poses. Drawn the way Video
  * Forge draws it: base, arms, mouth, brows, lids last.
  */
-function PuppetPreview({ rig }: { rig: ForgePuppet }) {
+function PuppetPreview({ rig, size = 320, onClick }: { rig: ForgePuppet; size?: number; onClick?: () => void }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     let raf = 0;
@@ -538,7 +639,10 @@ function PuppetPreview({ rig }: { rig: ForgePuppet }) {
         const t = (now - t0) / 1000;
         g.setTransform(1, 0, 0, 1, 0, 0);
         g.clearRect(0, 0, S, S);
-        g.fillStyle = "#3b6b3a";
+        const sky = g.createLinearGradient(0, 0, 0, S);
+        sky.addColorStop(0, "#1a2a52");
+        sky.addColorStop(1, "#0a1122");
+        g.fillStyle = sky;
         g.fillRect(0, 0, S, S);
         const pose = poseKeys.length ? poseKeys[Math.floor(t / 2.6) % (poseKeys.length + 1)] : undefined;
         const move = neck ? headMove(t) : { dy: 0, rot: 0 };
@@ -581,5 +685,35 @@ function PuppetPreview({ rig }: { rig: ForgePuppet }) {
       cancelAnimationFrame(raf);
     };
   }, [rig]);
-  return <canvas ref={ref} width={320} height={320} className="aspect-square w-full rounded-xl border border-line" aria-label="The puppet, talking and blinking" />;
+  return (
+    <canvas
+      ref={ref}
+      width={size}
+      height={size}
+      onClick={onClick}
+      title={onClick ? "Click to see it large" : undefined}
+      className={`aspect-square rounded-[22px] border border-white/10 ${onClick ? "zoomable w-full" : "w-[min(88vw,720px)]"}`}
+      aria-label="The puppet, talking and blinking"
+    />
+  );
+}
+
+function EnginePick({ title, tip, engines, value, onChange }: { title: string; tip: string; engines: PuppetEngine[]; value: string; onChange: (id: string) => void }) {
+  const e = engines.find((x) => x.id === value) ?? engines[0];
+  return (
+    <div>
+      <label className={label} title={tip}>
+        {title}
+      </label>
+      <select value={e?.id} onChange={(ev) => onChange(ev.target.value)} className={field} title={tip}>
+        {engines.map((x) => (
+          <option key={x.id} value={x.id}>
+            {x.label} — {x.free ? "free" : `paid, $${x.price}/picture`}
+            {x.refs ? "" : " · faces only"}
+          </option>
+        ))}
+      </select>
+      {e && <p className="mt-1 text-[11.5px] leading-snug text-[#8f98ab]">{e.note}</p>}
+    </div>
+  );
 }

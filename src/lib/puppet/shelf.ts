@@ -17,6 +17,8 @@ export interface PuppetOrder {
   description: string;
   style: string;
   framing: PuppetFraming;
+  /** make it with nobody there: pick the face automatically */
+  auto?: boolean;
   inspirations: string[];
   createdAt: string;
 }

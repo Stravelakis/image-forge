@@ -504,3 +504,54 @@ details summary::-webkit-details-marker {
 @media (prefers-reduced-motion: reduce) {
   .forge-twin .lamp, .forge-twin .slot-mark { transition: none; }
 }
+
+/* ---------------------------------------------------------------------------
+ * The Forge look, first on the puppet maker (12 Oct 2026): what Video Forge
+ * wears — black, frosted glass, Sora, round everything, one glowing button
+ * and outline buttons — in Image Forge's own colour (--color-ember, which the
+ * accent setting moves). The rest of the app follows once Ak picks A/B/C on
+ * docs/design/forge-twins-look.html in Video Forge.
+ * ------------------------------------------------------------------------- */
+.forge-pop { font-family: "Sora", system-ui, sans-serif; color: #eef1f8; border-radius: 30px;
+  background: linear-gradient(160deg, rgb(255 255 255 / .06), rgb(255 255 255 / .015) 40%), rgb(3 5 10 / .86);
+  backdrop-filter: blur(26px) saturate(1.35); -webkit-backdrop-filter: blur(26px) saturate(1.35);
+  border: 1px solid rgb(255 255 255 / .10);
+  box-shadow: 0 30px 120px -40px color-mix(in srgb, var(--color-ember) 55%, transparent), inset 0 1px 0 rgb(255 255 255 / .12); }
+.forge-pop .forge-head { border-bottom: 1px solid rgb(255 255 255 / .07); }
+.forge-pop h2 { font-weight: 600; font-size: 19px; letter-spacing: -.01em; }
+.forge-pop .forge-sub { font-weight: 300; font-size: 11.5px; color: #8f98ab; }
+.forge-label { display: block; margin-bottom: 7px; font: 500 10px "Sora", sans-serif; letter-spacing: .18em; text-transform: uppercase; color: #8f98ab; }
+.forge-field { width: 100%; border-radius: 16px; padding: 10px 14px; font: 400 13px "Sora", sans-serif; color: #eef1f8;
+  background: rgb(0 0 0 / .45); border: 1px solid rgb(255 255 255 / .10); outline: none; transition: border-color .2s, box-shadow .2s; }
+.forge-field:focus { border-color: color-mix(in srgb, var(--color-ember) 70%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ember) 18%, transparent); }
+.forge-field::placeholder { color: #6b7385; }
+select.forge-field option { background: #0b0e16; color: #eef1f8; }
+.forge-tile { position: relative; border-radius: 20px; padding: 12px; text-align: left; overflow: hidden;
+  background: linear-gradient(150deg, rgb(255 255 255 / .07), rgb(255 255 255 / .02) 45%, color-mix(in srgb, var(--color-ember) 4%, transparent));
+  border: 1px solid rgb(255 255 255 / .09); box-shadow: inset 0 1px 0 rgb(255 255 255 / .10); transition: border-color .2s, background .2s, transform .15s, box-shadow .2s; }
+button.forge-tile:hover { border-color: rgb(255 255 255 / .22); }
+button.forge-tile:active { transform: scale(.985); }
+.forge-tile.on { border-color: color-mix(in srgb, var(--color-ember) 65%, transparent); background: linear-gradient(150deg, color-mix(in srgb, var(--color-ember) 16%, transparent), rgb(255 255 255 / .02));
+  box-shadow: 0 0 26px -10px var(--color-ember), inset 0 1px 0 rgb(255 255 255 / .14); }
+.forge-tile b, .forge-tile .t { font-weight: 500; font-size: 13px; color: #eef1f8; }
+.forge-tile .d { font-weight: 300; font-size: 11.5px; color: #8f98ab; line-height: 1.4; }
+.forge-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; padding: 10px 20px; cursor: pointer;
+  font: 500 13px "Sora", sans-serif; color: #eef1f8; background: transparent; border: 1px solid rgb(255 255 255 / .16); transition: border-color .2s, box-shadow .25s, transform .12s, opacity .2s; }
+.forge-btn:hover:not(:disabled) { border-color: var(--color-ember); }
+.forge-btn:active:not(:disabled) { transform: scale(.97); }
+.forge-btn:disabled { opacity: .4; cursor: default; }
+.forge-btn.primary { border-color: transparent; font-weight: 600; color: var(--color-on-accent);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--color-ember) 35%, #1d2350), color-mix(in srgb, var(--color-ember) 75%, #3f4fa0) 45%, var(--color-ember));
+  box-shadow: 0 0 26px -8px var(--color-ember); }
+.forge-btn.primary:hover:not(:disabled) { box-shadow: 0 0 38px -6px var(--color-ember); }
+.forge-steps li { border-radius: 999px; padding: 5px 12px; font: 500 11px "Sora", sans-serif; color: #6b7385; }
+.forge-steps li.at { color: var(--color-on-accent); background: var(--color-ember); }
+.forge-steps li.past { color: #c3c9d6; }
+.forge-note { border-radius: 16px; padding: 10px 14px; font-size: 12px; }
+.forge-zoom { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; cursor: zoom-out;
+  background: rgb(0 0 0 / .82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: forge-fade .18s ease-out; }
+.forge-zoom img, .forge-zoom canvas { max-width: min(92vw, 1024px); max-height: 88vh; border-radius: 22px; box-shadow: 0 30px 120px -30px color-mix(in srgb, var(--color-ember) 50%, transparent); }
+.forge-zoom p { margin-top: 12px; font: 300 12px "Sora", sans-serif; color: #8f98ab; text-align: center; }
+.zoomable { cursor: zoom-in; }
+@keyframes forge-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .forge-zoom { animation: none; } }
