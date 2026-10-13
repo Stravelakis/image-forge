@@ -8,7 +8,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { PNG } from "pngjs";
 import { borderColour, cutPart, keyOut, resize, type Img } from "../src/lib/puppet/pixels";
-import { buildRig, poseBody, puppetSlug } from "../src/lib/puppet/rig";
+import { buildRig, embedView, poseBody, puppetSlug } from "../src/lib/puppet/rig";
 import { makeParts, makeBaseOptions, pictureBudget, type MakerIO } from "../src/lib/puppet/maker";
 import { basePrompt, editPrompt, keyColourFor, lipsFor, partsFor, PUPPET_PARTS } from "../src/lib/puppet/recipe";
 
@@ -238,5 +238,19 @@ describe("arm poses replace the body (13 Oct 2026)", () => {
     expect(a(68, 24)).toBeGreaterThan(200); // the hand: kept
     expect(a(50, 70)).toBeGreaterThan(200); // the body: kept
     expect(a(5, 5)).toBe(0); // background: gone
+  });
+});
+
+describe("views: side-facing and sitting (13 Oct 2026)", () => {
+  it("packs a second set of pictures into the same puppet, files prefixed", async () => {
+    const res = await makeParts({ base, framing: "head", only: ["lid_closed", "mouth_AH"] }, { generate: async (r) => (/tall oval/.test(r.prompt) ? ah : /fully shut/.test(r.prompt) ? blink : base) }, () => {});
+    const front = buildRig({ name: "owl", framing: "head", base, parts: res.parts });
+    const side = buildRig({ name: "owl", framing: "head", base, parts: res.parts });
+    const both = embedView(front, "side", side);
+    expect(both.json.views?.side?.base).toBe("side_base.png");
+    expect(both.json.views?.side?.mouths["1"].file).toBe("side_mouth_AH.png");
+    expect(both.json.views?.side?.mouths["0"].file).toBe("empty.png");
+    expect(both.files["side_mouth_AH.png"]).toBeDefined();
+    expect(both.files["mouth_AH.png"]).toBeDefined(); // the front is untouched
   });
 });

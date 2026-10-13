@@ -11,10 +11,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { formatUsd } from "../lib/providers";
-import { PUPPET_STYLES, keyColourFor, lipsFor, partsFor, type PuppetFraming } from "../lib/puppet/recipe";
-import { baseQuestion, makeBaseOptions, makeParts, pictureBudget, PUPPET_SIZE, type PartReport, type Verdict } from "../lib/puppet/maker";
+import { PUPPET_STYLES, VIEW_PARTS, keyColourFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
+import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, PUPPET_SIZE, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
-import { buildRig, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
+import { buildRig, embedView, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
 import { type PuppetEngine, sizeFor, blobToImg, describeInspiration, imgToPng, imgToUrl, judgeName, listLocalImageModels, pageGenerate, pageJudge, puppetEngines, unloadLocal } from "../lib/puppet/pageIO";
 import { finishOrder, orderPictures, removeFromShelf, shelfAvailable, shelvePuppet, type PuppetOrder } from "../lib/puppet/shelf";
 import type { PuppetTemplate } from "../lib/batches";
@@ -75,6 +75,10 @@ export default function PuppetMaker({
   const lips = lipsTouched ?? lipsFor(description, style);
   const look = useMemo(() => ({ key: keyColourFor(description), lips }), [description, lips]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The other views (recipe.ts VIEW_EDITS): side-facing for dialogue, sitting for full body.
+  const [wantSide, setWantSide] = useState(true);
+  const [wantSit, setWantSit] = useState(true);
+  const views: PuppetViewId[] = [...(framing !== "head" && wantSide ? (["side"] as const) : []), ...(framing === "full" && wantSit ? (["sit"] as const) : [])];
   const [inspo, setInspo] = useState<Pic[]>([]);
   // Two engines (Ak, 12 Oct 2026): one draws the faces, one makes the parts.
   // The parts need one that works from a picture; the faces can come from any.
@@ -253,7 +257,7 @@ export default function PuppetMaker({
         );
         const all = { ...keep, ...res.parts };
         setParts(all);
-        const made = buildRig({
+        let made = buildRig({
           name: slug,
           framing,
           base: base.img,
@@ -261,6 +265,24 @@ export default function PuppetMaker({
           madeBy: { name: name || slug, description, style, framing, engine: `faces: ${faceEng.label}; parts: ${partEng.label}`, app: "Image Forge", madeAt: new Date().toISOString() },
         });
         setRig(made);
+        // THE OTHER VIEWS, each from an edit of the finished front picture.
+        // A view that does not come out is simply left off — the front puppet
+        // is complete without it.
+        if (!only) {
+          for (const v of views) {
+            setBusy(v === "side" ? "Turning them to the side, for dialogue…" : "Sitting them down…");
+            const vb = await makeViewBase({ base: base.img, view: v, framing, look }, io, ctrl.signal);
+            if (!vb) {
+              pushLog(`${v} view: no clean picture after 3 tries — left out`, "info");
+              continue;
+            }
+            const vf: PuppetFraming = v === "sit" ? "full" : framing;
+            const vr = await makeParts({ base: vb, framing: vf, only: VIEW_PARTS[v], look }, io, (e) => e.type === "picture" && setPictures((n) => n + 1), ctrl.signal);
+            made = embedView(made, v, buildRig({ name: slug, framing: vf, base: vb, parts: vr.parts }));
+            setRig(made);
+            pushLog(`✓ ${v} view: ${Object.keys(vr.parts).length} parts`, "ok");
+          }
+        }
         setStep("done");
         const missing = res.reports.filter((r) => r.status === "missing").length;
         pushLog(`✓ puppet ${name || slug}: ${Object.keys(all).length} parts${missing ? `, ${missing} missing` : ""}, ${res.pictures} pictures`, "ok");
@@ -272,7 +294,7 @@ export default function PuppetMaker({
         setBusy("");
       }
     },
-    [framing, io, parts, slug, name, description, style, faceEng, partEng, settings, pushLog, look]
+    [framing, io, parts, slug, name, description, style, faceEng, partEng, settings, pushLog, look, views]
   );
   const buildRef = useRef(build);
   buildRef.current = build;
@@ -393,7 +415,7 @@ export default function PuppetMaker({
 
               <div>
                 <label className={label}>how much of them</label>
-                <div className="grid gap-2 sm:grid-cols-2">
+                <div className="grid gap-2 sm:grid-cols-3">
                   <button onClick={() => setFraming("head")} className={tile(framing === "head")} title="Face and shoulders fill the frame. Talks, blinks, raises its brows.">
                     <span className="t block">Head and shoulders</span>
                     <span className="d mt-0.5 block">Talks, blinks, raises its brows · {partsFor("head").length} parts</span>
@@ -402,6 +424,24 @@ export default function PuppetMaker({
                     <span className="t block">Waist up, with arms</span>
                     <span className="d mt-0.5 block">All that, plus wave · point · shrug · explain · {partsFor("waist").length} parts</span>
                   </button>
+                  <button onClick={() => setFraming("full")} className={tile(framing === "full")} data-tip="Head to feet, standing — and, if you like, a sitting version too. The legs stay still; everything else moves.">
+                    <span className="t block">Full body</span>
+                    <span className="d mt-0.5 block">Standing (and sitting) · {partsFor("full").length} parts</span>
+                  </button>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-4 text-[12.5px] text-[#c4cbe0]">
+                  {framing !== "head" && (
+                    <label className="flex items-center gap-2" data-tip={`Also a set turned three-quarters, so two characters can talk to each other. About ${VIEW_PARTS.side.length + 1} more pictures.`}>
+                      <input type="checkbox" checked={wantSide} onChange={(e) => setWantSide(e.target.checked)} />
+                      Also side-facing, for dialogue
+                    </label>
+                  )}
+                  {framing === "full" && (
+                    <label className="flex items-center gap-2" data-tip={`Also the same character sitting on a stool. About ${VIEW_PARTS.sit.length + 1} more pictures.`}>
+                      <input type="checkbox" checked={wantSit} onChange={(e) => setWantSit(e.target.checked)} />
+                      Also sitting
+                    </label>
+                  )}
                 </div>
               </div>
 
