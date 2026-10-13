@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import DesktopModeCard from "./DesktopModeCard";
 import type { ManifestRow, Toast } from "../types";
 import { ACCENTS, STYLES } from "../types";
@@ -45,7 +45,7 @@ export type SettingsSection =
 
 const SECTIONS: { id: SettingsSection; label: string; hint: string }[] = [
   { id: "engines", label: "Image engines", hint: "who paints" },
-  { id: "styles", label: "Image styles", hint: "the look" },
+  { id: "styles", label: "Image styles", hint: "how pictures are drawn" },
   { id: "text", label: "Text engines", hint: "who writes" },
   { id: "prompts", label: "Text prompts", hint: "how they write" },
   { id: "filenames", label: "Filenames", hint: "the rules" },
@@ -68,13 +68,30 @@ function TestButton({
   target,
   settings,
   label = "Test it",
+  watch,
 }: {
   target: TestTarget;
   settings: ForgeSettings;
   label?: string;
+  /** the key or token it checks — a pasted one (a jump from short to long) is checked straight away */
+  watch?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<TestResult | null>(null);
+  const last = useRef(watch ?? "");
+  useEffect(() => {
+    const before = last.current;
+    last.current = watch ?? "";
+    if (watch === undefined || watch.length < 12 || watch.length - before.length < 12) return;
+    const t = window.setTimeout(async () => {
+      setBusy(true);
+      setRes(null);
+      setRes(await testConnection(target, settings));
+      setBusy(false);
+    }, 500);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watch]);
   return (
     <div className="mt-2">
       <div className="flex flex-wrap items-center gap-2">
@@ -102,6 +119,41 @@ function TestButton({
   );
 }
 
+/**
+ * One key, checked on its own (Ak, 13 Oct 2026: "a test button for the api
+ * keys when they are pasted in"). The pool is narrowed to just this key, so
+ * the answer is about this key and not the first one.
+ */
+function KeyCheck({ target, settings, pool, keyId, auto }: { target: TestTarget; settings: ForgeSettings; pool: "geminiKeys" | "geminiPaidKeys" | "openaiKeys"; keyId: string; auto: number }) {
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<TestResult | null>(null);
+  const run = async () => {
+    const only = settings[pool].filter((k) => k.id === keyId);
+    if (!only.length || !only[0].key.trim()) return;
+    setBusy(true);
+    setRes(null);
+    setRes(await testConnection(target, { ...settings, [pool]: only.map((k) => ({ ...k, exhaustedUntil: 0 })) }));
+    setBusy(false);
+  };
+  // Pasted in: check straight away.
+  useEffect(() => {
+    if (auto) void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto]);
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      <Btn onClick={() => void run()} disabled={busy} className="!px-2.5 !py-1 !text-[11.5px]">
+        {busy ? "…" : "Test"}
+      </Btn>
+      {res && (
+        <span className={`max-w-[14rem] truncate text-[11px] ${res.ok ? "text-moss" : "text-blood"}`} title={`${res.message}${res.detail ? ` — ${res.detail}` : ""}`}>
+          {res.ok ? "✓" : "✗"} {res.message}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function KeyPoolEditor({
   title,
   hint,
@@ -126,6 +178,10 @@ function KeyPoolEditor({
   const [poolBusy, setPoolBusy] = useState("");
   const [poolNote, setPoolNote] = useState("");
   const [poolResults, setPoolResults] = useState<{ id: string; label: string; result: TestResult }[]>([]);
+  // A paste bumps this key's counter, which KeyCheck answers by testing.
+  const [pasted, setPasted] = useState<Record<string, number>>({});
+  const poolName: "geminiKeys" | "geminiPaidKeys" | "openaiKeys" | null =
+    test === "gemini-free" ? "geminiKeys" : test === "gemini-paid" ? "geminiPaidKeys" : test === "openai" ? "openaiKeys" : null;
   return (
     <div className="rounded-xl border border-line bg-panel/50 p-4">
       <p className="font-display text-[15px] tracking-wide text-cream">{title}</p>
@@ -141,8 +197,10 @@ function KeyPoolEditor({
                 type="password"
                 placeholder="paste key…"
                 onChange={(e) => onChange(pool.map((x) => (x.id === k.id ? { ...x, key: e.target.value } : x)))}
+                onPaste={() => window.setTimeout(() => setPasted((p) => ({ ...p, [k.id]: (p[k.id] ?? 0) + 1 })), 400)}
                 className={`${field} font-mono !text-[12px]`}
               />
+              {test && settings && poolName && k.key.trim() && <KeyCheck target={test} settings={settings} pool={poolName} keyId={k.id} auto={pasted[k.id] ?? 0} />}
               {benched ? (
                 <span className="shrink-0 rounded-md border border-blood/40 bg-blood/10 px-2 py-1 font-mono text-[9.5px] whitespace-nowrap text-blood" title="click to un-bench early">
                   resting {formatCountdown(k.exhaustedUntil)}
@@ -763,7 +821,7 @@ export default function SettingsView({
                   At 4 steps you get roughly 690 a day; at 8 steps roughly 380. Four is the model's intended setting.
                 </p>
               </div>
-              <TestButton target="cloudflare" settings={settings} label="Check the account and token" />
+              <TestButton target="cloudflare" settings={settings} label="Check the account and token" watch={settings.cloudflare.token} />
             </div>
 
             {/* ---- Pollinations: free, but needs a token now ---- */}
@@ -783,7 +841,7 @@ export default function SettingsView({
                   className={field}
                 />
               </div>
-              <TestButton target="pollinations" settings={settings} label="Check the token" />
+              <TestButton target="pollinations" settings={settings} label="Check the token" watch={settings.pollinationsToken} />
             </div>
 
             {/* ---- OVHcloud: free, nothing to set up ---- */}

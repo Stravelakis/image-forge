@@ -2057,6 +2057,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               onMake={makeFromStart}
               onOpenForge={() => nav("workbench")}
               onOpenSettings={() => nav("settings", "engines")}
+              onOpenStyles={() => nav("lib-styles")}
+              onEngine={(p) => patchSettings(p)}
             />
           </main>
         ) : view === "workbench" ? (

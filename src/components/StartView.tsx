@@ -6,10 +6,12 @@
  * so that a first-time visitor can make a set of pictures before meeting any
  * of it (HANDOFF §14.1).
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AspectKey, ManifestRow } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { PROVIDER_META, resolveRoute, scribeChat } from "../lib/providers";
+import { readyEngines, currentEngineValue } from "../lib/readyEngines";
+import { listLocalImageModels } from "../lib/puppet/pageIO";
 import { FREE_ENGINES } from "../lib/paidGuard";
 import { STYLE_CATALOGUE } from "../lib/styleCatalogue";
 import { MAX_START, countFromText, planStart } from "../lib/startPlan";
@@ -28,6 +30,8 @@ export default function StartView({
   onMake,
   onOpenForge,
   onOpenSettings,
+  onOpenStyles,
+  onEngine,
 }: {
   settings: ForgeSettings;
   rows: ManifestRow[];
@@ -36,9 +40,17 @@ export default function StartView({
   onMake: (prompts: string[], style: string, aspect: AspectKey) => Promise<number[]>;
   onOpenForge: () => void;
   onOpenSettings: () => void;
+  /** the styles page — the word "Style" leads there */
+  onOpenStyles: () => void;
+  /** switch engine — a settings patch from readyEngines */
+  onEngine: (patch: Partial<ForgeSettings>) => void;
 }) {
+  const [localModels, setLocalModels] = useState<string[]>([]);
+  useEffect(() => void listLocalImageModels(settings).then(setLocalModels), [settings.localBase]);
+  const engines = useMemo(() => readyEngines(settings, localModels), [settings, localModels]);
   const [text, setText] = useState("");
-  const [count, setCount] = useState(6);
+  // Two to start (Ak, 13 Oct 2026): enough to compare, cheap to throw away.
+  const [count, setCount] = useState(2);
   const [countTouched, setCountTouched] = useState(false);
   const favourites = settings.favoriteStyles ?? [];
   const [style, setStyle] = useState<string>(favourites[0] ?? "");
@@ -123,13 +135,20 @@ export default function StartView({
           </label>
 
           <label className="flex min-w-[200px] flex-col gap-1 text-[12px] text-dust">
-            Look
+            <button
+              type="button"
+              onClick={onOpenStyles}
+              className="self-start text-left underline decoration-dotted underline-offset-2 hover:text-cream"
+              title="See every style, with examples, and make your own"
+            >
+              Style
+            </button>
             <select
               value={style}
               onChange={(e) => setStyle(e.target.value)}
               className="rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[14px] text-cream"
             >
-              <option value="">No particular look</option>
+              <option value="">No particular style</option>
               {styles.starred.length > 0 && (
                 <optgroup label="★ Your favourites">
                   {styles.starred.map((s) => (
@@ -139,7 +158,7 @@ export default function StartView({
                   ))}
                 </optgroup>
               )}
-              <optgroup label="All looks">
+              <optgroup label="All styles">
                 {styles.rest.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -172,13 +191,28 @@ export default function StartView({
           <Btn variant="primary" onClick={() => void go()} disabled={!text.trim() || busy} className="!px-6 !py-3 !text-[15px]">
             <IHammer size={15} /> {busy ? "Planning…" : count === 1 ? "Make it" : `Make ${count}`}
           </Btn>
-          <span className="text-[12.5px] text-dust">
-            {free ? "free" : "costs money — you will be asked first"} · {engineName}
-            {" · "}
-            <button onClick={onOpenSettings} className="underline decoration-dust/40 underline-offset-2 hover:text-cream">
-              change
-            </button>
-          </span>
+          {/* The engine: only what is set up and working, and "Add more…"
+              to set up another (Ak, 13 Oct 2026). */}
+          <label className="flex items-center gap-2 text-[12.5px] text-dust" title="Which picture engine makes these. Only engines that are set up are listed.">
+            <select
+              value={engines.some((e) => e.value === currentEngineValue(settings)) ? currentEngineValue(settings) : ""}
+              onChange={(e) => {
+                if (e.target.value === "__add") return onOpenSettings();
+                const pickd = engines.find((x) => x.value === e.target.value);
+                if (pickd) onEngine(pickd.patch);
+              }}
+              className="rounded-full border border-line bg-[var(--color-field)] px-3 py-1.5 text-[12.5px] text-cream"
+            >
+              {!engines.some((e) => e.value === currentEngineValue(settings)) && <option value="">{engineName}</option>}
+              {engines.map((e) => (
+                <option key={e.value} value={e.value}>
+                  {e.label}
+                </option>
+              ))}
+              <option value="__add">Add more engines…</option>
+            </select>
+            <span>{free ? "free" : "costs money — you will be asked first"}</span>
+          </label>
         </div>
         {note && <p className="mt-3 text-[12.5px] text-parch">{note}</p>}
       </div>

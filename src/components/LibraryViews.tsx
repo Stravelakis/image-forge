@@ -290,7 +290,7 @@ export function StyleLibrary({
           <p className="mt-2 font-mono text-[10.5px] leading-relaxed text-dust">{s.block}</p>
           <div className="mt-3 flex gap-2">
             <Btn variant={active ? "ghost" : "primary"} className="!px-2.5 !py-1.5 !text-[11px]" onClick={() => setStyleLock(s.id)}>
-              {active ? "locked ✓" : "Lock this look"}
+              {active ? "locked ✓" : "Lock this style"}
             </Btn>
             {settings.customStyles.some((c) => c.id === s.id) && (
               <Btn
@@ -346,7 +346,7 @@ export function StyleLibrary({
         </p>
         <div className="mt-4 rounded-xl border border-ember/30 bg-ember/6 px-4 py-3">
           <p className="text-[12.5px] leading-relaxed text-parch">
-            <span className="font-semibold text-ember">What does “Lock this look” do?</span> It makes one style the law
+            <span className="font-semibold text-ember">What does “Lock this style” do?</span> It makes one style the law
             of the land: the wizard pre-selects it, the scribe appends its words to every prompt it writes, and the
             workbench flags any picture that drifts away from it. Lock one per project and every picture stays in the
             same family. You can change the lock anytime — nothing gets re-drawn.
