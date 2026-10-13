@@ -133,7 +133,7 @@ export const PUPPET_PARTS: PuppetPart[] = [
   { id: "mouth_EE", kind: "mouth", label: "EE", change: "Change only the mouth so it is spread wide saying EE, with the teeth showing.", expect: "mouth spread wide, teeth showing (EE)" },
   { id: "mouth_OH", kind: "mouth", label: "OH", change: "Change only the mouth so it is rounded into an O saying OH.", expect: "mouth rounded into an O" },
   { id: "mouth_OO", kind: "mouth", label: "OO", change: "Change only the mouth so it is small and tightly rounded saying OO.", expect: "small tight round mouth (OO)" },
-  { id: "mouth_FV", kind: "mouth", label: "F·V", change: "Change only the mouth so the top teeth rest on the lower lip saying F.", expect: "top teeth on the lower lip (F)" },
+  { id: "mouth_FV", kind: "mouth", label: "F·V", change: "Change only the mouth so the top front teeth rest gently on the lower lip, the shape a mouth makes for an 'fff' sound. Draw the teeth only — no letters.", expect: "top teeth resting on the lower lip, with no letter drawn on them" },
   { id: "mouth_L", kind: "mouth", label: "L", change: "Change only the mouth so it is part open with the tongue raised saying L.", expect: "mouth part open, tongue raised (L)" },
   { id: "mouth_CHSH", kind: "mouth", label: "SH", change: "Change only the mouth so the lips are pushed forward and rounded saying SH.", expect: "lips pushed forward and rounded (SH)" },
   { id: "mouth_SMILE", kind: "mouth", label: "smile", change: "Change only the mouth into a warm, gentle CLOSED-mouth smile, lips together, corners turned up, no teeth showing. Nothing above the mouth changes.", expect: "closed-mouth smile" },
@@ -178,7 +178,7 @@ export const partsFor = (framing: PuppetFraming): PuppetPart[] =>
 
 /** Added after every edit's own instruction. */
 export const KEEP =
-  "Keep absolutely everything else in the picture identical: the same character at the same size, position and angle, the same face, eyes, hair or fur, clothing, colours, lighting and the same flat magenta background. Change ONLY what is described. Do not redraw the picture.";
+  "Keep absolutely everything else in the picture identical: the same character at the same size, position and angle, the same face, eyes, hair or fur, clothing, colours, lighting and the same flat magenta background. Change ONLY what is described. Do not redraw the picture. Never draw letters, words or text anywhere.";
 
 export const editPrompt = (part: PuppetPart): string => `Edit this picture. ${part.change}\n\n${KEEP}`;
 

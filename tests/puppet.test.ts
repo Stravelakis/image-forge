@@ -177,6 +177,16 @@ describe("the whole run, with stand-in engines", () => {
     expect(rig.json.neck!.y).toBeLessThan(0.95);
   });
 
+  it("the head-and-shoulders crop keeps the top of the character (a hat, ears) in the frame", async () => {
+    const res = await makeParts({ base, framing: "head", only: ["lid_closed", "mouth_AH"] }, { generate: fakeEngine([]) }, () => {});
+    const rig = buildRig({ name: "owl", framing: "head", base, parts: res.parts });
+    const b = rig.files["base.png"];
+    // the top rows of the cropped base are empty: there is air above the head
+    let firstRow = -1;
+    for (let y = 0; y < b.height && firstRow < 0; y++) for (let x = 0; x < b.width; x += 2) if (b.data[(y * b.width + x) * 4 + 3] > 40) { firstRow = y; break; }
+    expect(firstRow).toBeGreaterThan(0);
+  });
+
   it("makes safe file names", () => {
     expect(puppetSlug("Κυρία Κουκουβάγια")).toMatch(/^puppet-|^[a-z0-9-]+$/);
     expect(puppetSlug("Olive the Owl!")).toBe("olive-the-owl");

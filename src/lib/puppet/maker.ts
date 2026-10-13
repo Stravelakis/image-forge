@@ -109,7 +109,7 @@ export function partQuestion(part: PuppetPart): string {
     'Answer only JSON: {"ok": true|false, "why": "short reason"}.',
     "ok is true only if the change is clearly visible on the right,",
     "both eyes still look in the same direction as on the left and are not cross-eyed,",
-    "and nothing looks broken: no doubled features, no smears, no visible seam or box edge.",
+    "and nothing looks broken: no doubled features, no smears, no visible seam or box edge, no letters or text drawn on it.",
   ].join(" ");
 }
 

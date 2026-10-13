@@ -84,12 +84,24 @@ export function bustBox(keyedBase: Img, eyes: Box | undefined): { s: number; x: 
   while (left > 0 && opaque(left - 1, eyeY)) left--;
   while (right < keyedBase.width - 1 && opaque(right + 1, eyeY)) right++;
   const headW = Math.max(right - left, keyedBase.width * 0.2);
+  // THE TOP OF THE CHARACTER, too. Measured from the head's width alone, a
+  // fox chef's tall hat was cut off at the top of the frame (13 Oct 2026).
+  // The square must reach the topmost drawn pixel, with a little air above.
+  let top = 0;
+  topScan: for (; top < eyeY; top++) {
+    for (let x = 0; x < keyedBase.width; x += 2) if (keyedBase.data[(top * keyedBase.width + x) * 4 + 3] > 40) break topScan;
+  }
   const EYE_AT = 0.42;
-  // Never run past the bottom of the picture: the art stops there, and the
-  // straight cut would show inside the circle like a bust on a shelf.
-  const maxS = Math.floor((keyedBase.height - eyeY) / (1 - EYE_AT));
-  const s = Math.min(Math.round(headW * 1.5), maxS, keyedBase.width);
-  return { s, x: Math.round(eyeX - s / 2), y: Math.round(eyeY - s * EYE_AT) };
+  const want = Math.max(headW * 1.5, ((eyeY - top) / EYE_AT) * 1.08);
+  const s = Math.round(Math.min(want, keyedBase.width, keyedBase.height));
+  // Eyes at 42% when there is room; otherwise slide so neither the top of the
+  // head nor the picture's bottom edge (a straight cut, like a bust on a shelf)
+  // ends up inside the frame.
+  let y = Math.round(eyeY - s * EYE_AT);
+  y = Math.min(y, Math.max(0, top - Math.round(s * 0.03)));
+  y = Math.max(0, Math.min(y, keyedBase.height - s));
+  const x = Math.max(0, Math.min(Math.round(eyeX - s / 2), keyedBase.width - s));
+  return { s, x, y };
 }
 
 export function buildRig(o: { name: string; framing: PuppetFraming; base: Img; parts: Record<string, CutPart>; madeBy?: Record<string, string> }): ForgePuppet {
