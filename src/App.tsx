@@ -2075,28 +2075,24 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               New €/2 delayed queue
             </button>
           )}
-          {/* The two live together: one makes work, the other does it. They
-              used to sit at opposite ends of the bar sharing a play icon,
-              which said both were ways of starting the same thing. */}
-          <button
-            onClick={() => nav("wizard")}
-            title="Set up a new queue of pictures — the wizard asks one easy question at a time"
-            className="btn-press flex items-center gap-1.5 rounded-lg border border-line2 bg-panel/70 px-3 py-2 text-[13px] text-parch hover:border-ember/50 hover:text-cream"
-          >
-            <IWand size={13} /> New queue
-          </button>
-          <button
-            onClick={() => runQueue()}
-            disabled={isRunning || queueLen === 0}
-            className={`btn-press flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold ${
-              isRunning
-                ? "stripes-live text-[var(--color-on-accent)]"
-                : `bg-ember text-[var(--color-on-accent)] hover:bg-[var(--color-accent-lift)] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none ${queueLen > 0 ? "breathe" : ""}`
-            }`}
-          >
-            <IPlay size={13} />
-            {isRunning ? "Forging…" : `Run queue · ${queueLen}`}
-          </button>
+          {/* One "make what is waiting" button, the same words as Made's, shown
+              only when something is waiting and not on Made itself, which has
+              its own (13 Oct 2026: the two used to repeat each other). New
+              work starts from Start or Wizards → Make pictures. */}
+          {(isRunning || queueLen > 0) && !(view === "workbench" && !tableMode) && view !== "lib-images" && (
+            <button
+              onClick={() => (isRunning ? nav("workbench") : runQueue())}
+              title={isRunning ? "Pictures are being made — click to watch them in Made" : `Make the ${queueLen} picture${queueLen === 1 ? "" : "s"} waiting in Made`}
+              className={`btn-press flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold ${
+                isRunning
+                  ? "stripes-live text-[var(--color-on-accent)]"
+                  : "bg-ember text-[var(--color-on-accent)] hover:bg-[var(--color-accent-lift)] breathe"
+              }`}
+            >
+              <IPlay size={13} />
+              {isRunning ? "Making…" : `Make the ${queueLen} waiting`}
+            </button>
+          )}
         </div>
       </header>
 

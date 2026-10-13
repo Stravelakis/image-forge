@@ -23,6 +23,27 @@ const SHAPES: { id: AspectKey; label: string }[] = [
   { id: "9:16", label: "Tall" },
 ];
 
+/**
+ * What you asked Start for, kept (Ak, 13 Oct 2026: "went to look at the rest
+ * of the app, went back to Start and it was empty — the creation was still
+ * running"). The newest two: the one running and the one before.
+ */
+interface StartRun {
+  id: string;
+  text: string;
+  at: string;
+  ids: number[];
+}
+const RUNS_KEY = "image-forge-start-runs-v1";
+function loadRuns(): StartRun[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RUNS_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((r) => r && Array.isArray(r.ids)) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function StartView({
   settings,
   rows,
@@ -57,7 +78,14 @@ export default function StartView({
   const [shape, setShape] = useState<AspectKey>("1:1");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
-  const [made, setMade] = useState<number[]>([]);
+  const [runs, setRuns] = useState<StartRun[]>(loadRuns);
+  useEffect(() => {
+    try {
+      localStorage.setItem(RUNS_KEY, JSON.stringify(runs));
+    } catch {
+      /* full: Made still has everything */
+    }
+  }, [runs]);
   const [zoom, setZoom] = useState<ManifestRow | null>(null);
 
   // The engine a blank row will use, said plainly: which, and whether it costs.
@@ -72,9 +100,10 @@ export default function StartView({
     return { starred, rest };
   }, [favourites]);
 
-  const mine = made.map((id) => rows.find((r) => r.id === id)).filter(Boolean) as ManifestRow[];
-  const doneCount = mine.filter((r) => r.status === "done").length;
-  const failedCount = mine.filter((r) => r.status === "failed").length;
+  // Rows deleted since are simply left out; a run with none left disappears.
+  const shown = runs
+    .map((run) => ({ run, rows: run.ids.map((id) => rows.find((r) => r.id === id)).filter(Boolean) as ManifestRow[] }))
+    .filter((x) => x.rows.length > 0);
 
   const go = async () => {
     const t = text.trim();
@@ -90,7 +119,7 @@ export default function StartView({
           : ""
     );
     const ids = await onMake(plan.prompts, style, shape);
-    setMade(ids);
+    setRuns((prev) => [{ id: String(Date.now()), text: t, at: new Date().toISOString(), ids }, ...prev].slice(0, 2));
     setBusy(false);
   };
 
@@ -217,40 +246,55 @@ export default function StartView({
         {note && <p className="mt-3 text-[12.5px] text-parch">{note}</p>}
       </div>
 
-      {mine.length > 0 && (
-        <div className="mt-8">
-          <p className="text-[13px] text-parch">
-            {doneCount} of {mine.length} ready
-            {failedCount > 0 ? ` · ${failedCount} did not work` : ""}
-            {isRunning && doneCount + failedCount < mine.length ? " · working…" : ""}
-          </p>
-          <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
-            {mine.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => r.preview && setZoom(r)}
-                title={r.error || r.filename}
-                className={`aspect-square overflow-hidden rounded-xl border ${
-                  r.status === "failed" ? "border-blood/50" : "border-line"
-                } bg-[var(--color-field)]`}
-              >
-                {r.preview && !r.preview.trimStart().startsWith("<svg") ? (
-                  <img src={r.preview} alt={r.filename} className="h-full w-full object-cover" />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center text-[11px] text-dust">
-                    {r.status === "failed" ? "did not work" : r.status === "generating" ? "making…" : "waiting"}
-                  </span>
-                )}
-              </button>
-            ))}
+      {shown.map(({ run, rows: mine }, i) => {
+        const doneCount = mine.filter((r) => r.status === "done").length;
+        const failedCount = mine.filter((r) => r.status === "failed").length;
+        const working = mine.some((r) => r.status === "pending" || r.status === "generating");
+        return (
+          <div key={run.id} className="mt-8">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-dust">
+              {working ? "Making now" : i === 0 ? "Your last one" : "The one before"} ·{" "}
+              {new Date(run.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </p>
+            <p className="mt-1 truncate text-[14px] text-cream" title={run.text}>
+              {run.text}
+            </p>
+            <p className="mt-0.5 text-[13px] text-parch">
+              {doneCount} of {mine.length} ready
+              {failedCount > 0 ? ` · ${failedCount} did not work` : ""}
+              {working && isRunning ? " · working…" : working ? " · waiting for the queue" : ""}
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
+              {mine.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => r.preview && setZoom(r)}
+                  title={r.error || `${r.filename} — click to see it big`}
+                  className={`aspect-square overflow-hidden rounded-xl border ${
+                    r.status === "failed" ? "border-blood/50" : "border-line"
+                  } bg-[var(--color-field)]`}
+                >
+                  {r.preview && !r.preview.trimStart().startsWith("<svg") ? (
+                    <img src={r.preview} alt={r.filename} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-[11px] text-dust">
+                      {r.status === "failed" ? "did not work" : r.status === "generating" ? "making…" : "waiting"}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })}
 
-      <p className="mt-10 text-[12.5px] text-dust">
-        Want the full control — filenames, one row at a time, CSV?{" "}
-        <button onClick={onOpenForge} className="text-parch underline decoration-dust/40 underline-offset-2 hover:text-cream">
-          Open the spreadsheet →
+      <p className="mt-10 text-[13px] text-dust">
+        <button
+          onClick={onOpenForge}
+          className="text-parch underline decoration-dust/40 underline-offset-2 hover:text-cream"
+          title="Everything you have made — pictures, sheets, GIFs and puppets — with redo"
+        >
+          See everything in Made →
         </button>
       </p>
 

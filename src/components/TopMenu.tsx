@@ -291,7 +291,7 @@ export default function TopMenu({
     { id: "filenames", title: "Filenames", hint: "the seven naming rules", icon: <IBook size={15} />, onPick: () => onNav("settings", "filenames") },
     { id: "folders", title: "Folders", hint: "where pictures land on disk", icon: <IFolder size={15} />, onPick: () => onNav("settings", "folders") },
     { id: "wp", title: "WP connections", hint: "the WordPress hand-off", icon: <IUpload size={15} />, onPick: () => onNav("settings", "wp") },
-    { id: "appearance", title: "Appearance", hint: "colour, background and movement", icon: <IGear size={15} />, onPick: () => onNav("settings", "appearance") },
+    { id: "appearance", title: "Language", hint: "English now; Greek, French, German, Spanish, Portuguese coming", icon: <IGear size={15} />, onPick: () => onNav("settings", "appearance") },
     { id: "advanced", title: "Advanced", hint: "check the forge, repair, backup, update", icon: <IRetry size={15} />, onPick: () => onNav("settings", "advanced") },
   ];
 

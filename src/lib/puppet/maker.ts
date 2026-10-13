@@ -74,7 +74,9 @@ export function baseQuestion(framing: PuppetFraming): string {
     "ok is true only if ALL of these hold:",
     "one single character; its mouth is closed;",
     "both eyes look in the same direction (not cross-eyed, not wall-eyed);",
-    "the whole head, including ears or hair, is inside the picture and not cut off at the top;",
+    // Not "nothing touches the top": a tall chef's hat grazing the edge failed
+    // good pictures (13 Oct 2026). The face and ears are what must fit.
+    "the face, eyes and ears are fully inside the picture (a hat or hair touching the top edge is fine);",
     "the background is one flat plain colour;",
     framing === "waist" ? "both arms and both hands are visible." : "head and shoulders are shown.",
   ].join(" ");

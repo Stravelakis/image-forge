@@ -51,7 +51,7 @@ const SECTIONS: { id: SettingsSection; label: string; hint: string }[] = [
   { id: "filenames", label: "Filenames", hint: "the rules" },
   { id: "folders", label: "Folders", hint: "where files go" },
   { id: "wp", label: "WP connections", hint: "the hand-off" },
-  { id: "appearance", label: "Appearance", hint: "the vibe" },
+  { id: "appearance", label: "Language", hint: "the app's own words" },
   { id: "advanced", label: "Advanced", hint: "care & updates" },
 ];
 
@@ -1432,176 +1432,29 @@ export default function SettingsView({
 
         {section === "appearance" && (
           <>
-            <H>Appearance</H>
-            <P>The forge's weather. Everything here updates live — pick what feels good, turn off what doesn't.</P>
-
-            <p className="font-mono text-[10px] tracking-[0.22em] text-dust uppercase">main color</p>
-            <div className="flex flex-wrap gap-2.5">
-              {ACCENTS.map((a) => {
-                const active = settings.ambient.accent === a.id;
-                return (
-                  <button
-                    key={a.id}
-                    onClick={() => patchSettings({ ambient: { ...settings.ambient, accent: a.id } })}
-                    className={`btn-press flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 ${active ? "border-line2 bg-raise" : "border-line bg-panel/50 hover:border-line2"}`}
-                  >
-                    <span className="h-6 w-6 rounded-full border border-black/30" style={{ background: a.hex, boxShadow: active ? `0 0 14px ${a.hex}88` : "none" }} />
-                    <span className="text-left">
-                      <span className={`block text-[12.5px] font-semibold ${active ? "text-cream" : "text-parch"}`}>{a.name}</span>
-                      <span className="block font-mono text-[9.5px] text-dust">{a.hex}</span>
-                    </span>
-                    {active && <ICheck size={13} className="text-moss" />}
-                  </button>
-                );
-              })}
-            </div>
-            <P>The main color paints the run button, highlights, card glows and the cursor light. Status colors stay fixed so done/failed always read the same.</P>
-
-            <p className="font-mono text-[10px] tracking-[0.22em] text-dust uppercase">background</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {(
-                [
-                  { id: "none", name: "Quiet", hint: "plain dark canvas — also turns off the corner lights" },
-                  { id: "dots", name: "Dot field", hint: "dots that part around your cursor" },
-                  { id: "embers", name: "Rising embers", hint: "sparks drifting up from the forge" },
-                  { id: "stars", name: "Night sky", hint: "twinkling stars, the odd shooting star" },
-                ] as { id: ForgeSettings["ambient"]["background"]; name: string; hint: string }[]
-              ).map((b) => (
-                <button
-                  key={b.id}
-                  onClick={() => patchSettings({ ambient: { ...settings.ambient, background: b.id } })}
-                  className={`btn-press rounded-xl border px-3.5 py-3 text-left ${settings.ambient.background === b.id ? "border-ember/60 bg-ember/8" : "border-line bg-panel/50 hover:border-line2"}`}
+            <H>Language</H>
+            <p className="mt-1 max-w-xl text-[13px] text-parch">
+              The language the app's own words are in. More are coming once the app has settled — they will come in the simple,
+              explain-it-like-I'm-five voice. Your pictures and prompts can be in any language today.
+            </p>
+            <div className="mt-4 grid max-w-xl grid-cols-2 gap-2 sm:grid-cols-3">
+              {[
+                ["English", "English", true],
+                ["Ελληνικά", "Greek", false],
+                ["Français", "French", false],
+                ["Deutsch", "German", false],
+                ["Español", "Spanish", false],
+                ["Português", "Portuguese", false],
+              ].map(([own, en, ready]) => (
+                <div
+                  key={String(en)}
+                  title={ready ? "The language the app is in now." : `${en}: coming soon.`}
+                  className={`rounded-xl border px-4 py-3 ${ready ? "border-ember/60 bg-ember/10 text-cream" : "border-line text-dust"}`}
                 >
-                  <span className={`block text-[13px] font-semibold ${settings.ambient.background === b.id ? "text-ember" : "text-cream"}`}>{b.name}</span>
-                  <span className="block text-[10.5px] text-dust">{b.hint}</span>
-                </button>
+                  <div className="text-[14px]">{own}</div>
+                  <div className="mt-0.5 text-[11px]">{ready ? "in use" : "coming soon"}</div>
+                </div>
               ))}
-            </div>
-            {settings.ambient.background !== "none" && (
-              <div className="rounded-xl border border-line bg-panel/40 p-4">
-                <label className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
-                  density
-                  <span className="text-cream">{settings.ambient.density}</span>
-                </label>
-                <input
-                  type="range"
-                  min={20}
-                  max={140}
-                  value={settings.ambient.density}
-                  onChange={(e) => patchSettings({ ambient: { ...settings.ambient, density: Number(e.target.value) } })}
-                  className="mt-2 w-full accent-[var(--color-ember)]"
-                />
-                {settings.ambient.background === "dots" && (
-                  <div className="mt-3 flex flex-wrap gap-4">
-                    <label className="flex cursor-pointer items-center gap-2 text-[12px] text-parch">
-                      <input type="checkbox" checked={settings.ambient.wave} onChange={(e) => patchSettings({ ambient: { ...settings.ambient, wave: e.target.checked } })} className="accent-[var(--color-ember)]" />
-                      gentle wave
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-[12px] text-parch">
-                      <input type="checkbox" checked={settings.ambient.sparkle} onChange={(e) => patchSettings({ ambient: { ...settings.ambient, sparkle: e.target.checked } })} className="accent-[var(--color-ember)]" />
-                      sparkling dots
-                    </label>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <p className="font-mono text-[10px] tracking-[0.22em] text-dust uppercase">card glow</p>
-            <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  { id: "off", name: "Off", hint: "plain hairline borders" },
-                  { id: "accent", name: "Accent glow", hint: "borders light up in the main color where you hover" },
-                  { id: "prismatic", name: "Prismatic", hint: "the glow slowly cycles through every hue" },
-                ] as { id: ForgeSettings["ambient"]["glow"]; name: string; hint: string }[]
-              ).map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => patchSettings({ ambient: { ...settings.ambient, glow: g.id } })}
-                  className={`btn-press rounded-xl border px-3.5 py-3 text-left ${settings.ambient.glow === g.id ? "border-ember/60 bg-ember/8" : "border-line bg-panel/50 hover:border-line2"}`}
-                >
-                  <span className={`block text-[13px] font-semibold ${settings.ambient.glow === g.id ? "text-ember" : "text-cream"}`}>{g.name}</span>
-                  <span className="block text-[10.5px] text-dust">{g.hint}</span>
-                </button>
-              ))}
-            </div>
-
-            <p className="font-mono text-[10px] tracking-[0.22em] text-dust uppercase">cursor</p>
-            <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  { id: "none", name: "Plain", hint: "the usual pointer, nothing extra" },
-                  { id: "lantern", name: "Lantern", hint: "a soft light follows your cursor with a lazy sway" },
-                  { id: "sparks", name: "Sparkle trail", hint: "tiny sparks drip off the cursor as you move" },
-                ] as { id: ForgeSettings["ambient"]["cursor"]; name: string; hint: string }[]
-              ).map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => patchSettings({ ambient: { ...settings.ambient, cursor: c.id } })}
-                  className={`btn-press rounded-xl border px-3.5 py-3 text-left ${settings.ambient.cursor === c.id ? "border-ember/60 bg-ember/8" : "border-line bg-panel/50 hover:border-line2"}`}
-                >
-                  <span className={`block text-[13px] font-semibold ${settings.ambient.cursor === c.id ? "text-ember" : "text-cream"}`}>{c.name}</span>
-                  <span className="block text-[10.5px] text-dust">{c.hint}</span>
-                </button>
-              ))}
-            </div>
-            {settings.ambient.cursor !== "none" && (
-              <div className="rounded-xl border border-line bg-panel/40 p-4">
-                <label className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
-                  {settings.ambient.cursor === "lantern" ? "lantern size" : "sparkle spread"}
-                  <span className="text-cream">{settings.ambient.cursorSize}px</span>
-                </label>
-                <input
-                  type="range"
-                  min={120}
-                  max={420}
-                  step={20}
-                  value={settings.ambient.cursorSize}
-                  onChange={(e) => patchSettings({ ambient: { ...settings.ambient, cursorSize: Number(e.target.value) } })}
-                  className="mt-2 w-full accent-[var(--color-ember)]"
-                />
-              </div>
-            )}
-            {/* motion — the master switch over everything above */}
-            <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">Movement</p>
-              <p className="mt-1 text-[12.5px] leading-relaxed text-dust">
-                How much things move. This governs everything on this page.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(
-                  [
-                    ["system", "Follow my system", "Whatever your operating system's “reduce motion” setting says. The right choice for almost everyone."],
-                    ["full", "Everything moves", "All of it, regardless of the system setting."],
-                    ["reduced", "Only what matters", "Things that tell you something happened still move. Endless drifting, flickering and scrolling stops."],
-                    ["off", "Still", "Nothing animates at all."],
-                  ] as const
-                ).map(([id, label, why]) => {
-                  const active = (settings.ambient.motion ?? "system") === id;
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => patchSettings({ ambient: { ...settings.ambient, motion: id } })}
-                      title={why}
-                      className={`rounded-lg border px-3 py-1.5 text-[12.5px] transition ${
-                        active ? "border-ember bg-ember/15 text-cream" : "border-line text-dust hover:text-cream"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 text-[11.5px] text-dust">
-                {
-                  {
-                    system: "Following your operating system. If you have turned reduce-motion on there, the forge is already calm.",
-                    full: "Everything moves, even if your system asks for less.",
-                    reduced: "A row finishing still catches your eye. Nothing drifts, flickers or scrolls forever.",
-                    off: "Completely still.",
-                  }[settings.ambient.motion ?? "system"]
-                }
-              </p>
             </div>
           </>
         )}
@@ -1730,7 +1583,7 @@ export default function SettingsView({
                   [
                     { key: "rows", label: "Manifest & generated previews", desc: "every row, status, cooldown and note" },
                     { key: "recipes", label: "Recipes & previous batches", desc: "saved wizard setups and batch history" },
-                    { key: "settings", label: "Settings, styles & API keys", desc: "engines, keys, cooldowns, appearance" },
+                    { key: "settings", label: "Settings, styles & API keys", desc: "engines, keys, cooldowns" },
                     { key: "market", label: "Marketplace progress", desc: "Emberfair purse, satchel, standing" },
                   ] as const
                 ).map((o) => (
