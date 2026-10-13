@@ -17,6 +17,7 @@ import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
 import { type PuppetEngine, sizeFor, blobToImg, describeInspiration, imgToPng, imgToUrl, judgeName, listLocalImageModels, pageGenerate, pageJudge, puppetEngines, unloadLocal } from "../lib/puppet/pageIO";
 import { finishOrder, orderPictures, shelfAvailable, shelvePuppet, type PuppetOrder } from "../lib/puppet/shelf";
+import type { PuppetTemplate } from "../lib/batches";
 import { downloadBlob } from "../lib/output";
 import { IX } from "./ui";
 
@@ -44,6 +45,8 @@ const STATUS_LOOK: Record<PartReport["status"], { dot: string; word: string }> =
 export default function PuppetMaker({
   settings,
   order,
+  template,
+  onSaveTemplate,
   onClose,
   pushToast,
   pushLog,
@@ -52,6 +55,9 @@ export default function PuppetMaker({
   settings: ForgeSettings;
   /** an order from Video Forge, if that is what opened this */
   order?: PuppetOrder | null;
+  /** a saved puppet template to start from */
+  template?: PuppetTemplate | null;
+  onSaveTemplate?: (name: string, t: PuppetTemplate) => void;
   onClose: () => void;
   pushToast: (kind: Toast["kind"], msg: string) => void;
   pushLog: (msg: string, kind: "info" | "ok" | "err" | "run") => void;
@@ -59,15 +65,15 @@ export default function PuppetMaker({
 }) {
   const [step, setStep] = useState<Step>("describe");
   const [name, setName] = useState(order?.name ?? "");
-  const [description, setDescription] = useState(order?.description ?? "");
-  const [style, setStyle] = useState(order?.style ?? "pixar");
-  const [framing, setFraming] = useState<PuppetFraming>(order?.framing ?? "head");
+  const [description, setDescription] = useState(order?.description ?? template?.description ?? "");
+  const [style, setStyle] = useState(order?.style ?? template?.style ?? "pixar");
+  const [framing, setFraming] = useState<PuppetFraming>(order?.framing ?? template?.framing ?? "head");
   const [inspo, setInspo] = useState<Pic[]>([]);
   // Two engines (Ak, 12 Oct 2026): one draws the faces, one makes the parts.
   // The parts need one that works from a picture; the faces can come from any.
   const [localModels, setLocalModels] = useState<string[]>([]);
-  const [faceId, setFaceId] = useState("");
-  const [partId, setPartId] = useState("");
+  const [faceId, setFaceId] = useState(template?.faceEngine ?? "");
+  const [partId, setPartId] = useState(template?.partEngine ?? "");
   // Pick the face automatically — for orders and overnight runs.
   const [autoPick, setAutoPick] = useState(order?.auto ?? false);
   const [bases, setBases] = useState<Pic[]>([]);
@@ -441,6 +447,19 @@ export default function PuppetMaker({
               <button onClick={() => void makeFaces()} disabled={!description.trim()} className="forge-btn primary w-full">
                 Draw 4 faces to choose from
               </button>
+              {onSaveTemplate && (
+                <button
+                  className="forge-btn w-full"
+                  disabled={!description.trim()}
+                  onClick={() => {
+                    onSaveTemplate(name.trim() || description.trim().split(/[,.]/)[0].slice(0, 40), { description, style, framing, faceEngine: faceEng.id, partEngine: partEng.id });
+                    pushToast("ok", "Saved as a template (Gallery → Templates).");
+                  }}
+                  title="Keep this description, style, framing and the two engines to start the next puppet from"
+                >
+                  Save as template
+                </button>
+              )}
               <label className="block cursor-pointer text-center text-[12px] text-[#8f98ab]">
                 …or <span className="text-[var(--color-ember)] underline">start from my own picture</span>
                 <input

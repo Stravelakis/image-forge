@@ -84,6 +84,8 @@ import { MOVED_EVENT } from "./components/DesktopModeCard";
 import { SparkField } from "./components/SparkField";
 import { loadThumbs, saveThumb, makeThumb } from "./lib/thumbStore";
 import MadeView from "./components/MadeView";
+import type { PuppetTemplate } from "./lib/batches";
+import { DEFAULT_SETUP } from "./lib/batches";
 import { CATEGORY_FOLDER } from "./lib/output";
 import { FORGE_PALETTE } from "./lib/theme";
 import imageMark from "./assets/image-mark.jpg";
@@ -256,7 +258,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const [textFor, setTextFor] = useState<null | { row: ManifestRow; blob: Blob }>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   // The puppet maker, opened from a menu (no order) or by Video Forge's order.
-  const [puppet, setPuppet] = useState<{ order: PuppetOrder | null } | null>(null);
+  const [puppet, setPuppet] = useState<{ order: PuppetOrder | null; template?: PuppetTemplate | null } | null>(null);
   const [vectorOpen, setVectorOpen] = useState(false);
   const [animateOpen, setAnimateOpen] = useState(false);
   const [paidAsk, setPaidAsk] = useState<null | { check: PaidRunCheck; targets: number[] }>(null);
@@ -2214,7 +2216,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
             <WizardView
               key={wizardPreset?.id ?? "fresh"}
               preset={wizardPreset}
-              setups={setups}
+              setups={setups.filter((t) => t.type !== "puppet")}
               settings={settings}
               patchSettings={patchSettings}
               folder={folder}
@@ -2278,6 +2280,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
             <TemplateLibrary
               setups={setups}
               onDelete={(id) => setSetups((s) => s.filter((x) => x.id !== id))}
+              onUsePuppet={(t) => setPuppet({ order: null, template: t.puppet ?? null })}
               onUse={(t) => {
                 setWizardPreset(t);
                 setView("wizard");
@@ -2434,6 +2437,10 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         <PuppetMaker
           settings={settings}
           order={puppet.order}
+          template={puppet.template}
+          onSaveTemplate={(name, t) =>
+            setSetups((s) => [{ id: uid(), name, createdAt: new Date().toISOString(), data: { ...DEFAULT_SETUP, name }, type: "puppet", puppet: t }, ...s])
+          }
           onClose={() => setPuppet(null)}
           pushToast={pushToast}
           pushLog={pushLog}

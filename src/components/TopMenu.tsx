@@ -280,8 +280,7 @@ export default function TopMenu({
   const galleryCards: NavCard[] = [
     { id: "lib-images", title: "Everything made", hint: "pictures, sheets, GIFs and puppets — with redo", icon: <IImage size={15} />, onPick: () => onNav("lib-images") },
     { id: "lib-styles", title: "Styles", hint: "the built-in languages, and your own", icon: <IFlask size={15} />, onPick: () => onNav("lib-styles") },
-    { id: "lib-templates", title: "Templates", hint: "saved setups, ready to reuse", icon: <IWand size={15} />, badge: templateCount > 0 ? String(templateCount) : undefined, onPick: () => onNav("lib-templates") },
-    { id: "lib-batches", title: "Previous batches", hint: "what you have run before", icon: <IFolder size={15} />, badge: batchCount > 0 ? String(batchCount) : undefined, onPick: () => onNav("lib-batches") },
+    { id: "lib-templates", title: "Templates", hint: "picture setups and puppets, ready to reuse", icon: <IWand size={15} />, badge: templateCount > 0 ? String(templateCount) : undefined, onPick: () => onNav("lib-templates") },
   ];
 
   const settingsCards: NavCard[] = [

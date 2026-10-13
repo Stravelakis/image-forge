@@ -409,25 +409,27 @@ export function TemplateLibrary({
   setups,
   onDelete,
   onUse,
+  onUsePuppet,
 }: {
   setups: SavedSetup[];
   onDelete: (id: string) => void;
   onUse: (t: SavedSetup) => void;
+  onUsePuppet?: (t: SavedSetup) => void;
 }) {
   return (
     <div className="mx-auto w-full max-w-4xl px-6 py-10">
       <header className="mb-6">
         <p className="font-mono text-[11px] tracking-[0.28em] text-ember uppercase">library</p>
-        <h2 className="mt-1 font-display text-3xl text-cream">Saved recipes</h2>
+        <h2 className="mt-1 font-display text-3xl text-cream">Templates</h2>
         <p className="mt-2 max-w-xl text-[13.5px] text-parch">
-          Every setup you save at the end of the wizard lands here. Next batch, the wizard offers them as starting points on step one.
+          Starting points you saved: a picture setup (style, engine, shape) from the end of the wizard, or a puppet (description, style, engines) from the puppet maker. Use one and only what changes is left to fill in.
         </p>
       </header>
       {setups.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line2 p-12 text-center">
           <IWand size={26} className="mx-auto text-dust" />
-          <p className="mt-3 font-display text-xl text-cream">No recipes yet.</p>
-          <p className="mt-1 text-[13px] text-parch">Finish a wizard run and give your setup a name — it appears here.</p>
+          <p className="mt-3 font-display text-xl text-cream">No templates yet.</p>
+          <p className="mt-1 text-[13px] text-parch">Save one at the end of the picture wizard, or with “Save as template” in the puppet maker.</p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
@@ -440,13 +442,25 @@ export function TemplateLibrary({
                     <ITrash size={13} />
                   </button>
                 </div>
-                <p className="mt-1 font-mono text-[10.5px] text-dust">
-                  <span className="text-potion">{kindById(t.data.kind).label}</span> · {t.data.styleId} · {t.data.model || "practice forge"} · {t.data.aspect === "per-category" ? "mixed shapes" : t.data.aspect} · saved {new Date(t.createdAt).toLocaleDateString("en-GB")}
-                </p>
+                {t.type === "puppet" && t.puppet ? (
+                  <p className="mt-1 text-[11.5px] text-dust">
+                    <span className="text-potion">puppet</span> · {t.puppet.style} · {t.puppet.framing === "waist" ? "waist up" : "head"} · {t.puppet.description.slice(0, 80)}
+                  </p>
+                ) : (
+                  <p className="mt-1 font-mono text-[10.5px] text-dust">
+                    <span className="text-potion">pictures · {kindById(t.data.kind).label}</span> · {t.data.styleId} · {t.data.model || "practice forge"} · {t.data.aspect === "per-category" ? "mixed shapes" : t.data.aspect} · saved {new Date(t.createdAt).toLocaleDateString("en-GB")}
+                  </p>
+                )}
                 <div className="mt-3">
-                  <Btn variant="primary" onClick={() => onUse(t)}>
-                    <IPlay size={12} /> Start wizard from here
-                  </Btn>
+                  {t.type === "puppet" ? (
+                    <Btn variant="primary" onClick={() => onUsePuppet?.(t)}>
+                      <IPlay size={12} /> Make a puppet from this
+                    </Btn>
+                  ) : (
+                    <Btn variant="primary" onClick={() => onUse(t)}>
+                      <IPlay size={12} /> Start wizard from here
+                    </Btn>
+                  )}
                 </div>
               </div>
             </BorderGlow>

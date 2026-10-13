@@ -26,11 +26,24 @@ export const DEFAULT_SETUP: BatchSetup = {
   defaultNegative: "",
 };
 
+/** A puppet's starting point, saved from the puppet maker (13 Oct 2026). */
+export interface PuppetTemplate {
+  description: string;
+  style: string;
+  framing: "head" | "waist";
+  faceEngine: string;
+  partEngine: string;
+}
+
+/** A template: a picture wizard setup (what "recipes" were), or a puppet's. */
 export interface SavedSetup {
   id: string;
   name: string;
   createdAt: string;
   data: BatchSetup;
+  /** absent = pictures, as every template saved before puppets existed */
+  type?: "pictures" | "puppet";
+  puppet?: PuppetTemplate;
 }
 
 export interface Batch {
