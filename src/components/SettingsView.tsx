@@ -1,3 +1,4 @@
+import { CanvaCard } from "./CanvaCard";
 import { loadPet, savePet, type PetChoice } from "./CursorPet";
 import { useRef, useState, useEffect } from "react";
 import DesktopModeCard from "./DesktopModeCard";
@@ -41,6 +42,7 @@ export type SettingsSection =
   | "filenames"
   | "folders"
   | "wp"
+  | "canva"
   | "appearance"
   | "advanced";
 
@@ -52,6 +54,7 @@ const SECTIONS: { id: SettingsSection; label: string; hint: string }[] = [
   { id: "filenames", label: "Filenames", hint: "the rules" },
   { id: "folders", label: "Folders", hint: "where files go" },
   { id: "wp", label: "WP connections", hint: "the hand-off" },
+  { id: "canva", label: "Canva", hint: "send pictures, fill templates" },
   { id: "appearance", label: "Language & pet", hint: "the app's words, your cursor pet" },
   { id: "advanced", label: "Advanced", hint: "care & updates" },
 ];
@@ -1464,6 +1467,8 @@ export default function SettingsView({
             <PetCard />
           </>
         )}
+
+        {section === "canva" && <CanvaCard settings={settings} patchSettings={patchSettings} />}
 
         {section === "advanced" && (
           <>

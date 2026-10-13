@@ -134,6 +134,8 @@ export interface ForgeSettings {
   github: { owner: string; repo: string; branch: string; csvPath: string };
   metaPrompts: { promptWriter: string; filenameForger: string; stylePicker: string; wpMeta: string; factory: string };
   wp: { url: string; user: string; appPassword: string };
+  /** Your own Canva integration (electron/canva.mjs) — kept in the vault. */
+  canva: { clientId: string; clientSecret: string };
   ambient: {
     accent: string;
     /** 2 = the Forge look was applied once (13 Oct 2026) */
@@ -232,6 +234,7 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   github: { owner: "", repo: "image-forge", branch: "main", csvPath: "marketplace-images.csv" },
   metaPrompts: { promptWriter: "", filenameForger: "", stylePicker: "", wpMeta: "", factory: "" },
   wp: { url: "", user: "", appPassword: "" },
+  canva: { clientId: "", clientSecret: "" },
   ambient: {
     accent: "forge",
     lookVersion: 2,
@@ -273,6 +276,7 @@ export function normalizeSettings(s: Partial<ForgeSettings>): ForgeSettings {
     metaPrompts: { ...DEFAULT_SETTINGS.metaPrompts, ...(s.metaPrompts ?? {}) },
     github: { ...DEFAULT_SETTINGS.github, ...(s.github ?? {}) },
     wp: { ...DEFAULT_SETTINGS.wp, ...(s.wp ?? {}) },
+    canva: { ...DEFAULT_SETTINGS.canva, ...(s.canva ?? {}) },
     ambient: (() => {
       const a = (s.ambient ?? {}) as Partial<ForgeSettings["ambient"]> & { dots?: boolean; glow?: boolean };
       const migrated: Partial<ForgeSettings["ambient"]> = { ...a };

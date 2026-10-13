@@ -29,6 +29,7 @@ export type SettingsSection =
   | "filenames"
   | "folders"
   | "wp"
+  | "canva"
   | "appearance"
   | "advanced";
 
@@ -227,6 +228,7 @@ export default function TopMenu({
   onWpImport,
   onPuppet,
   onAnimate,
+  onCanvaFill,
   onZip,
   onExportCsv,
   onExportXlsx,
@@ -245,6 +247,7 @@ export default function TopMenu({
   onWpImport: () => void;
   onPuppet: () => void;
   onAnimate: () => void;
+  onCanvaFill: () => void;
   onZip: () => void;
   onExportCsv: () => void;
   onExportXlsx: () => void;
@@ -274,6 +277,7 @@ export default function TopMenu({
     { id: "wizard", title: "Make pictures", hint: "describe what you need — three easy steps", icon: <IWand size={15} />, onPick: () => onNav("wizard") },
     { id: "puppet", title: "Make a puppet", hint: "a character that talks, blinks and waves — for Video Forge", icon: <span className="text-[13px] leading-none">☺</span>, onPick: onPuppet },
     { id: "sheet", title: "Animate a character", hint: "sprite sheets, turnarounds, mouth shapes, blinks", icon: <span className="text-[13px] leading-none">◈</span>, onPick: onAnimate },
+    { id: "canva", title: "Fill a Canva template", hint: "one finished design per row of your list, back here", icon: <span className="text-[13px] leading-none">▣</span>, onPick: onCanvaFill },
     { id: "factory", title: "Prompt factory", hint: "a huge list of prompts — to Google Sheets, Excel or CSV", icon: <ISparkle size={15} />, onPick: () => onNav("factory") },
   ];
 
@@ -291,6 +295,7 @@ export default function TopMenu({
     { id: "filenames", title: "Filenames", hint: "the seven naming rules", icon: <IBook size={15} />, onPick: () => onNav("settings", "filenames") },
     { id: "folders", title: "Folders", hint: "where pictures land on disk", icon: <IFolder size={15} />, onPick: () => onNav("settings", "folders") },
     { id: "wp", title: "WP connections", hint: "the WordPress hand-off", icon: <IUpload size={15} />, onPick: () => onNav("settings", "wp") },
+    { id: "canva", title: "Canva", hint: "send pictures to Canva, fill your templates", icon: <IUpload size={15} />, onPick: () => onNav("settings", "canva") },
     { id: "appearance", title: "Language & pet", hint: "the app's language, and the little pet that chases your mouse", icon: <IGear size={15} />, onPick: () => onNav("settings", "appearance") },
     { id: "advanced", title: "Advanced", hint: "check the forge, repair, backup, update", icon: <IRetry size={15} />, onPick: () => onNav("settings", "advanced") },
   ];

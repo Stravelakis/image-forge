@@ -87,6 +87,8 @@ import { flushVault } from "./lib/vault";
 import { setTextFallbacks } from "./lib/providers";
 import MadeView from "./components/MadeView";
 import { TipLayer } from "./components/TipLayer";
+import CanvaFill from "./components/CanvaFill";
+import { canvaUpload } from "./lib/canva";
 import { CursorPet } from "./components/CursorPet";
 import type { PuppetTemplate } from "./lib/batches";
 import { DEFAULT_SETUP } from "./lib/batches";
@@ -265,6 +267,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const [gifFor, setGifFor] = useState<null | { row: ManifestRow; blob: Blob }>(null);
   const [textFor, setTextFor] = useState<null | { row: ManifestRow; blob: Blob }>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [canvaFillOpen, setCanvaFillOpen] = useState(false);
   // The puppet maker, opened from a menu (no order) or by Video Forge's order.
   const [puppet, setPuppet] = useState<{ order: PuppetOrder | null; template?: PuppetTemplate | null } | null>(null);
   const [vectorOpen, setVectorOpen] = useState(false);
@@ -588,6 +591,62 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       }
     },
     [pushLog]
+  );
+
+  /** The full picture of a row: in memory if made this session, else from the linked folder. */
+  const getPicture = useCallback(async (r: ManifestRow): Promise<Blob | null> => {
+    const mem = imagesRef.current.get(r.filename);
+    if (mem) return mem;
+    const dir = folderRef.current;
+    if (!dir) return null;
+    try {
+      const sub = await dir.getDirectoryHandle(CATEGORY_FOLDER[r.category]);
+      return await (await sub.getFileHandle(r.filename)).getFile();
+    } catch {
+      return null;
+    }
+  }, []);
+
+  /** A finished picture made elsewhere (Canva): a new row in Made, done, saved to the folder. */
+  const addFinished = useCallback(
+    async (name: string, blob: Blob, note: string) => {
+      const taken = new Set(rowsRef.current.map((r) => r.filename));
+      let filename = name;
+      for (let i = 2; taken.has(filename); i++) filename = name.replace(/(\.png)?$/, `_${i}.png`);
+      const id = rowsRef.current.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+      const preview = await makeThumb(blob);
+      const row: ManifestRow = {
+        id, filename, prompt: note ? `Canva design — ${note}` : "Canva design", category: "image", item_id: "", shop_id: "", event_id: "",
+        style: "", aspect_ratio: "1:1", seed: 0, model: "canva", status: "done", error: "", generated_at: new Date().toISOString(),
+        imported_attachment_id: "", preview, made_with: "Canva",
+      } as ManifestRow;
+      imagesRef.current.set(filename, blob);
+      setRows((prev) => [...prev, row]);
+      void saveThumb(filename, blob);
+      await saveToFolder(row, blob);
+    },
+    [saveToFolder]
+  );
+
+  const sendToCanva = useCallback(
+    async (ids: number[]) => {
+      let ok = 0;
+      for (const id of ids) {
+        const r = rowsRef.current.find((x) => x.id === id);
+        if (!r) continue;
+        const blob = await getPicture(r);
+        if (!blob) continue;
+        try {
+          await canvaUpload(settingsRef.current, r.filename, blob);
+          ok++;
+        } catch (e) {
+          pushToast("err", `Canva: ${(e as Error).message}`);
+          return;
+        }
+      }
+      pushToast("ok", `${ok} picture${ok === 1 ? "" : "s"} sent to your Canva uploads.${ok < ids.length ? ` ${ids.length - ok} were not on this computer any more.` : ""}`);
+    },
+    [getPicture, pushToast]
   );
 
   /* ---------- the strike ---------- */
@@ -1991,6 +2050,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
           onWpImport={() => setWpOpen(true)}
           onPuppet={() => setPuppet({ order: null })}
           onAnimate={() => setSheetOpen(true)}
+          onCanvaFill={() => setCanvaFillOpen(true)}
           onZip={zipAll}
           motion={motionLevel}
               onExportCsv={exportCsv}
@@ -2137,6 +2197,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               }}
               onBackfill={backfillThumbs}
               onMakeGif={openGifMaker}
+              onSendToCanva={(ids) => void sendToCanva(ids)}
             />
           </main>
         ) : view === "workbench" ? (
@@ -2425,6 +2486,19 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         />
       )}
 
+      {canvaFillOpen && (
+        <CanvaFill
+          settings={settings}
+          rows={rows}
+          getPicture={getPicture}
+          onMade={addFinished}
+          onClose={() => setCanvaFillOpen(false)}
+          onOpenSettings={() => {
+            setCanvaFillOpen(false);
+            nav("settings", "canva");
+          }}
+        />
+      )}
       {sheetOpen && (
         <SheetMaker
           settings={settings}

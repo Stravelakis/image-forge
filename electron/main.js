@@ -28,6 +28,7 @@ import { readMode, writeMode, writeHandover, takeHandover, isTrustedInstallerUrl
 import { sharedValues, putShared } from "./forgeKeys.mjs";
 import { openVault, HARVEST_PAGE } from "./vault.mjs";
 import { recordMade } from "./forgeHub.mjs";
+import { authLink, canvaClient, exchangeCode, tokenStore } from "./canva.mjs";
 import { shelfRoot, openOrders, orderPicture, finishOrder, savePuppetFile, listPuppets, puppetFile, removePuppet } from "./forgeShelf.mjs";
 import os from "node:os";
 import { spawn } from "node:child_process";
@@ -286,6 +287,41 @@ async function handleApp(req, res) {
       }
       return json(res, r.ok ? 200 : 400, r.ok ? { ok: true } : r);
     }
+    // CANVA (electron/canva.mjs). The page sends your integration's ID and
+    // secret with each call; the tokens stay here, locked.
+    if (req.method === "POST" && seg[2] === "canva") {
+      const body = JSON.parse((await readBody(req, 40 * 1024 * 1024)).toString("utf8") || "{}");
+      const creds = { clientId: String(body.clientId || "").trim(), clientSecret: String(body.clientSecret || "").trim() };
+      const store = tokenStore(app.getPath("userData"));
+      const what = seg[3];
+      if (what === "connect") {
+        if (!creds.clientId || !creds.clientSecret) return json(res, 400, { error: "Paste the Client ID and the secret first." });
+        const redirectUri = `http://127.0.0.1:${APP_CTL.port}/canva/callback`;
+        const link = authLink({ clientId: creds.clientId, redirectUri });
+        CANVA_PENDING = { ...link, creds, redirectUri, at: Date.now() };
+        await shell.openExternal(link.url);
+        return json(res, 200, { ok: true, redirectUri });
+      }
+      if (what === "disconnect") {
+        await store.clear();
+        return json(res, 200, { ok: true });
+      }
+      const c = canvaClient(creds, store);
+      if (what === "status") {
+        const t = await store.read();
+        if (!t) return json(res, 200, { connected: false, redirectUri: `http://127.0.0.1:${APP_CTL.port}/canva/callback` });
+        const me = await c.me().catch(() => null);
+        return json(res, 200, { connected: !!me, name: me?.profile?.display_name ?? "", redirectUri: `http://127.0.0.1:${APP_CTL.port}/canva/callback` });
+      }
+      if (what === "upload") return json(res, 200, { assetId: await c.upload(String(body.name || "image-forge"), Buffer.from(String(body.b64 || ""), "base64")) });
+      if (what === "templates") return json(res, 200, { items: await c.templates() });
+      if (what === "dataset") return json(res, 200, { dataset: await c.dataset(String(body.id || "")) });
+      if (what === "fill") {
+        const r = await c.fillAndExport(String(body.templateId || ""), body.data || {}, body.title);
+        return json(res, 200, { b64: r.bytes.toString("base64"), designUrl: r.designUrl });
+      }
+      return json(res, 404, { error: "no such Canva call" });
+    }
     // Keys shared with Video Forge on this computer (electron/forgeKeys.mjs).
     if (route === "GET /app/keys") {
       return json(res, 200, { keys: await sharedValues() });
@@ -392,6 +428,11 @@ function startServer(distDir) {
         handleLink(req, res);
         return;
       }
+      // Canva sends the browser back here after you sign in (canva.mjs).
+      if ((req.url || "").startsWith("/canva/callback")) {
+        void canvaCallback(req, res);
+        return;
+      }
       if ((req.url || "").startsWith("/app/")) {
         handleApp(req, res);
         return;
@@ -455,6 +496,29 @@ function startServer(distDir) {
     server.on("listening", () => resolve({ server, port: server.address().port }));
     attempt();
   });
+}
+
+/* ---------------- Canva sign-in ---------------- */
+
+let CANVA_PENDING = null;
+async function canvaCallback(req, res) {
+  const u = new URL(req.url, "http://127.0.0.1");
+  const page = (raw) => {
+    const msg = String(raw).replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[ch]);
+    res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    res.end(`<!doctype html><meta charset="utf-8"><body style="background:#000;color:#ece8ff;font:16px Sora,system-ui;display:grid;place-items:center;height:100vh"><div style="max-width:480px;text-align:center"><h2>${msg}</h2><p>You can close this tab and go back to Image Forge.</p></div>`);
+  };
+  const p = CANVA_PENDING;
+  if (!p || u.searchParams.get("state") !== p.state || Date.now() - p.at > 15 * 60 * 1000) return page("That sign-in link is old — press Connect in Image Forge again.");
+  if (u.searchParams.get("error")) return page(`Canva said no: ${u.searchParams.get("error")}`);
+  try {
+    const t = await exchangeCode(p.creds, { code: u.searchParams.get("code") || "", verifier: p.verifier, redirectUri: p.redirectUri });
+    await tokenStore(app.getPath("userData")).write(t);
+    CANVA_PENDING = null;
+    page("Connected to Canva ✓");
+  } catch (e) {
+    page(String(e && e.message ? e.message : e));
+  }
 }
 
 /* ---------------- the vault ---------------- */

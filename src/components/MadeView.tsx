@@ -60,6 +60,7 @@ export default function MadeView({
   onOpenTable,
   onBackfill,
   onMakeGif,
+  onSendToCanva,
 }: {
   rows: ManifestRow[];
   batches: Batch[];
@@ -73,6 +74,8 @@ export default function MadeView({
   /** read pictures back from the linked folder, for rows made before thumbnails were kept */
   onBackfill?: () => Promise<number>;
   onMakeGif?: (row: ManifestRow) => void;
+  /** put these pictures into your Canva uploads (Settings → Canva) */
+  onSendToCanva?: (ids: number[]) => void;
 }) {
   const [kind, setKind] = useState<Kind>("all");
   const [status, setStatus] = useState<Status | "all">("all");
@@ -173,6 +176,15 @@ export default function MadeView({
                 Make the {stats.waiting} waiting
               </button>
             ))}
+          {onSendToCanva && rows.some((r) => r.rating === "like" && r.status === "done") && (
+            <button
+              className="forge-ghost px-4 py-2 text-[13px] text-parch"
+              onClick={() => onSendToCanva(rows.filter((r) => r.rating === "like" && r.status === "done").map((r) => r.id))}
+              data-tip="Puts every picture you marked ♥ into your Canva uploads, ready to design with. Connect Canva first in Settings → Canva."
+            >
+              Send {rows.filter((r) => r.rating === "like" && r.status === "done").length} ♥ to Canva
+            </button>
+          )}
           {marked.length > 0 && (
             <button
               className="forge-ghost px-4 py-2 text-[13px] text-parch"
