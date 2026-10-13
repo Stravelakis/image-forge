@@ -142,6 +142,13 @@ export function savePuppetFile(root, slug, file, bytes) {
   return { ok: true, path: p };
 }
 
+/** Both: one file of a puppet (its face picture, for a thumbnail), or null. */
+export function puppetFile(root, slug, file) {
+  if (!SLUG.test(slug) || !FILE.test(file) || file !== path.basename(file)) return null;
+  const p = path.join(dirs(root).puppets, slug, file);
+  return fs.existsSync(p) ? fs.readFileSync(p) : null;
+}
+
 /** Both: every finished puppet on the shelf, newest first. */
 export function listPuppets(root) {
   const { puppets } = dirs(root);

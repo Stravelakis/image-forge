@@ -56,6 +56,9 @@ export interface ManifestRow {
    */
   request_id?: string;
   preview?: string;
+  /** Which model actually made it (a catalogue id, or the engine). Kept in
+   *  the app, so "Made" can count by engine and add up what was spent. */
+  made_with?: string;
 }
 
 export interface LogEntry {

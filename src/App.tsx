@@ -82,6 +82,9 @@ import GifMaker from "./components/GifMaker";
 import UpdateReadyDialog from "./components/UpdateReadyDialog";
 import { MOVED_EVENT } from "./components/DesktopModeCard";
 import { SparkField } from "./components/SparkField";
+import { loadThumbs, saveThumb, makeThumb } from "./lib/thumbStore";
+import MadeView from "./components/MadeView";
+import { CATEGORY_FOLDER } from "./lib/output";
 import { FORGE_PALETTE } from "./lib/theme";
 import imageMark from "./assets/image-mark.jpg";
 import videoMark from "./assets/video-mark.jpg";
@@ -322,6 +325,15 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     return () => window.clearTimeout(t);
   }, [settings, isDesktop]);
   const stopRef = useRef(false);
+  // HALT MEANS NOW. The stop flag only kept the NEXT picture from starting;
+  // the ones in flight carried on — minutes, on a local model — so "Halt the
+  // forge" looked like it did nothing (Ak, 13 Oct 2026). This cancels them;
+  // strike() already puts a cancelled row back to "pending".
+  const runAbortRef = useRef<AbortController | null>(null);
+  const haltNow = useCallback(() => {
+    stopRef.current = true;
+    runAbortRef.current?.abort();
+  }, []);
   const folderRef = useRef<FileSystemDirectoryHandle | null>(null);
   const tauriFolderRef = useRef<string | null>(null);
   const imagesRef = useRef<Map<string, Blob>>(new Map());
@@ -330,6 +342,16 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const repairForgeRef = useRef<null | (() => void)>(null);
 
   useEffect(() => saveBatches(batches), [batches]);
+  // "Made" is where the Forge tab lands; the spreadsheet is behind "Edit as a table".
+  const [tableMode, setTableMode] = useState(false);
+  // Thumbnails kept from earlier sessions fill the rows that have no picture
+  // in memory — after a restart, that is all of them (lib/thumbStore.ts).
+  useEffect(() => {
+    void loadThumbs().then((thumbs) => {
+      if (!Object.keys(thumbs).length) return;
+      setRows((prev) => prev.map((r) => (!r.preview && thumbs[r.filename] ? { ...r, preview: thumbs[r.filename] } : r)));
+    });
+  }, []);
   useEffect(() => saveSetups(setups), [setups]);
 
 
@@ -513,6 +535,30 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     }
   }, []);
 
+  /** Pictures made before thumbnails were kept: read them back from the
+   *  linked folder (each category in its own subfolder) and keep a thumbnail. */
+  const backfillThumbs = useCallback(async (): Promise<number> => {
+    const dir = folderRef.current;
+    if (!dir) {
+      pushToast("info", "No folder is linked — link your output folder first (top right).");
+      return 0;
+    }
+    let n = 0;
+    for (const r of rowsRef.current.filter((x) => x.status === "done" && !x.preview)) {
+      try {
+        const sub = await dir.getDirectoryHandle(CATEGORY_FOLDER[r.category]);
+        const file = await (await sub.getFileHandle(r.filename)).getFile();
+        await saveThumb(r.filename, file);
+        const thumb = await makeThumb(file);
+        setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, preview: thumb } : x)));
+        n++;
+      } catch {
+        /* not in the folder — leave it */
+      }
+    }
+    return n;
+  }, [pushToast]);
+
   const saveToFolder = useCallback(
     async (row: ManifestRow, blob: Blob) => {
       try {
@@ -616,7 +662,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       }
 
       try {
-        const { blob, dataUrl } = await generateReal({ ...row, prompt, negative_prompt }, s, undefined, exhaust, cdH * 3600e3);
+        const { blob, dataUrl } = await generateReal({ ...row, prompt, negative_prompt }, s, runAbortRef.current?.signal, exhaust, cdH * 3600e3);
         if (halted()) {
           setRows((prev) => prev.map((r) => (r.id === id && r.status === "generating" ? { ...r, status: "pending" } : r)));
           pushLog(`· ${row.filename} halted mid-strike`, "info");
@@ -646,7 +692,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         }
         const saved = { ...row, filename };
         imagesRef.current.set(filename, blob);
-        patchRow(id, { filename, status: "done", generated_at: new Date().toISOString(), preview: dataUrl, error: "" });
+        patchRow(id, { filename, status: "done", generated_at: new Date().toISOString(), preview: dataUrl, error: "", made_with: route.def?.id || (route.engine === "local" ? `local:${route.apiModel}` : route.engine) });
+        void saveThumb(filename, blob);
         pushLog(`✓ ${filename} struck · ${(blob.size / 1024).toFixed(0)} KB via ${route.engine}`, "ok");
         setSettings((prev) => ({ ...prev, usage: bumpUsage(prev.usage, modelId || s.provider) }));
         // The picture exists and is already counted. If writing it to the
@@ -704,6 +751,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       }
 
       stopRef.current = false;
+      runAbortRef.current = new AbortController();
       setIsRunning(true);
 
       const queued = ids
@@ -1273,6 +1321,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
           imagesRef.current.set(filename, blob);
           await saveToFolder({ ...row, filename }, blob);
           patchRow(row.id, { filename, status: "done", generated_at: new Date().toISOString(), error: "" });
+          void saveThumb(filename, blob);
         }
         for (const f of failures) {
           const row = rowsRef.current.find((r) => r.filename === f.filename);
@@ -2061,6 +2110,25 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               onEngine={(p) => patchSettings(p)}
             />
           </main>
+        ) : (view === "workbench" && !tableMode) || view === "lib-images" ? (
+          <main className="min-w-0 flex-1 overflow-y-auto">
+            <MadeView
+              rows={rows}
+              batches={batches}
+              settings={settings}
+              isRunning={isRunning}
+              onRun={() => runQueue()}
+              onStop={haltNow}
+              onRedo={rerunMarked}
+              updateRow={patchRow}
+              onOpenTable={() => {
+                setTableMode(true);
+                nav("workbench");
+              }}
+              onBackfill={backfillThumbs}
+              onMakeGif={openGifMaker}
+            />
+          </main>
         ) : view === "workbench" ? (
           <>
             <Sidebar
@@ -2074,15 +2142,18 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               styleLock={styleLock}
               isRunning={isRunning}
               onRun={() => runQueue()}
-              onStop={() => {
-                stopRef.current = true;
-              }}
+              onStop={haltNow}
               drift={drift}
               violations={violations}
               motion={motionLevel}
               onJumpSpec={() => nav("settings", "filenames")}
             />
             <main className="relative flex min-w-0 flex-1 flex-col">
+              <div className="flex shrink-0 items-center gap-2 border-b border-line px-5 py-2">
+                <button onClick={() => setTableMode(false)} className="btn-press font-mono text-[11px] text-dust hover:text-cream">
+                  ← back to Made
+                </button>
+              </div>
               {activeBatch && (
                 <div className="flex shrink-0 items-center gap-2.5 border-b border-line bg-panel/60 px-5 py-2">
                   <span className="font-mono text-[10px] tracking-[0.2em] text-dust uppercase">showing batch</span>
@@ -2197,10 +2268,6 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
                 </div>
               </div>
             )}
-          </main>
-        ) : view === "lib-images" ? (
-          <main className="min-w-0 flex-1 overflow-y-auto">
-            <ImageLibrary rows={rows} batches={batches} updateRow={patchRow} onRedo={rerunMarked} onMakeGif={openGifMaker} onAddText={openLetterer} />
           </main>
         ) : view === "lib-styles" ? (
           <main className="min-w-0 flex-1 overflow-y-auto">

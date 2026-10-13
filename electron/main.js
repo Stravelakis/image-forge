@@ -26,7 +26,7 @@ import {
 } from "./link.mjs";
 import { readMode, writeMode, writeHandover, takeHandover, isTrustedInstallerUrl, download, MODES } from "./appctl.mjs";
 import { sharedValues, putShared } from "./forgeKeys.mjs";
-import { shelfRoot, openOrders, orderPicture, finishOrder, savePuppetFile, listPuppets } from "./forgeShelf.mjs";
+import { shelfRoot, openOrders, orderPicture, finishOrder, savePuppetFile, listPuppets, puppetFile } from "./forgeShelf.mjs";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -226,6 +226,12 @@ async function handleApp(req, res) {
       return json(res, 200, finishOrder(shelf, seg[3], body));
     }
     if (route === "GET /app/puppets") return json(res, 200, { puppets: listPuppets(shelf).map(({ slug, name, framing, madeAt }) => ({ slug, name, framing, madeAt })) });
+    if (req.method === "GET" && seg[2] === "puppets" && seg.length === 5) {
+      const bytes = puppetFile(shelf, seg[3], seg[4]);
+      if (!bytes) return json(res, 404, { error: "no such file" });
+      res.writeHead(200, { "Content-Type": seg[4].endsWith(".json") ? "application/json" : "image/png" });
+      return res.end(bytes);
+    }
     if (req.method === "PUT" && seg[2] === "puppets" && seg.length === 5) {
       const r = savePuppetFile(shelf, seg[3], seg[4], await readBody(req, 12 * 1024 * 1024));
       return json(res, r.ok ? 200 : 400, r.ok ? { ok: true } : r);

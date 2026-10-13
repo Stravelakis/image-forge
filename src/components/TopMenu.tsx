@@ -275,7 +275,7 @@ export default function TopMenu({
   ];
 
   const galleryCards: NavCard[] = [
-    { id: "lib-images", title: "Images", hint: "mark, note and redo any picture", icon: <IImage size={15} />, onPick: () => onNav("lib-images") },
+    { id: "lib-images", title: "Everything made", hint: "pictures, sheets, GIFs and puppets — with redo", icon: <IImage size={15} />, onPick: () => onNav("lib-images") },
     { id: "lib-styles", title: "Styles", hint: "the built-in languages, and your own", icon: <IFlask size={15} />, onPick: () => onNav("lib-styles") },
     { id: "lib-templates", title: "Templates", hint: "saved setups, ready to reuse", icon: <IWand size={15} />, badge: templateCount > 0 ? String(templateCount) : undefined, onPick: () => onNav("lib-templates") },
     { id: "lib-batches", title: "Previous batches", hint: "what you have run before", icon: <IFolder size={15} />, badge: batchCount > 0 ? String(batchCount) : undefined, onPick: () => onNav("lib-batches") },
@@ -318,7 +318,7 @@ export default function TopMenu({
           onPick={pick}
           items={[
             { id: "start", label: "Start" },
-            { id: "workbench", label: "Forge" },
+            { id: "workbench", label: "Made" },
             { id: "chat", label: "Chat" },
             { id: "wizards", label: "Wizards", badge: markedCount > 0 ? String(markedCount) : undefined, opens: true },
             { id: "gallery", label: "Gallery", badge: batchCount > 0 ? String(batchCount) : undefined, opens: true },
