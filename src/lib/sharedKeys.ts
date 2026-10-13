@@ -12,7 +12,7 @@
  *  · a key you type here is shared as soon as settings save.
  */
 import type { ForgeSettings } from "./providers";
-import { newKey } from "./providers";
+import { FREE_TEXT_MODEL, newKey } from "./providers";
 
 const HEADERS = { "X-Forge-App": "1" };
 
@@ -24,6 +24,10 @@ export const TEXT_PROVIDERS = {
   groq: { host: "api.groq.com", base: "https://api.groq.com/openai/v1", label: "groq" },
 } as const;
 type TextName = keyof typeof TEXT_PROVIDERS;
+
+const JOB_MODEL = FREE_TEXT_MODEL;
+/** Models that can look at a picture (the Letterer's "where does the text go"). */
+const VISION_MODEL: Record<string, string> = { "api.mistral.ai": "mistral-medium-latest" };
 
 const hostOf = (base: string) => {
   try {
@@ -90,6 +94,20 @@ export function fillFromShared(s: ForgeSettings, keys: Record<string, string>): 
     for (const job of ["scribe", "coder", "vision"] as const) {
       const e = next[job];
       if (hostOf(e.base) === p.host && !e.key.trim()) edit({ [job]: { ...e, key } } as Partial<ForgeSettings>);
+    }
+  }
+  // A JOB WITH NO KEY takes a provider that has one (13 Oct 2026). Keys
+  // arriving from Video Forge filled the providers but left "writing" pointed
+  // at an empty OpenAI box, so Chat said "needs a text model" with a working
+  // Mistral key right there.
+  const withKey = next.textProviders.find((t) => t.key.trim() && JOB_MODEL[hostOf(t.base)]);
+  if (withKey) {
+    for (const job of ["scribe", "coder", "vision"] as const) {
+      const e = next[job];
+      if (e.key.trim()) continue;
+      const host = hostOf(withKey.base);
+      const model = job === "vision" ? VISION_MODEL[host] : JOB_MODEL[host];
+      if (model) edit({ [job]: { base: withKey.base, key: withKey.key, model } } as Partial<ForgeSettings>);
     }
   }
   return next;

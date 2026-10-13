@@ -476,7 +476,106 @@ export async function generateReal(
 
 /* ---------------- the scribe & factory (OpenAI-compatible chat) ---------------- */
 
+/** A sensible free model per text provider, by its address's host. */
+export const FREE_TEXT_MODEL: Record<string, string> = {
+  "api.mistral.ai": "mistral-small-latest",
+  // Checked 13 Oct 2026 — free models come and go (NVIDIA retired Llama 3.3
+  // in Aug 2026), so a model that is gone is replaced by pickTextModel.
+  "openrouter.ai": "google/gemma-4-31b-it:free",
+  "integrate.api.nvidia.com": "google/gemma-4-31b-it",
+  "api.groq.com": "llama-3.3-70b-versatile", // gitleaks:allow — a model name, not a key
+};
+
+/**
+ * THE OTHER TEXT ENGINES you have keys for (13 Oct 2026). Free tiers say "too
+ * many requests" (429) or wobble (5xx) — Mistral did, mid-test — and the Chat
+ * then just failed. Now the next provider with a key answers instead. Kept
+ * here, set by the app whenever settings change, so every caller of
+ * scribeChat gets it without passing anything new.
+ */
+let FALLBACKS: { base: string; key: string; model: string }[] = [];
+export function setTextFallbacks(providers: ForgeSettings["textProviders"]): void {
+  FALLBACKS = providers
+    .filter((p) => p.key.trim())
+    .map((p) => {
+      let host = "";
+      try {
+        host = new URL(p.base).host;
+      } catch {
+        /* not an address */
+      }
+      return { base: p.base, key: p.key, model: FREE_TEXT_MODEL[host] ?? "" };
+    })
+    .filter((p) => p.model);
+}
+
+/** Free models change; when the one asked for is gone, find a working one. */
+const PREFER = [/gemma-4-31b/i, /mistral-large/i, /nemotron-3-super/i, /mistral-small/i, /gemma/i, /llama.*instruct/i, /qwen.*instruct/i];
+const picked = new Map<string, string>();
+async function pickTextModel(base: string, key: string): Promise<string | null> {
+  if (picked.has(base)) return picked.get(base)!;
+  try {
+    const r = await fetchWithTimeout(`${routeBase(base)}/models`, { headers: { Authorization: `Bearer ${key.trim()}` } }, 20000);
+    const ids = ((await r.json()) as { data?: { id: string }[] }).data?.map((m) => m.id) ?? [];
+    const pool = /openrouter/.test(base) ? ids.filter((id) => id.endsWith(":free")) : ids.filter((id) => !/embed|guard|safety|reward|retriever|vision|coder|code/i.test(id));
+    for (const re of PREFER) {
+      const hit = pool.find((id) => re.test(id));
+      if (hit) {
+        picked.set(base, hit);
+        return hit;
+      }
+    }
+  } catch {
+    /* no list — no fallback */
+  }
+  return null;
+}
+
 export async function scribeChat(
+  scribe: ForgeSettings["scribe"],
+  system: string,
+  user: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const hostOf = (u: string) => {
+    try {
+      return new URL(u).host.replace(/^(api|integrate\.api)\./, "");
+    } catch {
+      return u;
+    }
+  };
+  try {
+    return await scribeOnce(scribe, system, user, signal);
+  } catch (e) {
+    const first = String((e as Error)?.message ?? e);
+    const busy = /text engine (429|5\d\d)|timed out|Failed to fetch|no text-engine key|could not reach/i.test(first);
+    if (!busy || signal?.aborted) throw e;
+    const tried = [`${hostOf(scribe.base)}: ${first.slice(0, 60)}`];
+    for (const f of FALLBACKS.filter((x) => x.base !== scribe.base || x.key !== scribe.key)) {
+      try {
+        return await scribeOnce({ ...f, model: picked.get(f.base) ?? f.model }, system, user, signal);
+      } catch (err) {
+        let why = String((err as Error)?.message ?? err);
+        // The model itself is gone (404/410): find the one that replaced it.
+        if (/text engine (404|410)/.test(why)) {
+          const m = await pickTextModel(f.base, f.key);
+          if (m) {
+            try {
+              return await scribeOnce({ ...f, model: m }, system, user, signal);
+            } catch (err2) {
+              why = String((err2 as Error)?.message ?? err2);
+            }
+          }
+        }
+        tried.push(`${hostOf(f.base)}: ${why.slice(0, 60)}`);
+      }
+    }
+    // Every engine with a key was asked; say what each one answered.
+    throw new Error(tried.length > 1 ? `every text engine was busy or failed — ${tried.join(" · ")}` : first);
+  }
+}
+
+async function scribeOnce(
   scribe: ForgeSettings["scribe"],
   system: string,
   user: string,

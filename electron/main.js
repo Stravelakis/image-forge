@@ -90,18 +90,35 @@ const PROXIED = {
  * Authorization and Content-Type headers travel, so nothing else about the
  * machine leaks.
  */
-function proxyUpstream(prefix, req, res) {
+async function proxyUpstream(prefix, req, res) {
   const { host, name } = PROXIED[prefix];
   const target = req.url.slice(prefix.length) || "/";
+  // The body is read whole and sent with its length. Piped, it went out in
+  // chunks with no length, and NVIDIA waited for the end of a body that never
+  // announced itself, then dropped the line (13 Oct 2026: "read ECONNRESET"
+  // after 37 s — the Chat's fallback to NVIDIA never answered).
+  let body = Buffer.alloc(0);
+  try {
+    body = req.method === "GET" || req.method === "HEAD" ? Buffer.alloc(0) : await readBody(req, 40 * 1024 * 1024);
+  } catch (e) {
+    res.writeHead(413, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: `request too large for ${name}` }));
+    return;
+  }
   const upstream = https.request(
     {
       hostname: host,
       port: 443,
+      // IPv4. On a network with half-working IPv6 the request sat on the IPv6
+      // address until NVIDIA hung up — even "try both" lost the race on big
+      // bodies (13 Oct 2026). Both hosts have IPv4 addresses.
+      family: 4,
       path: target,
       method: req.method,
       headers: {
         ...(req.headers.authorization ? { authorization: req.headers.authorization } : {}),
         ...(req.headers["content-type"] ? { "content-type": req.headers["content-type"] } : {}),
+        ...(body.length ? { "content-length": String(body.length) } : {}),
         host,
       },
     },
@@ -114,7 +131,7 @@ function proxyUpstream(prefix, req, res) {
     res.writeHead(502, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: `could not reach ${name}: ${e.message}` }));
   });
-  req.pipe(upstream);
+  upstream.end(body);
 }
 
 /**

@@ -84,6 +84,7 @@ import { MOVED_EVENT } from "./components/DesktopModeCard";
 import { SparkField } from "./components/SparkField";
 import { loadThumbs, saveThumb, makeThumb } from "./lib/thumbStore";
 import { flushVault } from "./lib/vault";
+import { setTextFallbacks } from "./lib/providers";
 import MadeView from "./components/MadeView";
 import { TipLayer } from "./components/TipLayer";
 import type { PuppetTemplate } from "./lib/batches";
@@ -311,6 +312,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     const t = window.setInterval(look, 20000);
     return () => window.clearInterval(t);
   }, [isDesktop]);
+  // Chat and the other text jobs fall back to any other text engine with a key.
+  useEffect(() => setTextFallbacks(settings.textProviders), [settings.textProviders]);
   const sharedSent = useRef<Record<string, string> | null>(null);
   useEffect(() => {
     if (!isDesktop) return;
