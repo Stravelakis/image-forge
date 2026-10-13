@@ -544,6 +544,8 @@ button.forge-tile:active { transform: scale(.985); }
   background: linear-gradient(100deg, color-mix(in srgb, var(--color-ember) 35%, #1d2350), color-mix(in srgb, var(--color-ember) 75%, #3f4fa0) 45%, var(--color-ember));
   box-shadow: 0 0 26px -8px var(--color-ember); }
 .forge-btn.primary:hover:not(:disabled) { box-shadow: 0 0 38px -6px var(--color-ember); }
+.forge-btn.danger { border-color: rgba(255,107,107,.55); color: #ffb4b4; }
+.forge-btn.danger:hover:not(:disabled) { border-color: #ff6b6b; background: rgba(255,107,107,.12); }
 .forge-steps li { border-radius: 999px; padding: 5px 12px; font: 500 11px "Sora", sans-serif; color: #6b7385; }
 .forge-steps li.at { color: var(--color-on-accent); background: var(--color-ember); }
 .forge-steps li.past { color: #c3c9d6; }

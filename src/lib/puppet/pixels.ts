@@ -196,11 +196,28 @@ function keyWith(img: Img, bg: [number, number, number], tolerance: number): Img
     }
     if (!near[p]) continue;
     const e = dist(p);
-    if (e >= outer) continue;
-    const a = Math.max(0.05, (e - tolerance * 0.5) / (outer - tolerance * 0.5));
-    // colour = a*fg + (1-a)*bg  →  fg = (colour - (1-a)*bg) / a
-    for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, (d[i + c] - (1 - a) * bg[c]) / a));
-    d[i + 3] = Math.round(d[i + 3] * a);
+    if (e < outer) {
+      const a = Math.max(0.05, (e - tolerance * 0.5) / (outer - tolerance * 0.5));
+      // colour = a*fg + (1-a)*bg  →  fg = (colour - (1-a)*bg) / a
+      for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, (d[i + c] - (1 - a) * bg[c]) / a));
+      d[i + 3] = Math.round(d[i + 3] * a);
+    }
+    // SPILL: the background's colour reflected onto the outline — the pink
+    // fringe round the fox, the bride's veil (13 Oct 2026). Near the edge, a
+    // pixel leaning the background's way loses that lean, keeping its brightness.
+    const lum = (d[i] + d[i + 1] + d[i + 2]) / 3;
+    const bl = (bg[0] + bg[1] + bg[2]) / 3;
+    const cx = [d[i] - lum, d[i + 1] - lum, d[i + 2] - lum];
+    const bx = [bg[0] - bl, bg[1] - bl, bg[2] - bl];
+    const cn = Math.hypot(cx[0], cx[1], cx[2]);
+    const bn = Math.hypot(bx[0], bx[1], bx[2]);
+    if (cn > 8 && bn > 8) {
+      const cos = (cx[0] * bx[0] + cx[1] * bx[1] + cx[2] * bx[2]) / (cn * bn);
+      if (cos > 0.75) {
+        const k = Math.min(1, (cos - 0.75) / 0.2) * 0.85;
+        for (let c = 0; c < 3; c++) d[i + c] = Math.max(0, Math.min(255, Math.round(d[i + c] - cx[c] * k)));
+      }
+    }
   }
   return out;
 }

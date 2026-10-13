@@ -8,9 +8,9 @@ import fs from "node:fs";
 import path from "node:path";
 import { PNG } from "pngjs";
 import { borderColour, cutPart, keyOut, resize, type Img } from "../src/lib/puppet/pixels";
-import { buildRig, puppetSlug } from "../src/lib/puppet/rig";
+import { buildRig, poseBody, puppetSlug } from "../src/lib/puppet/rig";
 import { makeParts, makeBaseOptions, pictureBudget, type MakerIO } from "../src/lib/puppet/maker";
-import { basePrompt, editPrompt, partsFor, PUPPET_PARTS } from "../src/lib/puppet/recipe";
+import { basePrompt, editPrompt, keyColourFor, lipsFor, partsFor, PUPPET_PARTS } from "../src/lib/puppet/recipe";
 
 const load = (name: string): Img => {
   const png = PNG.sync.read(fs.readFileSync(path.join(__dirname, "fixtures", "puppet", `${name}.png`)));
@@ -102,6 +102,31 @@ describe("the recipe", () => {
     for (const p of PUPPET_PARTS) expect(editPrompt(p)).toMatch(/Change ONLY/);
   });
 
+  it("mouth requests describe shapes, never sounds or letters (13 Oct 2026)", () => {
+    for (const p of PUPPET_PARTS.filter((x) => x.kind === "mouth")) {
+      const e = editPrompt(p);
+      expect(e).not.toMatch(/saying|sound|letter|'f+'/i);
+    }
+    expect(editPrompt(PUPPET_PARTS.find((p) => p.id === "mouth_L")!)).toMatch(/INSIDE the mouth/);
+  });
+
+  it("one lips rule per puppet, in the base and every mouth", () => {
+    const noLips = { key: keyColourFor("an owl"), lips: false };
+    expect(basePrompt({ description: "an owl", style: "pixar", framing: "head", inspirations: 0, look: noLips })).toMatch(/NO separate drawn lips/);
+    expect(editPrompt(PUPPET_PARTS[0], noLips)).toMatch(/NO separate drawn lips/);
+    expect(editPrompt(PUPPET_PARTS.find((p) => p.kind === "brow")!, noLips)).not.toMatch(/lips/);
+    expect(lipsFor("a grey owl librarian", "pixar")).toBe(false);
+    expect(lipsFor("a cheerful baker woman", "pixar")).toBe(true);
+    expect(lipsFor("a cheerful baker woman", "doodle")).toBe(false);
+  });
+
+  it("picks a background colour the character is not", () => {
+    expect(keyColourFor("a red fox chef").name).toBe("magenta");
+    expect(keyColourFor("a bridezilla in a pink dress").name).toBe("green");
+    expect(keyColourFor("a pink frog prince").name).toBe("blue");
+    expect(basePrompt({ description: "pink", style: "pixar", framing: "head", inspirations: 0, look: { key: keyColourFor("pink"), lips: true } })).toMatch(/pure green background/);
+  });
+
   it("budgets pictures honestly", () => {
     expect(pictureBudget("head")).toEqual({ best: 20, worst: 52 });
   });
@@ -111,7 +136,7 @@ describe("the whole run, with stand-in engines", () => {
   /** An "engine" that knows two edits and returns the base for anything else. */
   const fakeEngine = (calls: string[]): MakerIO["generate"] => async (req) => {
     calls.push(req.prompt);
-    if (/saying AH/.test(req.prompt)) return ah;
+    if (/tall oval/.test(req.prompt)) return ah;
     if (/fully shut/.test(req.prompt)) return blink;
     return base;
   };
@@ -190,5 +215,28 @@ describe("the whole run, with stand-in engines", () => {
   it("makes safe file names", () => {
     expect(puppetSlug("Κυρία Κουκουβάγια")).toMatch(/^puppet-|^[a-z0-9-]+$/);
     expect(puppetSlug("Olive the Owl!")).toBe("olive-the-owl");
+  });
+});
+
+describe("arm poses replace the body (13 Oct 2026)", () => {
+  const W = 100;
+  const pic = (paint: (x: number, y: number) => [number, number, number]): Img => {
+    const data = new Uint8ClampedArray(W * W * 4);
+    for (let y = 0; y < W; y++) for (let x = 0; x < W; x++) data.set([...paint(x, y), 255], (y * W + x) * 4);
+    return { width: W, height: W, data };
+  };
+  const inHead = (x: number, y: number) => x >= 40 && x < 60 && y >= 10 && y < 40;
+  const inBody = (x: number, y: number) => x >= 30 && x < 70 && y >= 40;
+  const base = pic((x, y) => (inHead(x, y) ? [200, 150, 100] : inBody(x, y) ? [50, 80, 160] : [255, 0, 255]));
+  // the edit: the head redrawn a touch differently, and a hand beside it
+  const edit = pic((x, y) => (inHead(x, y) ? [210, 160, 110] : x >= 64 && x < 72 && y >= 18 && y < 30 ? [230, 190, 150] : inBody(x, y) ? [50, 80, 160] : [255, 0, 255]));
+
+  it("leaves the head out (the base's own head goes on top) and keeps the raised hand", () => {
+    const out = poseBody(base, edit, [255, 0, 255], { x0: 38, x1: 62, y1: 40 });
+    const a = (x: number, y: number) => out.data[(y * W + x) * 4 + 3];
+    expect(a(50, 25)).toBe(0); // head area: emptied
+    expect(a(68, 24)).toBeGreaterThan(200); // the hand: kept
+    expect(a(50, 70)).toBeGreaterThan(200); // the body: kept
+    expect(a(5, 5)).toBe(0); // background: gone
   });
 });

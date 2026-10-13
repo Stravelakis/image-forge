@@ -73,6 +73,15 @@ export async function shelvePuppet(slug: string, rig: ForgePuppet): Promise<{ ok
 }
 
 /** Is the shelf there at all (desktop app)? */
+/** Take a puppet off the shelf (moved to puppets-deleted, not erased). */
+export async function removeFromShelf(slug: string): Promise<boolean> {
+  try {
+    return (await fetch(`/app/puppets/${encodeURIComponent(slug)}`, { method: "DELETE", headers: HEADERS })).ok;
+  } catch {
+    return false;
+  }
+}
+
 export async function shelfAvailable(): Promise<boolean> {
   try {
     return (await fetch("/app/puppets", { headers: HEADERS })).ok;

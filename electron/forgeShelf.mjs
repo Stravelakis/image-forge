@@ -149,6 +149,22 @@ export function puppetFile(root, slug, file) {
   return fs.existsSync(p) ? fs.readFileSync(p) : null;
 }
 
+/**
+ * Both: take a puppet off the shelf (Ak, 13 Oct 2026: "a bridezilla that was
+ * not something to keep"). Not erased: moved to puppets-deleted/, so a click
+ * too many can still be undone by hand.
+ */
+export function removePuppet(root, slug, now = new Date()) {
+  if (!SLUG.test(slug)) return { ok: false, problem: "bad puppet name" };
+  const from = path.join(dirs(root).puppets, slug);
+  if (!fs.existsSync(from)) return { ok: true, gone: false };
+  const bin = path.join(root, "puppets-deleted");
+  fs.mkdirSync(bin, { recursive: true });
+  const to = path.join(bin, `${slug}-${now.toISOString().replace(/[:.]/g, "-")}`);
+  fs.renameSync(from, to);
+  return { ok: true, gone: true, to };
+}
+
 /** Both: every finished puppet on the shelf, newest first. */
 export function listPuppets(root) {
   const { puppets } = dirs(root);

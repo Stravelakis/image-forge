@@ -17,7 +17,7 @@
  * test passes stand-ins; a headless overnight run could pass anything.
  */
 import { composite, crop, cutPart, resize, sideBySide, type Box, type Img } from "./pixels";
-import { BASE_NEGATIVE, basePrompt, editPrompt, partsFor, type PuppetFraming, type PuppetPart } from "./recipe";
+import { BASE_NEGATIVE, DEFAULT_LOOK, EDIT_NEGATIVE, basePrompt, editPrompt, partsFor, type PuppetFraming, type PuppetLook, type PuppetPart } from "./recipe";
 import type { CutPart } from "./rig";
 
 export interface Verdict {
@@ -62,12 +62,14 @@ export interface BaseRequest {
   count?: number;
   /** different every time "show me others" is pressed */
   round?: number;
+  /** background colour and lips — the same in every picture of this puppet */
+  look?: PuppetLook;
   /** picture size in pixels (square). Default PUPPET_SIZE; local engines use
    *  768 — an 8 GB card took 5 min 40 s per edit at 1024 (12 Oct 2026). */
   size?: number;
 }
 
-export function baseQuestion(framing: PuppetFraming): string {
+export function baseQuestion(framing: PuppetFraming, look: PuppetLook = DEFAULT_LOOK): string {
   return [
     "This picture is meant to be the starting point for an animated talking character.",
     'Answer only JSON: {"ok": true|false, "why": "short reason"}.',
@@ -77,7 +79,8 @@ export function baseQuestion(framing: PuppetFraming): string {
     // Not "nothing touches the top": a tall chef's hat grazing the edge failed
     // good pictures (13 Oct 2026). The face and ears are what must fit.
     "the face, eyes and ears are fully inside the picture (a hat or hair touching the top edge is fine);",
-    "the background is one flat plain colour;",
+    `the background is one flat plain colour, and none of that colour shows on the character itself;`,
+    look.lips ? "the mouth has drawn lips;" : "the mouth has no separate drawn lips;",
     framing === "waist" ? "both arms and both hands are visible." : "head and shoulders are shown.",
   ].join(" ");
 }
@@ -85,7 +88,7 @@ export function baseQuestion(framing: PuppetFraming): string {
 export async function makeBaseOptions(req: BaseRequest, io: MakerIO, onEvent: (e: MakerEvent) => void, signal?: AbortSignal): Promise<Img[]> {
   const count = req.count ?? 4;
   const size = req.size ?? PUPPET_SIZE;
-  const prompt = basePrompt({ description: req.description, style: req.style, framing: req.framing, inspirations: req.inspirations.length });
+  const prompt = basePrompt({ description: req.description, style: req.style, framing: req.framing, inspirations: req.inspirations.length, look: req.look });
   const out: Img[] = [];
   for (let i = 0; i < count; i++) {
     if (signal?.aborted) break;
@@ -95,7 +98,7 @@ export async function makeBaseOptions(req: BaseRequest, io: MakerIO, onEvent: (e
       size
     );
     onEvent({ type: "picture" });
-    const verdict = io.judge ? await io.judge(baseQuestion(req.framing), shrink(picture, 512), signal).catch(() => null) : null;
+    const verdict = io.judge ? await io.judge(baseQuestion(req.framing, req.look), shrink(picture, 512), signal).catch(() => null) : null;
     out.push(picture);
     onEvent({ type: "base", index: i, picture, verdict });
   }
@@ -104,8 +107,10 @@ export async function makeBaseOptions(req: BaseRequest, io: MakerIO, onEvent: (e
 
 /* ---------------- 2. the parts ---------------- */
 
-export function partQuestion(part: PuppetPart): string {
+export function partQuestion(part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): string {
   return [
+    ...(part.kind === "mouth" ? [look.lips ? "The mouth must have drawn lips." : "The mouth must have no separate drawn lips."] : []),
+    ...(part.kind === "arms" ? ["Each arm must appear exactly once — no extra arm left resting at the side."] : []),
     "Left: a cartoon character. Right: the same character after an edit.",
     `The edit was meant to give: ${part.expect}.`,
     'Answer only JSON: {"ok": true|false, "why": "short reason"}.',
@@ -139,6 +144,7 @@ export interface PartsRequest {
   /** only these ids; default every part for the framing */
   only?: string[];
   tries?: number;
+  look?: PuppetLook;
 }
 
 export interface PartsResult {
@@ -178,7 +184,7 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
       if (signal?.aborted) throw new DOMException("stopped", "AbortError");
       report.tries = t;
       const edit = resize(
-        await io.generate({ prompt: editPrompt(part), refs: [req.base], seed: seedFor(n * 31 + t), width: req.base.width, height: req.base.height }, signal),
+        await io.generate({ prompt: editPrompt(part, req.look), negative: EDIT_NEGATIVE, refs: [req.base], seed: seedFor(n * 31 + t), width: req.base.width, height: req.base.height }, signal),
         req.base.width,
         req.base.height
       );
@@ -190,11 +196,13 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
         onEvent({ type: "part", report: { ...report } });
         continue;
       }
-      const candidate: CutPart = { layer: cut.layer, keyed: cut.keyed, box: cut.box };
+      // An arm pose keeps the WHOLE edit too: it becomes a body that replaces
+      // the resting one (rig.ts poseBody), so the old arms are gone.
+      const candidate: CutPart = { layer: cut.layer, keyed: cut.keyed, box: cut.box, ...(part.kind === "arms" ? { full: edit } : {}) };
       const view = viewBox(cut.box, req.base);
       const after = composite(req.base, cut.layer, cut.box.x, cut.box.y);
       const pair = shrink(sideBySide(crop(req.base, view), crop(after, view)), 768);
-      const verdict = io.judge ? await io.judge(partQuestion(part), pair, signal).catch(() => null) : null;
+      const verdict = io.judge ? await io.judge(partQuestion(part, req.look), pair, signal).catch(() => null) : null;
       if (!verdict || verdict.ok) {
         parts[part.id] = candidate;
         report.status = "ok";

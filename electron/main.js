@@ -27,7 +27,7 @@ import {
 import { readMode, writeMode, writeHandover, takeHandover, isTrustedInstallerUrl, download, MODES } from "./appctl.mjs";
 import { sharedValues, putShared } from "./forgeKeys.mjs";
 import { openVault, HARVEST_PAGE } from "./vault.mjs";
-import { shelfRoot, openOrders, orderPicture, finishOrder, savePuppetFile, listPuppets, puppetFile } from "./forgeShelf.mjs";
+import { shelfRoot, openOrders, orderPicture, finishOrder, savePuppetFile, listPuppets, puppetFile, removePuppet } from "./forgeShelf.mjs";
 import os from "node:os";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -250,6 +250,10 @@ async function handleApp(req, res) {
       if (!bytes) return json(res, 404, { error: "no such file" });
       res.writeHead(200, { "Content-Type": seg[4].endsWith(".json") ? "application/json" : "image/png" });
       return res.end(bytes);
+    }
+    if (req.method === "DELETE" && seg[2] === "puppets" && seg.length === 4) {
+      const r = removePuppet(shelf, seg[3]);
+      return json(res, r.ok ? 200 : 400, r);
     }
     if (req.method === "PUT" && seg[2] === "puppets" && seg.length === 5) {
       const r = savePuppetFile(shelf, seg[3], seg[4], await readBody(req, 12 * 1024 * 1024));

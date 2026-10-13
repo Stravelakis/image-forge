@@ -75,11 +75,53 @@ export const styleById = (id: string): PuppetStyle => PUPPET_STYLES.find((s) => 
 export const KEY_COLOUR = "#FF00FF";
 
 /**
+ * THE BACKGROUND, PER CHARACTER (13 Oct 2026). Magenta works for most, but a
+ * pink or purple character bleeds into it and comes out with holes and a
+ * pink fringe (Ak's bridezilla, the fox's pink-lit hat). So the colour the
+ * character is NOT is chosen: magenta, else green, else blue.
+ */
+export interface KeyColour {
+  name: "magenta" | "green" | "blue";
+  hex: string;
+}
+const KEYS: { key: KeyColour; clashes: RegExp }[] = [
+  { key: { name: "magenta", hex: "#FF00FF" }, clashes: /\b(pink|magenta|purple|violet|lilac|lavender|fuchsia|rose|mauve|plum|orchid|bridezilla|bride)\b/i },
+  { key: { name: "green", hex: "#00FF00" }, clashes: /\b(green|lime|olive|emerald|mint|frog|leaf|leaves|grass|jade|cactus|alien|zombie|dinosaur|ogre|goblin)\b/i },
+  { key: { name: "blue", hex: "#0000FF" }, clashes: /(?!)/ },
+];
+export function keyColourFor(description: string): KeyColour {
+  return (KEYS.find((k) => !k.clashes.test(description)) ?? KEYS[KEYS.length - 1]).key;
+}
+
+/**
+ * LIPS OR NO LIPS — one or the other for the whole puppet (Ak, 13 Oct 2026).
+ * A mouth that has lips in one shape and is a bare opening in the next looks
+ * like two characters. Animals, doodles and anime faces default to no lips.
+ */
+export function lipsFor(description: string, style: string): boolean {
+  if (style === "doodle" || style === "anime") return false;
+  return !/\b(owl|bird|parrot|penguin|duck|chick|fox|dog|puppy|cat|kitten|bear|rabbit|bunny|mouse|rat|wolf|lion|tiger|monkey|frog|fish|dragon|dinosaur|monster|robot|blob|alien|creature|animal|beast|cow|pig|sheep|goat|horse|deer|squirrel|hedgehog|owlet|bee|bug|insect)\b/i.test(description);
+}
+
+/** What a puppet keeps the same in every picture: its background and its mouth's kind. */
+export interface PuppetLook {
+  key: KeyColour;
+  lips: boolean;
+}
+export const DEFAULT_LOOK: PuppetLook = { key: { name: "magenta", hex: KEY_COLOUR }, lips: true };
+
+const lipsClause = (look: PuppetLook) =>
+  look.lips
+    ? "The mouth has clearly drawn LIPS, the same colour and thickness in every picture."
+    : "The mouth has NO separate drawn lips: it is a simple opening drawn straight into the face, the same in every picture.";
+
+/**
  * The base picture's prompt. Each clause is there because its absence caused a
  * real failure on the course puppets — see the table in docs/puppet-recipe.md.
  */
-export function basePrompt(o: { description: string; style: string; framing: PuppetFraming; inspirations: number }): string {
+export function basePrompt(o: { description: string; style: string; framing: PuppetFraming; inspirations: number; look?: PuppetLook }): string {
   const style = styleById(o.style);
+  const look = o.look ?? DEFAULT_LOOK;
   const frame =
     o.framing === "waist"
       ? "Shown from the waist up, facing the viewer, BOTH ARMS AND BOTH HANDS fully visible and relaxed at the sides, with generous empty space on both sides and above the head so a raised hand would still fit inside the picture. The head sits in the upper third."
@@ -89,20 +131,24 @@ export function basePrompt(o: { description: string; style: string; framing: Pup
     `Drawn as ${style.prompt}.`,
     frame,
     "Mouth CLOSED and relaxed, calm friendly neutral expression.",
+    lipsClause(look),
     "Eyes relaxed and normally open, upper lids resting over the top of the irises, little white above or below; both eyes look at a distant point far beyond the camera so the two lines of sight are PARALLEL — not cross-eyed, not staring.",
     "Eyebrows level and calm, the same colour as the character's own hair or fur.",
     "Short neck sitting low on the shoulders.",
     o.inspirations
       ? `The attached picture${o.inspirations > 1 ? "s are" : " is"} INSPIRATION ONLY: borrow the look, colours and costume, but draw ONE new character in the style described, on its own.`
       : "",
-    `Centred on a completely flat, uniform, pure magenta background (${KEY_COLOUR}), edge to edge, with no shadow, no floor and no props.`,
+    `Centred on a completely flat, uniform, pure ${look.key.name} background (${look.key.hex}), edge to edge, with no shadow, no floor and no props. No ${look.key.name} anywhere on the character itself.`,
   ]
     .filter(Boolean)
     .join(" ");
 }
 
 export const BASE_NEGATIVE =
-  "cross-eyed, converging eyes, wall-eyed, uneven pupils, wide staring eyes, bulging eyes, startled, open mouth, cropped head, cut-off ears, tight crop, text, watermark, extra characters, extra limbs, photorealistic photo";
+  "cross-eyed, converging eyes, wall-eyed, uneven pupils, wide staring eyes, bulging eyes, startled, open mouth, cropped head, cut-off ears, tight crop, text, watermark, extra characters, extra limbs, photorealistic photo, letters, words";
+
+/** For every edit: what must not appear. Kept OUT of the request itself — naming letters there is what drew them (13 Oct 2026). */
+export const EDIT_NEGATIVE = "text, letters, words, writing, captions, symbols on the teeth, tongue sticking out, extra mouth, extra row of teeth, blurry";
 
 /* ---------------- the parts ---------------- */
 
@@ -129,14 +175,17 @@ const EYES_STAY =
  * the fragile part — the wording here is the one that finally held them.
  */
 export const PUPPET_PARTS: PuppetPart[] = [
-  { id: "mouth_AH", kind: "mouth", label: "AH", change: "Change only the mouth so it is open wide saying AH, with the tongue and lower teeth visible.", expect: "mouth open wide (AH)" },
-  { id: "mouth_EE", kind: "mouth", label: "EE", change: "Change only the mouth so it is spread wide saying EE, with the teeth showing.", expect: "mouth spread wide, teeth showing (EE)" },
-  { id: "mouth_OH", kind: "mouth", label: "OH", change: "Change only the mouth so it is rounded into an O saying OH.", expect: "mouth rounded into an O" },
-  { id: "mouth_OO", kind: "mouth", label: "OO", change: "Change only the mouth so it is small and tightly rounded saying OO.", expect: "small tight round mouth (OO)" },
-  { id: "mouth_FV", kind: "mouth", label: "F·V", change: "Change only the mouth so the top front teeth rest gently on the lower lip, the shape a mouth makes for an 'fff' sound. Draw the teeth only — no letters.", expect: "top teeth resting on the lower lip, with no letter drawn on them" },
-  { id: "mouth_L", kind: "mouth", label: "L", change: "Change only the mouth so it is part open with the tongue raised saying L.", expect: "mouth part open, tongue raised (L)" },
-  { id: "mouth_CHSH", kind: "mouth", label: "SH", change: "Change only the mouth so the lips are pushed forward and rounded saying SH.", expect: "lips pushed forward and rounded (SH)" },
-  { id: "mouth_SMILE", kind: "mouth", label: "smile", change: "Change only the mouth into a warm, gentle CLOSED-mouth smile, lips together, corners turned up, no teeth showing. Nothing above the mouth changes.", expect: "closed-mouth smile" },
+  // SHAPES, NEVER SOUNDS. "Saying fff" put letters on the teeth and "saying
+  // L" stuck the tongue out (Ak, 13 Oct 2026): only what the lips, teeth and
+  // tongue do is described. editPrompt adds the puppet's lips rule.
+  { id: "mouth_AH", kind: "mouth", label: "AH", change: "Change only the mouth so it is open wide in a relaxed tall oval, the jaw dropped, the tongue resting low inside and the lower teeth just visible.", expect: "mouth open wide in a tall oval" },
+  { id: "mouth_EE", kind: "mouth", label: "EE", change: "Change only the mouth so it is stretched wide to the sides and only slightly open, both rows of teeth showing close together, like a wide grin.", expect: "mouth stretched wide, teeth showing close together" },
+  { id: "mouth_OH", kind: "mouth", label: "OH", change: "Change only the mouth so it forms a round open circle of medium size, the inside of the mouth dark.", expect: "mouth rounded into a medium open circle" },
+  { id: "mouth_OO", kind: "mouth", label: "OO", change: "Change only the mouth so it is pushed forward into a small, tight, round opening, much smaller than a circle.", expect: "small tight round mouth" },
+  { id: "mouth_FV", kind: "mouth", label: "F·V", change: "Change only the mouth so the upper front teeth rest lightly on the middle of the lower lip, the lower lip tucked slightly under them, and the mouth otherwise closed. The teeth are plain and white.", expect: "upper teeth resting on the lower lip, plain white teeth with nothing drawn on them" },
+  { id: "mouth_L", kind: "mouth", label: "L", change: "Change only the mouth so it is slightly open, with the tip of the tongue touching just behind the upper front teeth. The tongue stays INSIDE the mouth; only its tip shows, behind the teeth.", expect: "mouth slightly open, tongue tip behind the upper teeth, the tongue NOT sticking out" },
+  { id: "mouth_CHSH", kind: "mouth", label: "SH", change: "Change only the mouth so the lips are pushed forward and squared off, slightly open, with the teeth close together and visible.", expect: "lips pushed forward and squared, teeth close together" },
+  { id: "mouth_SMILE", kind: "mouth", label: "smile", change: "Change only the mouth into a warm, gentle CLOSED-mouth smile, corners turned up, no teeth showing. Nothing above the mouth changes.", expect: "closed-mouth smile" },
   {
     id: "lid_closed",
     kind: "lid",
@@ -167,20 +216,22 @@ export const PUPPET_PARTS: PuppetPart[] = [
   { id: "brow_confused", kind: "brow", label: "puzzled", change: `Change only the eyebrows so ONE is raised high and the other is lowered and drawn in, a puzzled look. ${EYES_STAY}`, expect: "one eyebrow up, one down (puzzled)" },
   // Arms: only on waist-up puppets. None of these touch the face, on purpose —
   // a hand over the mouth would hide the talking.
-  { id: "arms_wave", kind: "arms", label: "wave", waistOnly: true, change: "Change only the arms: raise the character's right hand to shoulder height beside the head in a friendly open-palm wave. The hand stays clear of the face.", expect: "one hand raised in a wave, beside (not over) the face" },
-  { id: "arms_point", kind: "arms", label: "point", waistOnly: true, change: "Change only the arms: the character's right arm points out to the side of the picture with the index finger, as if showing something next to them.", expect: "one arm pointing out to the side" },
-  { id: "arms_shrug", kind: "arms", label: "shrug", waistOnly: true, change: "Change only the arms: both forearms lifted with the palms turned up and open in a shrug, hands at waist height.", expect: "palms up in a shrug" },
-  { id: "arms_explain", kind: "arms", label: "explain", waistOnly: true, change: "Change only the arms: both hands raised in front of the chest, palms slightly open, as if explaining something. The hands stay below the chin.", expect: "both hands in front of the chest, explaining" },
+  { id: "arms_wave", kind: "arms", label: "wave", waistOnly: true, change: "Change only the arms: raise the character's right hand to shoulder height beside the head in a friendly open-palm wave. The hand stays clear of the face. Each arm is drawn exactly once: an arm that moves is no longer resting at the side.", expect: "one hand raised in a wave, beside (not over) the face" },
+  { id: "arms_point", kind: "arms", label: "point", waistOnly: true, change: "Change only the arms: the character's right arm points out to the side of the picture with the index finger, as if showing something next to them. Each arm is drawn exactly once: an arm that moves is no longer resting at the side.", expect: "one arm pointing out to the side" },
+  { id: "arms_shrug", kind: "arms", label: "shrug", waistOnly: true, change: "Change only the arms: both forearms lifted with the palms turned up and open in a shrug, hands at waist height. Each arm is drawn exactly once: an arm that moves is no longer resting at the side.", expect: "palms up in a shrug" },
+  { id: "arms_explain", kind: "arms", label: "explain", waistOnly: true, change: "Change only the arms: both hands raised in front of the chest, palms slightly open, as if explaining something. The hands stay below the chin. Each arm is drawn exactly once: an arm that moves is no longer resting at the side.", expect: "both hands in front of the chest, explaining" },
 ];
 
 export const partsFor = (framing: PuppetFraming): PuppetPart[] =>
   PUPPET_PARTS.filter((p) => framing === "waist" || !p.waistOnly);
 
 /** Added after every edit's own instruction. */
-export const KEEP =
-  "Keep absolutely everything else in the picture identical: the same character at the same size, position and angle, the same face, eyes, hair or fur, clothing, colours, lighting and the same flat magenta background. Change ONLY what is described. Do not redraw the picture. Never draw letters, words or text anywhere.";
+export const keepFor = (look: PuppetLook = DEFAULT_LOOK) =>
+  `Keep absolutely everything else in the picture identical: the same character at the same size, position and angle, the same face, eyes, hair or fur, clothing, colours, lighting and the same flat ${look.key.name} background. Change ONLY what is described. Do not redraw the picture.`;
+export const KEEP = keepFor();
 
-export const editPrompt = (part: PuppetPart): string => `Edit this picture. ${part.change}\n\n${KEEP}`;
+export const editPrompt = (part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): string =>
+  `Edit this picture. ${part.change}${part.kind === "mouth" ? ` ${lipsClause(look)}` : ""}\n\n${keepFor(look)}`;
 
 /**
  * Where on the picture each kind of part may sit, as fractions of the height.

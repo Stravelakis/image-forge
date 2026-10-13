@@ -17,6 +17,8 @@ export interface CutPart {
   box: Box;
   /** the same part with the background removed — what the puppet uses */
   keyed?: Img;
+  /** arm poses only: the whole edited picture, for poseBody */
+  full?: Img;
 }
 
 export interface ForgeLayer {
@@ -41,8 +43,12 @@ export interface ForgePuppetJson {
   /** Where the head comes off the shoulders, so it can nod and shake on its
    *  own (Video Forge's puppetTypes `neck`). Fractions of the base's height. */
   neck?: { y: number; overlap: number; feather: number };
-  /** Arm poses, drawn over the base and under the face. Waist-up puppets only. */
+  /** Arm poses. Waist-up puppets only. */
   poses?: Record<string, ForgeLayer>;
+  /** true: each pose is a WHOLE BODY picture that replaces the resting body
+   *  while it is used (13 Oct 2026). Before, a pose was drawn over the base
+   *  and the resting arms stayed visible under the waving one. */
+  posesReplaceBody?: boolean;
   /** How this puppet was made — engine, style, date. Read by people, not code. */
   madeBy?: Record<string, string>;
 }
@@ -104,6 +110,50 @@ export function bustBox(keyedBase: Img, eyes: Box | undefined): { s: number; x: 
   return { s, x, y };
 }
 
+/**
+ * WHERE THE HEAD IS, so a pose body can leave it out: the head always comes
+ * from the base, which the face layers were cut from. Measured like bustBox —
+ * the drawn run across the eye line — down to the neck.
+ */
+export function headRegion(keyedBase: Img, eyes: Box | undefined, neckPx: number | null): { x0: number; x1: number; y1: number } | null {
+  if (!eyes) return null;
+  const eyeX = Math.round(eyes.x + eyes.w / 2);
+  const eyeY = Math.round(eyes.y + eyes.h / 2);
+  const W = keyedBase.width;
+  const opaque = (x: number) => x >= 0 && x < W && keyedBase.data[(eyeY * W + x) * 4 + 3] > 40;
+  let left = eyeX;
+  let right = eyeX;
+  while (left > 0 && opaque(left - 1)) left--;
+  while (right < W - 1 && opaque(right + 1)) right++;
+  const headW = Math.max(right - left, W * 0.15);
+  const pad = Math.round(headW * 0.06);
+  return {
+    x0: Math.max(0, left - pad),
+    x1: Math.min(W - 1, right + pad),
+    y1: Math.min(keyedBase.height - 1, Math.round(neckPx ?? eyeY + headW * 0.8)),
+  };
+}
+
+/**
+ * A pose as a BODY: the whole edited picture, background out, with the head
+ * area emptied — except where the edit really differs there (a waving hand
+ * beside the cheek). Video Forge draws it instead of the resting body and puts
+ * the base's own head on top.
+ */
+export function poseBody(base: Img, edit: Img, bg: [number, number, number], head: { x0: number; x1: number; y1: number } | null): Img {
+  const out = keyOut(edit, bg);
+  if (!head) return out;
+  const W = out.width;
+  for (let y = 0; y <= head.y1; y++) {
+    for (let x = head.x0; x <= head.x1; x++) {
+      const i = (y * W + x) * 4;
+      const d = Math.max(Math.abs(edit.data[i] - base.data[i]), Math.abs(edit.data[i + 1] - base.data[i + 1]), Math.abs(edit.data[i + 2] - base.data[i + 2]));
+      if (d < 70) out.data[i + 3] = 0;
+    }
+  }
+  return out;
+}
+
 export function buildRig(o: { name: string; framing: PuppetFraming; base: Img; parts: Record<string, CutPart>; madeBy?: Record<string, string> }): ForgePuppet {
   const bg = borderColour(o.base);
   const keyedBase = keyOut(o.base, bg);
@@ -156,18 +206,29 @@ export function buildRig(o: { name: string; framing: PuppetFraming; base: Img; p
     if (l) lids[k] = l;
   }
 
-  const poses: Record<string, ForgeLayer> = {};
-  for (const id of Object.keys(o.parts).filter((k) => k.startsWith("arms_"))) {
-    const l = layer(id);
-    if (l) poses[id.slice(5)] = l;
-  }
-
   // THE NECK, measured: just under the chin, and the chin is the bottom of the
   // widest-open mouth (minus the soft edge cutPart padded it with). Below it
   // the body stays put; above it the head nods and shakes (Ak, 12 Oct 2026).
   const chinPart = o.parts.mouth_AH ?? o.parts.mouth_OH ?? o.parts.mouth_EE;
   const pad = Math.max(6, Math.round((o.base.width * 18) / 1024)) * 2;
   const neckY = chinPart ? (chinPart.box.y + chinPart.box.h - pad - oy) / frame + 0.03 : null;
+
+  // POSES AS BODIES (see poseBody). A part without its whole picture — an old
+  // resumed run — falls back to the overlay it always was.
+  const poses: Record<string, ForgeLayer> = {};
+  const head = headRegion(keyedBase, o.parts.lid_closed?.box ?? o.parts.lid_half?.box, neckY !== null ? neckY * frame + oy : null);
+  let allBodies = true;
+  for (const id of Object.keys(o.parts).filter((k) => k.startsWith("arms_"))) {
+    const p = o.parts[id];
+    if (p.full && !box) {
+      files[`${id}.png`] = poseBody(o.base, p.full, bg, head);
+      poses[id.slice(5)] = { file: `${id}.png`, x: 0, y: 0, w: frame, h: frame };
+    } else {
+      allBodies = false;
+      const l = layer(id);
+      if (l) poses[id.slice(5)] = l;
+    }
+  }
 
   const json: ForgePuppetJson = {
     name: o.name,
@@ -184,7 +245,7 @@ export function buildRig(o: { name: string; framing: PuppetFraming; base: Img; p
     brows,
     mouths,
     ...(neckY !== null && neckY > 0.3 && neckY < 0.95 ? { neck: { y: +neckY.toFixed(4), overlap: 0.05, feather: 0.015 } } : {}),
-    ...(Object.keys(poses).length ? { poses } : {}),
+    ...(Object.keys(poses).length ? { poses, ...(allBodies ? { posesReplaceBody: true } : {}) } : {}),
     ...(o.madeBy ? { madeBy: o.madeBy } : {}),
   };
   return { json, files };

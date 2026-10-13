@@ -11,12 +11,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { formatUsd } from "../lib/providers";
-import { PUPPET_STYLES, partsFor, type PuppetFraming } from "../lib/puppet/recipe";
+import { PUPPET_STYLES, keyColourFor, lipsFor, partsFor, type PuppetFraming } from "../lib/puppet/recipe";
 import { baseQuestion, makeBaseOptions, makeParts, pictureBudget, PUPPET_SIZE, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
 import { type PuppetEngine, sizeFor, blobToImg, describeInspiration, imgToPng, imgToUrl, judgeName, listLocalImageModels, pageGenerate, pageJudge, puppetEngines, unloadLocal } from "../lib/puppet/pageIO";
-import { finishOrder, orderPictures, shelfAvailable, shelvePuppet, type PuppetOrder } from "../lib/puppet/shelf";
+import { finishOrder, orderPictures, removeFromShelf, shelfAvailable, shelvePuppet, type PuppetOrder } from "../lib/puppet/shelf";
 import type { PuppetTemplate } from "../lib/batches";
 import { downloadBlob } from "../lib/output";
 import { IX } from "./ui";
@@ -67,7 +67,14 @@ export default function PuppetMaker({
   const [name, setName] = useState(order?.name ?? "");
   const [description, setDescription] = useState(order?.description ?? template?.description ?? "");
   const [style, setStyle] = useState(order?.style ?? template?.style ?? "pixar");
-  const [framing, setFraming] = useState<PuppetFraming>(order?.framing ?? template?.framing ?? "head");
+  // Waist-up by default (13 Oct 2026): the hands are what made Ak say a
+  // puppet had never moved them — head-only puppets have none.
+  const [framing, setFraming] = useState<PuppetFraming>(order?.framing ?? template?.framing ?? "waist");
+  // Lips or none, the same in every picture; guessed from the words until set by hand.
+  const [lipsTouched, setLipsTouched] = useState<boolean | null>(null);
+  const lips = lipsTouched ?? lipsFor(description, style);
+  const look = useMemo(() => ({ key: keyColourFor(description), lips }), [description, lips]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [inspo, setInspo] = useState<Pic[]>([]);
   // Two engines (Ak, 12 Oct 2026): one draws the faces, one makes the parts.
   // The parts need one that works from a picture; the faces can come from any.
@@ -167,7 +174,7 @@ export default function PuppetMaker({
         setBusy("Drawing four faces…");
       }
       await makeBaseOptions(
-        { description: words, style, framing, inspirations: pics, count: 4, round, size: sizeFor(faceEng.id) },
+        { description: words, style, framing, inspirations: pics, count: 4, round, size: sizeFor(faceEng.id), look },
         faceIO,
         async (e) => {
           if (e.type === "picture") setPictures((n) => n + 1);
@@ -193,7 +200,7 @@ export default function PuppetMaker({
       setBusy("");
       setRound((r) => r + 1);
     }
-  }, [description, style, framing, inspo, round, faceIO, faceEng.refs, settings, autoPick, name, pushLog]);
+  }, [description, style, framing, inspo, round, faceIO, faceEng.refs, settings, autoPick, name, pushLog, look]);
 
   const useOwnPicture = useCallback(async (f: File) => {
     const img = resize(await blobToImg(f), sizeFor(partEng.id), sizeFor(partEng.id));
@@ -202,10 +209,10 @@ export default function PuppetMaker({
     setBase(pic);
     // Your own picture gets the same look-over as a drawn one.
     if (io.judge) {
-      const verdict = await io.judge(baseQuestion(framing), resize(img, 512, 512)).catch(() => null);
+      const verdict = await io.judge(baseQuestion(framing, look), resize(img, 512, 512)).catch(() => null);
       setBases((p) => p.map((b) => (b.url === pic.url ? { ...b, verdict } : b)));
     }
-  }, [io, framing, partEng.id]);
+  }, [io, framing, partEng.id, look]);
 
   /* ---------- step 3: the parts ---------- */
   const build = useCallback(
@@ -225,7 +232,7 @@ export default function PuppetMaker({
           await unloadLocal(settings, faceEng.id.slice(6));
         }
         const res = await makeParts(
-          { base: base.img, framing, done: keep, only },
+          { base: base.img, framing, done: keep, only, look },
           io,
           async (e) => {
             if (e.type === "picture") setPictures((n) => n + 1);
@@ -265,7 +272,7 @@ export default function PuppetMaker({
         setBusy("");
       }
     },
-    [framing, io, parts, slug, name, description, style, faceEng, partEng, settings, pushLog]
+    [framing, io, parts, slug, name, description, style, faceEng, partEng, settings, pushLog, look]
   );
   const buildRef = useRef(build);
   buildRef.current = build;
@@ -303,6 +310,23 @@ export default function PuppetMaker({
     dir.file(`${slug}.rig.json`, JSON.stringify(rig.json, null, 1));
     downloadBlob(`${slug}-puppet.zip`, await zip.generateAsync({ type: "blob" }));
   }, [rig, slug]);
+
+  /** Throw this puppet away: off the shelf too if it went there, and back to step 1. */
+  const deletePuppet = useCallback(async () => {
+    stop();
+    if (shelved) await removeFromShelf(shelved);
+    if (order) void finishOrder(order.id, { problem: "deleted in Image Forge" });
+    setRig(null);
+    setParts({});
+    setReports([]);
+    setPreviews({});
+    setBase(null);
+    setBases([]);
+    setShelved("");
+    setConfirmDelete(false);
+    setStep("describe");
+    pushToast("info", `${name || "The puppet"} is deleted.${shelved ? " It is off the Video Forge shelf too." : ""}`);
+  }, [shelved, order, name, pushToast]);
 
   const close = () => {
     stop();
@@ -379,6 +403,24 @@ export default function PuppetMaker({
                     <span className="d mt-0.5 block">All that, plus wave · point · shrug · explain · {partsFor("waist").length} parts</span>
                   </button>
                 </div>
+              </div>
+
+              <div>
+                <label className={label} title="One or the other for the whole puppet, so its mouth always looks like the same mouth.">its mouth</label>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <button onClick={() => setLipsTouched(true)} className={tile(lips)} title="A mouth with drawn lips — usual for people.">
+                    <span className="t block">With lips</span>
+                    <span className="d mt-0.5 block">Drawn lips in every mouth shape</span>
+                  </button>
+                  <button onClick={() => setLipsTouched(false)} className={tile(!lips)} title="A mouth that is just an opening — usual for animals, doodles and anime.">
+                    <span className="t block">No lips</span>
+                    <span className="d mt-0.5 block">Just an opening, like most cartoon animals</span>
+                  </button>
+                </div>
+                <p className="mt-1.5 text-[11.5px] text-[#8f98ab]">
+                  {lipsTouched === null ? "Guessed from the description — click to change. " : ""}
+                  Drawn on a plain {look.key.name} background, which is cut away afterwards ({look.key.name === "magenta" ? "the usual one" : `not magenta, because of the colours in the description`}).
+                </p>
               </div>
 
               <div>
@@ -576,6 +618,20 @@ export default function PuppetMaker({
                     )}
                     <button className="forge-btn" onClick={() => void saveZip()}>Save the puppet (zip)</button>
                     {redo.length > 0 && <button className="forge-btn" onClick={() => void build(redo)}>Try the {redo.length} unsure/missing again</button>}
+                    {confirmDelete ? (
+                      <div className="flex gap-2">
+                        <button className="forge-btn danger flex-1" onClick={() => void deletePuppet()} title="Throw it away for good. If it went to Video Forge, it comes off the shelf too.">
+                          Yes, delete it
+                        </button>
+                        <button className="forge-btn flex-1" onClick={() => setConfirmDelete(false)} title="Keep the puppet">
+                          Keep it
+                        </button>
+                      </div>
+                    ) : (
+                      <button className="forge-btn" onClick={() => setConfirmDelete(true)} title="Not one to keep? Delete it — you will be asked once more.">
+                        Delete this puppet
+                      </button>
+                    )}
                   </>
                 )}
               </div>
