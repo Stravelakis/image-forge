@@ -78,8 +78,8 @@ describe("puppet pictures", () => {
 
 describe("the recipe", () => {
   it("has 16 face parts, and arms only when shown from the waist up", () => {
-    expect(partsFor("head")).toHaveLength(16);
-    expect(partsFor("waist")).toHaveLength(20);
+    expect(partsFor("head")).toHaveLength(19);
+    expect(partsFor("waist")).toHaveLength(23);
     expect(partsFor("head").some((p) => p.kind === "arms")).toBe(false);
   });
 
@@ -128,7 +128,7 @@ describe("the recipe", () => {
   });
 
   it("budgets pictures honestly", () => {
-    expect(pictureBudget("head")).toEqual({ best: 20, worst: 52 });
+    expect(pictureBudget("head")).toEqual({ best: 23, worst: 61 });
   });
 });
 

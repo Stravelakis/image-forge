@@ -185,6 +185,11 @@ export const PUPPET_PARTS: PuppetPart[] = [
   { id: "mouth_FV", kind: "mouth", label: "F·V", change: "Change only the mouth so the upper front teeth rest lightly on the middle of the lower lip, the lower lip tucked slightly under them, and the mouth otherwise closed. The teeth are plain and white.", expect: "upper teeth resting on the lower lip, plain white teeth with nothing drawn on them" },
   { id: "mouth_L", kind: "mouth", label: "L", change: "Change only the mouth so it is slightly open, with the tip of the tongue touching just behind the upper front teeth. The tongue stays INSIDE the mouth; only its tip shows, behind the teeth.", expect: "mouth slightly open, tongue tip behind the upper teeth, the tongue NOT sticking out" },
   { id: "mouth_CHSH", kind: "mouth", label: "SH", change: "Change only the mouth so the lips are pushed forward and squared off, slightly open, with the teeth close together and visible.", expect: "lips pushed forward and squared, teeth close together" },
+  // HALF-OPEN (13 Oct 2026): the steps between shapes and the quiet syllables,
+  // so the mouth flows rather than snapping (Video Forge timeline.ts).
+  { id: "mouth_halfAH", kind: "mouth", label: "½ AH", change: "Change only the mouth so it is a little open in a small relaxed oval, about half as open as a wide-open mouth, the teeth barely showing.", expect: "mouth a little open, a small oval" },
+  { id: "mouth_halfOH", kind: "mouth", label: "½ OH", change: "Change only the mouth so it forms a small round opening, about half the size of a wide round mouth.", expect: "small round opening" },
+  { id: "mouth_halfEE", kind: "mouth", label: "½ EE", change: "Change only the mouth so it is a little wider than at rest and just parted, a thin line of teeth showing.", expect: "mouth slightly widened and just parted" },
   { id: "mouth_SMILE", kind: "mouth", label: "smile", change: "Change only the mouth into a warm, gentle CLOSED-mouth smile, corners turned up, no teeth showing. Nothing above the mouth changes.", expect: "closed-mouth smile" },
   {
     id: "lid_closed",

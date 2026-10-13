@@ -71,6 +71,10 @@ const MOUTH_IDS: Record<string, string> = {
   mouth_L: "7",
   mouth_CHSH: "8",
   mouth_SMILE: "9",
+  // Half-open steps (Video Forge visemeMap HALF): 10 AH, 11 OH, 12 EE.
+  mouth_halfAH: "10",
+  mouth_halfOH: "11",
+  mouth_halfEE: "12",
 };
 
 /**
