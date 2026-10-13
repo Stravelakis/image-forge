@@ -30,8 +30,8 @@ lowercase, ending in `.png`. An agent cannot write outside the output folder.
 
 ## Keys
 
-With no keys at all the server uses Pollinations, which now needs a free token.
-Give it keys either way you prefer:
+With no keys at all the server uses OVHcloud, which needs none (two pictures a
+minute, always square). For more, give it keys either way you prefer:
 
 **A settings file** — export a backup from the app (Settings → Advanced →
 Backup) and point at it:

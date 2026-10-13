@@ -23,12 +23,56 @@ The app opens on the **Start** screen.
 
 1. Type what you need, for example *"12 potion bottle icons, cute, glowing"*.
 2. Check **How many** (it reads a number at the start of your sentence).
-3. Pick a **Look** and a **Shape** if you like.
-4. Press **Make**.
+3. Pick a **Style** (the word is a link to the Styles page) and a **Shape** if
+   you like.
+4. Pick an **engine** from the drop-down. It lists only engines that are set up;
+   **Add more engines…** at the end opens Settings.
+5. Press the button.
 
 With nothing set up it uses **OVHcloud**, which is free and needs no key. It
 makes two pictures a minute and they are always square. The pictures appear
 under the box as they finish; click one to see it full size.
+
+## Made: everything you have made
+
+**Made** shows the numbers (made, today, waiting, failed, spent), then every
+picture, sheet, GIF and puppet with its exact date, engine and status.
+
+- **Redo** makes one again. **Redo N marked or failed** remakes the marked and
+  failed ones together.
+- ♥ and ✕ mark what you liked; **GIF** turns a picture into a short animation;
+  click any picture to see it large.
+- **Edit as a table** opens the spreadsheet behind it, with CSV in and out.
+- Thumbnails are kept between restarts. For older pictures, **Find them in my
+  folder** brings them back from your linked folder.
+- A **Make the N waiting** button in the header runs whatever is queued (it is
+  hidden on Made itself).
+
+## Wizards and Gallery
+
+**Wizards** are four makers: **Make pictures** (three steps), **Make a puppet**,
+**Animate a character** (sprite sheets, turnarounds, mouth shapes) and **Prompt
+factory** (a big prompt list, copied for Google Sheets or saved as Excel or CSV).
+**Gallery** holds **Everything made**, **Styles** and **Templates** (saved
+picture setups and puppet templates). Uploading to WordPress is under
+**Download**.
+
+## Making a puppet
+
+A puppet is a character Video Forge can make talk, blink, nod and, from the waist
+up, wave and point. Open **Wizards → Make a puppet**, describe it (or add up to
+three inspiration photos), pick head and shoulders, waist up or full body, and
+choose two engines: one for faces and one for the parts. Pick one of four faces;
+the parts follow, each with at most three tries and a picture checker. Then
+**Send to Video Forge**, **Save zip** or **Save as template**.
+[Step by step, in plain words](https://github.com/Stravelakis/image-forge/blob/master/docs/puppets-eli5.md).
+
+## Hover help and the cursor pet
+
+Hold the mouse over any control and a bubble says what it does. A little violet
+fox runs after your mouse; **Settings → Language & pet** turns it off, or swaps in
+any walk cycle you made. The same page shows the app's language: English now,
+Greek, French, German, Spanish and Portuguese are coming, in simple words.
 
 ## Faster or better pictures
 
@@ -52,14 +96,19 @@ free Mistral key covers writing, code and vision.
 
 ## Keeping your settings safe
 
-The top of **Settings** says when your settings were last saved and checked,
+On the desktop app your keys, settings and list are also kept in a file the app
+owns, locked so only your Windows user can read it, so a busy port or an update
+cannot open the app empty. The top of **Settings** says when your settings were last saved and checked,
 and how many keys are stored (it never shows them). Press **Back up to a
 file** once your keys are in, and keep the file private — it holds the keys.
 
-## Working with BYOK Vid Creator
+## Working with Video Forge
 
-If both apps are installed, the video app can ask Image Forge for pictures,
-such as mouth-shape sheets for its characters. Free requests run by
+If both apps are installed they share keys (Google, OpenRouter, NVIDIA, Mistral,
+Cloudflare, Pollinations, OpenAI, Groq, ElevenLabs, Fish): a key typed into
+either works in both. The Video Forge mark in the header opens that app. Video
+Forge can ask Image Forge for pictures, such as mouth-shape sheets, or order a
+puppet, and the finished puppet appears in Video Forge. Free requests run by
 themselves; anything that costs money still asks you first.
 
 Be aware: free engines often draw one picture when asked for a grid of nine,

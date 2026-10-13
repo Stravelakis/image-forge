@@ -8,7 +8,10 @@ nav_order: 4
 Sprite sheets, talking-avatar mouth shapes, GIFs from a single still, and text
 that sits *on* a surface instead of floating over it.
 
-All of it works on free engines. None of it needs a card.
+All of it works on free engines. None of it needs a card. Everything you make
+lands in **Made**, with a **Redo** on each. Sheets and GIFs live under
+**Wizards → Animate a character**; talking puppets under **Wizards → Make a
+puppet** ([in plain words](puppets-eli5.md)).
 
 ---
 
@@ -78,6 +81,20 @@ you.
 
 Mouths alone do not make a face look alive, which is what the eyes and brows
 sheets are for.
+
+---
+
+## Puppets and the cursor pet
+
+A **puppet** is a character cut into parts so Video Forge can make it talk,
+blink, raise its brows, nod and, from the waist up, wave and point. It is the
+newest kind of character art Image Forge makes; read
+[Making a puppet, in plain words](puppets-eli5.md).
+
+A **walk cycle** from *Animate a character* can also become your **cursor
+pet**: press *Make it my cursor pet*, and that character runs after your mouse
+instead of the built-in violet fox. Settings → Language & pet turns it off or
+brings the fox back.
 
 ---
 
@@ -152,5 +169,6 @@ with a CSV of what happened.
 ## Where to go next
 
 - [Start from nothing](no-code.md)
+- [Make a puppet](puppets-eli5.md)
 - [Let an agent run it](vibe-coding.md)
 - [Every manifest column](manifest.md)

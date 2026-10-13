@@ -5,9 +5,10 @@ nav_order: 6
 
 # For developers: how it is built
 
-React 18 + Vite + TypeScript, with an Electron shell for Windows. No backend,
-no state library. About 20,000 lines of source. Everything durable is a CSV or
-a `localStorage` key.
+React 19 + Vite 8 + TypeScript, with an Electron shell for Windows. No backend,
+no state library. About 28,000 lines of source. Everything durable is a CSV or
+a `localStorage` key, mirrored on the desktop app into a file the app owns
+(the vault).
 
 The full engineering map is
 [HANDOFF.md](https://github.com/Stravelakis/image-forge/blob/master/HANDOFF.md).
@@ -20,7 +21,7 @@ This page is the short version.
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # vitest, 621 tests across 31 files
+npm test           # vitest, 715 tests across 39 files
 npm run typecheck  # tsc --noEmit
 npm run build      # vite build
 ```
@@ -63,6 +64,12 @@ src/
 │  ├─ engines.mjs        ← model registry, routing, generateBytes, 429
 │  │                       rotation, OVH pacing. DOM-free
 │  ├─ providers.ts       settings shape and migration, key pools, text chat
+│  │                       (with fallback to the next text engine that has a key)
+│  ├─ readyEngines.ts    the engines that are set up now — Start's drop-down
+│  ├─ startPlan.ts       one sentence + a number -> N prompts
+│  ├─ sharedKeys.ts      keys shared with Video Forge (page side)
+│  ├─ vault.ts           the page's side of the vault file (page side)
+│  ├─ thumbStore.ts      thumbnails kept between restarts (IndexedDB)
 │  ├─ paidGuard.ts       what a run costs, per row
 │  ├─ testConnection.ts  "does this key actually work?" — real calls
 │  ├─ visionEngine.ts    model lists with provider metadata; NVIDIA routing
@@ -76,13 +83,38 @@ src/
 │  ├─ warp.ts            homography maths for the four-corner text warp
 │  ├─ vectorAssets.ts    SVG + Lottie via a code model, sanitised
 │  ├─ theme.ts           the palette derived from the accent colour
-│  └─ output.ts          folder linking, ZIP, blob helpers
+│  ├─ output.ts          folder linking, ZIP, blob helpers
+│  └─ puppet/            the puppet maker, engine-agnostic
+│     ├─ recipe.ts       looks, framings, the parts and their prompts,
+│     │                   background colour and lips choices
+│     ├─ pixels.ts       pure picture maths: cut a part, key the background
+│     ├─ maker.ts        the run: 4 faces, then parts with <= 3 tries each
+│     ├─ rig.ts          builds Video Forge's rig JSON
+│     ├─ pageIO.ts       the page's engines, the checker, local unload/rest
+│     └─ shelf.ts        orders and puppets on the shared Forge shelf
 ├─ components/           one file per view; ui.tsx is the primitives
+│  ├─ MadeView.tsx       Made: stats, every picture/sheet/GIF/puppet, Redo
+│  ├─ StartView.tsx      the front door
+│  ├─ PuppetMaker.tsx    the puppet maker pop-up
+│  ├─ TipLayer.tsx       the hover-help bubble for the whole window
+│  └─ CursorPet.tsx      the cursor pet (fox, or a walk cycle you made)
 scripts/
 ├─ mcp-server.js         the agent API — 8 tools over stdio
+├─ hoverHelp.mjs         the scanner behind tests/hoverHelp.test.ts
 └─ build-exe.js          vite → electron-builder
-electron/main.js         desktop shell (ESM — never require())
+electron/
+├─ main.js               desktop shell (ESM — never require()); proxies:
+│                          /cf-api, /nv-api, /local-api/<port>
+├─ vault.mjs             everything the page keeps, saved in a file the app owns
+├─ forgeKeys.mjs         keys shared with Video Forge (same file in both repos)
+├─ forgeShelf.mjs        puppet orders and puppets (same file in both repos)
+├─ link.mjs              the link to BYOK Vid Creator
+└─ appctl.mjs            window or browser mode
 ```
+
+The files shared with Video Forge (`forgeKeys.mjs`, `forgeShelf.mjs`,
+`TipLayer.tsx`) are **the same file in both repos**: change one, copy it to the
+other.
 
 ---
 
@@ -127,6 +159,13 @@ in step:
 - `vite.config.js` — `/cf-api` and `/nv-api` for `npm run dev`
 - `electron/main.js` — the same prefixes for the desktop app
 
+A third door, `/local-api/<port>` in `electron/main.js`, forwards to your own
+LocalAI on `127.0.0.1`: LocalAI refuses picture requests that come from a web
+page ("missing csrf token"), so the puppet maker sends them through the app.
+It only reaches `127.0.0.1` and only answers the app's own page. The NVIDIA and
+Cloudflare relay sends bodies with a length over IPv4 (a half-working IPv6
+route once left a request hanging).
+
 Node has no CORS, so the MCP server calls them directly. If "could not reach
 it" appears only in the browser, this is why.
 
@@ -135,7 +174,15 @@ it" appears only in the browser, this is why.
 ## The desktop app
 
 - Fixed ports 47821–47825. Never `listen(0)`: storage is per origin, and a
-  random port was a new empty store every launch.
+  random port was a new empty store every launch. A test copy names its own
+  with `IMAGEFORGE_PORTS=47901,47902` and its own profile with
+  `IMAGEFORGE_USER_DATA`.
+- **The vault.** The page's storage belongs to its address, port included, so a
+  second copy on port 47822 used to come up empty. `electron/vault.mjs` now
+  keeps a full snapshot in a file under userData (locked with Windows' per-user
+  encryption, plain JSON off Windows); `src/lib/vault.ts` copies it into storage
+  before the page reads anything, merges what other ports held, and writes
+  changes back within a couple of seconds. Routes: `GET/PUT /app/vault`.
 - Data lives in `%APPDATA%\image-forge`, named after `package.json` `name`.
   Adding a `productName` would move every user's data. A test forbids it.
 - `main.js` is ESM. `require()` there crashed the Cloudflare and NVIDIA
@@ -158,6 +205,11 @@ Worth knowing:
 - `version.test.ts` — the version is the same in `package.json`, the app and
   the MCP server.
 - `sourceHygiene.test.ts` — no invisible or control characters in source.
+- `hoverHelp.test.ts` — fails on any clickable control without a `data-tip` or
+  `title`. New buttons need one.
+- `puppet.test.ts` — the real puppet code on owl pictures in
+  `tests/fixtures/puppet/`; no engine is called.
+- `vault.test.ts`, `sharedKeys.test.ts` — the real files, in a temp folder.
 
 ---
 

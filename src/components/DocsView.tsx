@@ -5,13 +5,13 @@ import { MODELS } from "../lib/providers";
 import { fsSupported, CATEGORY_FOLDER } from "../lib/output";
 import { Btn, CodeBlock, CopyBtn, IDownload, IFolder, useRevealObserver } from "./ui";
 
-const FULL_SCHEMA = `id,filename,prompt,negative_prompt,note,category,item_id,shop_id,event_id,style,aspect_ratio,width,height,seed,model,status,error,generated_at,imported_attachment_id
-1,shop_blacksmith.png,"Claymation-style medieval blacksmith shop front","text, watermark",,shop,,12,,claymation,16:9,1024,576,41,imagen-4-ultra,pending,,,
-2,item_longsword.png,"Claymation-style fantasy longsword item icon",,,item,543,,,claymation,1:1,768,768,3,flux,pending,,,`;
+const FULL_SCHEMA = `id,filename,prompt,negative_prompt,note,category,kind,style,aspect_ratio,width,height,seed,model,status,error,generated_at
+1,image_potion_shop.png,"Claymation-style potion shop front","text, watermark",,image,,claymation,16:9,1024,576,41,cloudflare-flux,pending,,
+2,image_potion_red.png,"Claymation-style red potion bottle icon",,,image,,claymation,1:1,768,768,3,ovh-sdxl,pending,,`;
 
 const MINIMAL_CSV = `filename,prompt,category,model
-shop_tavern.png,"ramshackle tavern at dusk, foaming tankard sign",shop,imagen-4-ultra
-item_rope.png,"coiled hempen rope item icon on parchment",item,flux`;
+image_tavern.png,"ramshackle tavern at dusk, foaming tankard sign",image,ovh-sdxl
+image_rope.png,"coiled hempen rope icon on parchment",image,cloudflare-flux`;
 
 const COLUMNS: [string, string][] = [
   ["id", "numeric, optional — assigned automatically when missing"],
@@ -19,16 +19,15 @@ const COLUMNS: [string, string][] = [
   ["prompt", "what gets sent to the painter"],
   ["negative_prompt", "what must NOT appear — sent to engines that understand it"],
   ["note", "your margin note · becomes part of the prompt when you redo the picture"],
-  ["category", "shop · item · event · npc — decides the output subfolder"],
-  ["item_id / shop_id / event_id", "optional keys back into your project's data"],
-  ["style", "the visual language, e.g. claymation"],
+  ["category", "image · svg · lottie · sheet · gif — decides the output subfolder"],
+  ["kind", "optional flavour that seasons the prompt"],
+  ["style", "the visual language, e.g. claymation (36 built in, plus your own)"],
   ["aspect_ratio", "16:9 · 1:1 · 9:16 · 4:3 — width/height derive from it"],
   ["seed", "reproducibility seed; 0 lets the engine choose"],
-  ["model", "per-row painter: imagen-4-ultra, imagen-4, flux, turbo, dall-e-3, gpt-image-1 or any endpoint id. Empty = the default engine"],
+  ["model", "per-row painter, e.g. ovh-sdxl, cloudflare-flux, flux, nano-banana-2-lite, gpt-image-1 or any endpoint id. Empty = the default engine"],
   ["status", "pending → generating → done → imported (failed / skipped are side doors)"],
   ["error", "last failure, written by the forge"],
   ["generated_at", "ISO time of the successful strike"],
-  ["imported_attachment_id", "WordPress attachment id, filled by the import"],
 ];
 
 function wpCliScript(rows: ManifestRow[]): string {
@@ -40,11 +39,11 @@ echo "${r.filename},$ATT" >> attachment-ids.csv && \\
 wp post meta update "$ATT" _wp_attachment_image_alt "${r.prompt.slice(0, 100).replace(/"/g, "'")}"`
   );
   return `#!/usr/bin/env bash
-# Run from the folder that contains shops/ items/ events/ npcs/
+# Run from the folder that contains images/ vectors/ lottie/ sheets/ gifs/
 set -euo pipefail
 echo "filename,attachment_id" > attachment-ids.csv
 
-${lines.length ? lines.join("\n\n") : "# no finished rows yet — generate some plates first"}
+${lines.length ? lines.join("\n\n") : "# no finished rows yet — make some pictures first"}
 
 echo "done — feed attachment-ids.csv into your custom SQL table"`;
 }
@@ -75,8 +74,9 @@ export default function DocsView({
         <p className="font-mono text-[11px] tracking-[0.28em] text-ember uppercase">the manual</p>
         <h2 className="mt-2 font-display text-3xl text-cream">Image Forge, documented</h2>
         <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-parch">
-          A standalone, manifest-driven image pipeline. Feed it a CSV, pick painters per row, get organized images out —
-          ready for WordPress, a D&amp;D marketplace, or anything with a media library.
+          Describe what you need, say how many, and get named, sorted pictures — plus sheets, GIFs and talking puppets for Video
+          Forge. Under it all is a spreadsheet you can open any time. Hold the mouse over any control and a small bubble says what it
+          does.
         </p>
       </header>
 
@@ -85,21 +85,97 @@ export default function DocsView({
           <h3 className="font-display text-lg text-cream">01 · Two-minute quickstart</h3>
           <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-[13.5px] leading-relaxed text-parch marker:font-mono marker:text-ember">
             <li>
-              Open <button data-tip="Opens Settings on the Image engines page, where you pick a painter." onClick={onOpenSettings} className="font-mono text-ember underline decoration-ember/40 underline-offset-2">Settings → Image engines</button> and pick a painter.{" "}
-              <span className="font-mono text-moss">flux</span> works instantly with no key;{" "}
-              <span className="font-mono text-lagoon">imagen-4-ultra</span> wants a free Gemini key (add several — rotation is automatic).
+              Open <span className="font-display text-cream">Start</span> (the app opens there). Type what you need, once:{" "}
+              <span className="font-mono text-cream">12 potion bottle icons, cute</span>. A number at the start fills in{" "}
+              <span className="font-display text-cream">How many</span>.
             </li>
-            <li>Press <span className="font-display text-cream">Run queue</span> — pending and failed rows are struck one at a time.</li>
-            <li>Get the files: link an output folder (auto-save), download the ZIP, or save rows one by one.</li>
-            <li>Hand the set to your project — the WP recipe at the bottom does the Media Library step.</li>
+            <li>Pick a <span className="font-display text-cream">Style</span> (optional) and a shape: square, wide or tall.</li>
+            <li>
+              Pick an <span className="font-display text-cream">engine</span> from the drop-down. It lists only engines that are set
+              up; <span className="font-mono text-moss">OVHcloud</span> is always there and needs no key. <em>Add more engines…</em> at
+              the end opens{" "}
+              <button data-tip="Opens Settings on the Image engines page, where you add keys." onClick={onOpenSettings} className="font-mono text-ember underline decoration-ember/40 underline-offset-2">Settings → Image engines</button>.
+            </li>
+            <li>Press the button. Start shows the run in progress, then your last run. <em>See everything in Made →</em> opens the full list.</li>
+            <li>Get the files: link an output folder (auto-save), download the ZIP, or save pictures one by one.</li>
           </ol>
         </li>
 
         <li className="reveal">
-          <h3 className="font-display text-lg text-cream">02 · Feed it your own CSV</h3>
+          <h3 className="font-display text-lg text-cream">02 · Made — everything you have made</h3>
           <p className="mt-2 text-[13.5px] text-parch">
-            Workbench → <span className="font-mono text-cream">Import CSV</span>, or the wizard's prompt factory, or the{" "}
-            <span className="font-mono text-cream">Wizards → Prompt factory</span> AI list writer. Only{" "}
+            <span className="font-mono text-cream">Made</span> (it used to be called Forge) is the home of everything: numbers at the
+            top (made, today, waiting, failed, spent, and a count by engine), then every picture, sheet, GIF and puppet with its exact
+            date, engine and status.
+          </p>
+          <ul className="mt-3 list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed text-parch marker:text-ember">
+            <li><span className="text-cream">Redo</span> remakes one the same way. <span className="text-cream">Redo N marked or failed</span> remakes the marked and the failed together.</li>
+            <li>♥ and ✕ mark what you liked or did not. <span className="text-cream">GIF</span> turns a picture into a short moving one. Click any picture to see it large.</li>
+            <li><span className="text-cream">Edit as a table</span> opens the spreadsheet: every row, every column, CSV in and out.</li>
+            <li>Thumbnails are kept between restarts. For pictures made before that, <span className="text-cream">Find them in my folder</span> looks in your linked folder and brings them back.</li>
+            <li>When pictures are waiting, a <span className="text-cream">Make the N waiting</span> button sits in the header on every page except Made.</li>
+          </ul>
+        </li>
+
+        <li className="reveal">
+          <h3 className="font-display text-lg text-cream">03 · Wizards, Gallery and Templates</h3>
+          <p className="mt-2 text-[13.5px] text-parch">Wizards are four makers:</p>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-[13.5px] leading-relaxed text-parch marker:text-ember">
+            <li><span className="text-cream">Make pictures</span> — three steps: what to make, how it looks, go.</li>
+            <li><span className="text-cream">Make a puppet</span> — a character that talks, blinks and waves (section 04).</li>
+            <li><span className="text-cream">Animate a character</span> — sprite sheets, turnarounds, expressions, mouth shapes, walk cycles.</li>
+            <li><span className="text-cream">Prompt factory</span> — a big list of prompts, copied for Google Sheets or saved as Excel or CSV.</li>
+          </ul>
+          <p className="mt-3 text-[13.5px] text-parch">
+            <span className="text-cream">Gallery</span> holds <em>Everything made</em>, <em>Styles</em> (36 looks plus your own) and{" "}
+            <em>Templates</em>: picture setups saved at the end of the picture wizard, and puppet templates saved with{" "}
+            <em>Save as template</em>, ready to reuse.
+          </p>
+        </li>
+
+        <li className="reveal">
+          <h3 className="font-display text-lg text-cream">04 · Making a puppet</h3>
+          <p className="mt-2 text-[13.5px] text-parch">
+            <span className="text-cream">Wizards → Make a puppet</span> makes a character for Video Forge that talks, blinks, raises its
+            brows, nods and — from the waist up — waves, points and shrugs.
+          </p>
+          <ol className="mt-3 list-decimal space-y-1.5 pl-5 text-[13.5px] leading-relaxed text-parch marker:font-mono marker:text-ember">
+            <li>Describe it in a sentence or two, or add up to three inspiration photos. Pick a look and a framing: head and shoulders, waist up (the default) or full body.</li>
+            <li>Choose its mouth: with lips or no lips (guessed from your description). Optionally add a side-facing view for two characters talking, and a sitting view for full body.</li>
+            <li>Choose two engines: one draws the faces, one makes the parts (the parts need an engine that works from a picture). Your own computer is free; Google costs money and shows the price first.</li>
+            <li>Four faces are drawn and a picture checker marks each. Pick one, or tick <em>Pick the face for me and carry on</em>.</li>
+            <li>The parts are made by editing that same face, each with at most three tries. Then try it live, and press <span className="text-cream">Send to Video Forge</span>, <span className="text-cream">Save zip</span> or <span className="text-cream">Save as template</span>.</li>
+          </ol>
+          <p className="mt-3 text-[13.5px] text-parch">
+            The background colour (magenta, else green, else blue) is chosen to be one the character does not wear, and is cut away
+            afterwards. <span className="text-cream">Delete this puppet</span> asks twice and moves it to{" "}
+            <span className="font-mono text-cream">%APPDATA%\Forge\puppets-deleted</span>, so nothing is erased. Video Forge can also
+            order a puppet and Image Forge opens the maker, filled in. The method in full:{" "}
+            <span className="font-mono text-parch">docs/puppet-recipe.md</span>; in plain words:{" "}
+            <span className="font-mono text-parch">docs/puppets-eli5.md</span>.
+          </p>
+        </li>
+
+        <li className="reveal">
+          <h3 className="font-display text-lg text-cream">05 · Your cursor pet, language and keys</h3>
+          <p className="mt-2 text-[13.5px] text-parch">
+            A little violet fox runs after the mouse, sits when it catches up and naps when you stop.{" "}
+            <span className="text-cream">Settings → Language &amp; pet</span> turns it off. Any walk cycle you make in{" "}
+            <em>Animate a character</em> can take its place with <em>Make it my cursor pet</em>. The same page picks the app&apos;s
+            language: English now; Greek, French, German, Spanish and Portuguese are coming, in simple words.
+          </p>
+          <p className="mt-3 text-[13.5px] text-parch">
+            On the desktop app, your settings and keys are kept in a file the app owns, so a changed port or an update cannot empty
+            them. When Video Forge is installed too, a key typed into either app works in both (Google, OpenRouter, NVIDIA, Mistral,
+            Cloudflare, Pollinations, OpenAI, Groq, ElevenLabs, Fish). A shared key only fills an empty box.
+          </p>
+        </li>
+
+        <li className="reveal">
+          <h3 className="font-display text-lg text-cream">06 · Feed it your own CSV</h3>
+          <p className="mt-2 text-[13.5px] text-parch">
+            In Made, <span className="font-mono text-cream">Edit as a table</span> → <span className="font-mono text-cream">Import CSV</span>, or
+            use <span className="font-mono text-cream">Wizards → Prompt factory</span>. Only{" "}
             <span className="font-mono text-cream">filename</span> is mandatory; everything else gets defaults. Tick{" "}
             <span className="text-ember">forge immediately after import</span> and your CSV becomes images on arrival.
           </p>
@@ -121,7 +197,7 @@ export default function DocsView({
         </li>
 
         <li className="reveal">
-          <h3 className="font-display text-lg text-cream">03 · Painters, key rotation &amp; cooldowns</h3>
+          <h3 className="font-display text-lg text-cream">07 · Painters, key rotation &amp; cooldowns</h3>
           <p className="mt-2 text-[13.5px] text-parch">
             The <span className="font-mono text-cream">model</span> column routes each row to its own painter. When a key
             hits a 429 it rests and the next key retries the same row instantly. Only when the whole pool rests does the
@@ -152,7 +228,7 @@ export default function DocsView({
         </li>
 
         <li className="reveal">
-          <h3 className="font-display text-lg text-cream">04 · Getting the files out</h3>
+          <h3 className="font-display text-lg text-cream">08 · Getting the files out</h3>
           <div className="mt-3 grid gap-2.5 sm:grid-cols-3">
             <div className="plaque rounded-xl p-4">
               <p className="flex items-center gap-2 font-mono text-[10px] tracking-[0.2em] text-moss uppercase"><IFolder size={12} /> linked folder</p>
@@ -170,15 +246,15 @@ export default function DocsView({
             </div>
             <div className="plaque rounded-xl p-4">
               <p className="font-mono text-[10px] tracking-[0.2em] text-ember uppercase">row by row</p>
-              <p className="mt-2 text-[12px] leading-relaxed text-parch">Every row drawer has <span className="text-cream">Save picture</span> for reviewing single plates.</p>
+              <p className="mt-2 text-[12px] leading-relaxed text-parch">Every picture in Made can be saved on its own, and the header&apos;s <span className="text-cream">Download</span> menu also has the manifest as CSV or a spreadsheet.</p>
             </div>
           </div>
         </li>
 
         <li className="reveal">
-          <h3 className="font-display text-lg text-cream">05 · The WordPress hand-off</h3>
+          <h3 className="font-display text-lg text-cream">09 · The WordPress hand-off</h3>
           <p className="mt-2 text-[13.5px] text-parch">
-            Two ways: <span className="text-cream">Wizards → Import to WordPress</span> uploads for real with an
+            Two ways: <span className="text-cream">Download → Upload to WordPress</span> uploads for real with an
             application password (attachment ids come straight back into the manifest), or this script — generated live
             from your current manifest — does it with WP-CLI so Imagify optimizes everything:
           </p>
@@ -187,13 +263,15 @@ export default function DocsView({
         </li>
 
         <li className="reveal">
-          <h3 className="font-display text-lg text-cream">06 · Troubleshooting</h3>
+          <h3 className="font-display text-lg text-cream">10 · Troubleshooting</h3>
           <div className="mt-3 space-y-2.5">
             {[
               ["“Link folder” does nothing", "Folder access needs Chrome or Edge, a secure context (https/localhost) and a normal browser tab — sandboxed previews block it. The exact reason shows in Settings → Folders, and the ZIP always works."],
-              ["Every Imagen row parks for 24h", "You used today's free quota on that key. Add another Gemini key — rotation is automatic and each key brings its own ≈25/day per model."],
+              ["A row says failed", "Open it in Made and read the red note, then press Redo. A busy engine rests and retries by itself; Redo N marked or failed redoes every failed one at once."],
+              ["Every key is resting", "You used today's free allowance on that engine. Add another key, or pick a different engine from Start's drop-down."],
               ["Pollinations is slow", "Normal — free plates take 5–40s. Use turbo, or start the queue and make tea."],
-              ["Images vanish after a reload", "Plates live in session memory; the manifest text persists. Sync to a folder or ZIP before closing a big session."],
+              ["The chat says its writing engine is busy", "With more than one text account set up, the next one with a key answers instead. If none has a key, add one in Settings → Text engines."],
+              ["My keys or settings look empty", "On the desktop app they are kept in a file the app owns, so a changed port or an update should not empty them. If they are gone anyway, press Restore in Settings with your backup file."],
               ["My endpoint gives CORS errors", "Your server must allow the forge's origin — or run the same recipe as a local script; the CSV contract is identical."],
             ].map(([q, a]) => (
               <details key={q} className="group rounded-xl border border-line bg-panel/40 px-4 py-3 open:border-line2">

@@ -1,8 +1,9 @@
 ## Stack
 
-React 18 + Vite + TypeScript, packaged with Electron for Windows. No backend,
-no state library, ~20k lines. Everything durable is a CSV or a `localStorage`
-key. 672 tests (vitest) run in CI on every push with typecheck and build.
+React 19 + Vite 8 + TypeScript 7, packaged with Electron for Windows. No backend,
+no state library, ~28k lines. Everything durable is a CSV or a `localStorage`
+key, mirrored on desktop into a file the app owns (the vault). 715 tests across
+39 files (vitest) run in CI on every push with typecheck and build.
 
 ```bash
 npm install
@@ -45,9 +46,27 @@ rest silently.
 | `nano-banana*` | Google | paid | JPEG only; `429` may mean "no prepay balance" |
 | `gpt-image-1`, `dall-e-3` | OpenAI-compatible | paid | |
 
+## Layout, 13 Oct 2026 round
+
+| Path | Owns |
+|---|---|
+| `src/components/StartView.tsx`, `lib/startPlan.ts`, `lib/readyEngines.ts` | Start: one sentence + N, style, shape, engine drop-down of ready engines |
+| `src/components/MadeView.tsx`, `lib/thumbStore.ts` | Made: stats, every row/puppet, Redo; thumbnails in IndexedDB; rows carry `made_with` |
+| `src/lib/puppet/` (`recipe`, `pixels`, `maker`, `rig`, `pageIO`, `shelf`) + `components/PuppetMaker.tsx` | the puppet maker; engine-agnostic (`generate`, `judge` injected). Method: `docs/puppet-recipe.md` |
+| `electron/vault.mjs` + `src/lib/vault.ts` | all page storage mirrored to a DPAPI-locked file; page loads it first, merges other ports' boxes |
+| `electron/forgeKeys.mjs` + `src/lib/sharedKeys.ts` | keys shared with Video Forge: gemini, openrouter, nvidia, mistral, cloudflare-account/-token, pollinations, openai, groq, elevenlabs, fish. A shared key only fills an empty box |
+| `electron/forgeShelf.mjs` | puppet orders and puppets under `%APPDATA%\Forge\` (same file in Video Forge) |
+| `src/components/TipLayer.tsx` | the hover bubble for the window (`data-tip`, `data-tip-more`, or `title`); `tests/hoverHelp.test.ts` fails on a naked control |
+| `src/components/CursorPet.tsx` | the cursor pet; a walk cycle can replace it |
+| `electron/main.js` | adds `/local-api/<port>` (LocalAI refuses page requests: CSRF), `/app/vault`, `/app/keys`, `/app/video-forge`, `/app/orders`, `/app/puppets`; test copies use `IMAGEFORGE_PORTS` and `IMAGEFORGE_USER_DATA` |
+
+Text jobs: `scribeChat` falls back to the next provider with a key on 429, 5xx or
+a retired model (`setTextFallbacks`, `pickTextModel`). The Cloudflare/NVIDIA relay
+sends a `Content-Length` body over IPv4.
+
 ## The link to BYOK Vid Creator
 
-Two apps, not a merge. The desktop main process (`electron/link.mjs`) owns a
+Two apps, not a merge. (Now also shared: keys and the puppet shelf, above.) The desktop main process (`electron/link.mjs`) owns a
 folder under `userData`:
 
 ```

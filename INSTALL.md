@@ -82,7 +82,9 @@ In the app, **Settings → Advanced**:
   separates duplicate filenames, moves rows off models a provider switched
   off, and clears expired cooldowns. Your data is kept.
 - **Reset** — tick exactly what to wipe (manifest, recipes and batches,
-  settings and keys). Press **Download backup first**. It asks twice.
+  settings and keys). Press **Download backup first**. It asks twice. On the
+  desktop app it also clears the copy kept in the app's own vault file, so what
+  you wipe stays wiped.
 
 ---
 

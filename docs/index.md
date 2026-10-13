@@ -26,6 +26,7 @@ No code and no terminal. Words like "API key" are explained the first time.
 | [Download and install](download.md) | You are on Windows and want to double-click something. |
 | [Your first pictures](no-code.md) | You want to make pictures and have never set up an engine. |
 | [Sheets, GIFs and lettering](creators.md) | You want sprite sheets, talking avatars, GIFs and text on surfaces. |
+| [Making a puppet, in plain words](puppets-eli5.md) | You want a talking cartoon character for Video Forge and no jargon. |
 
 ### For vibe coders
 
@@ -38,6 +39,7 @@ No code and no terminal. Words like "API key" are explained the first time.
 | Guide | For you if |
 |---|---|
 | [How it is built](developers.md) | You want the architecture, how to add an engine, and how to release. |
+| [The puppet recipe](puppet-recipe.md) | You want the method behind the puppet maker, and every failure that shaped it. |
 
 ---
 
@@ -53,11 +55,16 @@ No code and no terminal. Words like "API key" are explained the first time.
 
 ## The idea in one paragraph
 
-The unit of work is a **spreadsheet row**. One row is one picture: a filename,
-a prompt, a shape, a seed, and which engine should paint it. You fill in rows
-— by hand, from a CSV, with a wizard, by asking the chat, or by letting an
-agent do it — and press **Run queue**. Images come out named and sorted into
-folders, and the CSV records what happened to each one. Anything that can
+The front door is **Start**: describe what you need once, say how many, pick a
+style and an engine, press the button. Everything that comes out lands in
+**Made**, with its date, engine and status, a Redo on each, and the numbers at
+the top.
+
+Underneath, the unit of work is a **spreadsheet row**. One row is one picture:
+a filename, a prompt, a shape, a seed, and which engine should paint it. You
+fill in rows — from Start, from a CSV, with a wizard, by asking the chat, or by
+letting an agent do it. Images come out named and sorted into folders, and the
+CSV records what happened to each one. Anything that can
 read and write that CSV is a first-class citizen of the project.
 
 ---

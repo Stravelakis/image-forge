@@ -2,8 +2,10 @@
 
 > **Read this before touching anything.** It maps every subsystem, explains the
 > non-obvious decisions, and ends with recipes for the changes you are most
-> likely to make. True as of **25 September 2026, version 1.0.2**. If this file
-> and the code disagree, the code wins — then fix this file.
+> likely to make. True as of **13 October 2026**, package version **1.0.4**
+> plus the unreleased `forge-twins` work (Made, puppet maker, vault, shared keys,
+> hover help, cursor pet — see CHANGELOG `[Unreleased]`). 715 tests in 39 files.
+> If this file and the code disagree, the code wins — then fix this file.
 
 Also read: **[STANDARDS.md](STANDARDS.md)** (what "done" means here, and how
 this repo applies the owner's shared repo standards),
@@ -35,7 +37,7 @@ the UI; all three share `src/lib/engines.mjs`.
 ```bash
 npm install
 npm run dev                 # browser app → http://localhost:3000
-npm test                    # vitest — 672 tests across 34 files
+npm test                    # vitest — 715 tests across 39 files
 npm run typecheck           # tsc --noEmit (vite build does NOT typecheck)
 npm run build               # vite build → dist/
 node scripts/build-exe.js   # Electron installer + portable → release/
@@ -84,8 +86,11 @@ so those browser-refusing providers fail there.
 ```
 
 The UI is a view switch rendered by `App.tsx`, with a top menu
-(`TopMenu.tsx`): Start, Forge, Chat, Wizards, Gallery, Docs, Settings. The app
-opens on **Start** (`components/StartView.tsx`).
+(`TopMenu.tsx`): Start, **Made**, Chat, Wizards (Make pictures, Make a puppet,
+Animate a character, Prompt factory), Gallery (Everything made, Styles,
+Templates), Docs (the manual, Agents & API), Settings. The app opens on
+**Start** (`components/StartView.tsx`). The old Forge tab is Made
+(`MadeView.tsx`), with the spreadsheet behind "Edit as a table".
 
 ---
 
@@ -115,6 +120,15 @@ opens on **Start** (`components/StartView.tsx`).
 | `components/ui.tsx` | primitives | inline SVG icons, `Btn`, `Lightbox` |
 | `lib/startPlan.ts` + `components/StartView.tsx` | the Start screen | one sentence + a number → N prompts: the text engine writes them if set up, otherwise built-in framings; says which |
 | `lib/link.ts` + `electron/link.mjs` | the link to BYOK Vid Creator | see §14.2 — validation lives only in `link.mjs` |
+| `components/MadeView.tsx` + `lib/thumbStore.ts` | Made | stats, every picture/sheet/GIF/puppet, Redo, "Redo N marked or failed"; thumbnails in IndexedDB; rows record `made_with` |
+| `lib/readyEngines.ts` | Start's engine drop-down | only engines that will work now; each choice is a settings patch |
+| `lib/puppet/` (`recipe`, `pixels`, `maker`, `rig`, `pageIO`, `shelf`) + `components/PuppetMaker.tsx` | the puppet maker | see "The puppet maker" in §9 and `docs/puppet-recipe.md` |
+| `lib/sharedKeys.ts` + `electron/forgeKeys.mjs` | keys shared with Video Forge | DPAPI file `%APPDATA%\Forge\shared-keys.bin`; a shared key only fills an empty box |
+| `lib/vault.ts` + `electron/vault.mjs` | the vault | page storage mirrored to a file the app owns; loaded first; other ports' boxes merged once; `flushVault()` before a reset |
+| `electron/forgeShelf.mjs` + `lib/puppet/shelf.ts` | puppet orders and puppets | `%APPDATA%\Forge\` — same file as Video Forge's |
+| `components/TipLayer.tsx` | hover help | `data-tip` / `data-tip-more` / `title`; `tests/hoverHelp.test.ts` + `scripts/hoverHelp.mjs` fail on any naked control. Same file in Video Forge |
+| `components/CursorPet.tsx` | the cursor pet | built-in fox, or a walk cycle from `SheetMaker.tsx` ("Make it my cursor pet") |
+| `components/AgentsView.tsx`, `DocsView.tsx` | the in-app Docs and Agents pages | must match `scripts/mcp-server.js` (8 tools) and the real menus |
 | `electron/main.js` | desktop shell | see §9 |
 | `scripts/build-exe.js` + `build/installer.nsh` | packaging | see §9 |
 
@@ -248,7 +262,21 @@ signtool" even so; `Get-AuthenticodeSignature` reports `NotSigned`.
 - **Look** — `src/components/SparkField.tsx` (copied from Video Forge), root
   is `bg-black isolate`, marks in `src/assets/`, styles `.forge-twin` at the
   end of `index.css`.
-- **Test copy** — `IMAGEFORGE_USER_DATA=<folder>` runs on a separate profile.
+- **Test copy** — `IMAGEFORGE_USER_DATA=<folder>` runs on a separate profile;
+  `IMAGEFORGE_PORTS=47901,47902` gives it its own ports so it cannot meet the
+  installed copy.
+- **The vault (13 Oct)** — `electron/vault.mjs` keeps a full snapshot of the
+  page's storage in `<userData>/vault.bin` (DPAPI-locked; plain `vault.json` off
+  Windows), plus `vault-harvest-<port>.bin` of what other ports' boxes held.
+  `src/lib/vault.ts` loads it before anything reads storage, merges the harvest
+  (lists joined, empty settings filled, nothing overwritten) and writes changes
+  back within a couple of seconds. Routes `GET/PUT /app/vault`,
+  `POST /app/vault/harvested`. Reset calls `flushVault()` first or the reload
+  would bring everything back.
+- **Shared keys now cover** gemini, openrouter, nvidia, mistral,
+  cloudflare-account/-token, pollinations, openai, groq, elevenlabs, fish
+  (`SHARED_NAMES` in `forgeKeys.mjs`; `keysFromSettings` in `sharedKeys.ts` maps
+  the page's settings onto them).
 
 ### The 13 October round
 
@@ -517,4 +545,4 @@ step.
 
 ## Next round (13 Oct 2026)
 
-The full review and work list for both forges lives in Video Forge's `docs/FORGES-PLAN.md` (private repo). Top item for this app: settings and keys must move out of the page storage (it is tied to the port, so a second copy opens with an empty box).
+The full review and work list for both forges lives in Video Forge's `docs/FORGES-PLAN.md` (private repo). Done since this note was written: settings and keys moved out of the page storage into the vault file (§9), and the docs were brought up to date (README, GUIDE, `docs/`, the site's three levels, the in-app Docs/Agents pages and `appFacts.ts`). Still to do: translations (Settings → Language & pet lists them as coming), and keeping `appFacts.ts` in step with the app each time a menu or button changes.

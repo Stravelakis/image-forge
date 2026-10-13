@@ -37,12 +37,17 @@ The app opens here.
 
 ![The Start screen](site/public/screens/start.png)
 
-1. **What do you need?** — describe it: *"12 potion bottle icons, cute"*.
+1. **What do you need?** — describe it once: *"12 potion bottle icons, cute"*.
 2. **How many** — filled in from a number at the start of your sentence, or
    set it yourself (up to 60).
-3. **Look** — optional. Your starred looks come first.
+3. **Style** — optional. The word *Style* is a link to the Styles page; your
+   starred looks come first.
 4. **Shape** — square, wide or tall.
-5. Press **Make**.
+5. **Engine** — a drop-down of the engines that are set up and ready right now
+   (your own computer's models by name, OVHcloud, Cloudflare, Pollinations,
+   Google, OpenAI-compatible). The last choice, **Add more engines…**, opens
+   Settings → Image engines.
+6. Press the button.
 
 The line next to the button says which engine will draw them and whether it
 costs money. With nothing set up it is **OVHcloud**: free, no key, two
@@ -54,20 +59,38 @@ pictures a minute, always square.
 genuinely different prompt for each picture. Without one it varies the
 framing — close-up, from above, evening light — and says so under the button.
 
-Click any finished picture to see it full size.
+Click any finished picture to see it full size. Start keeps the run that is
+in progress and your last run under the box, and **See everything in Made →**
+at the bottom leads to the full list.
 
 ---
 
-## 4. The spreadsheet — the Forge
+## 4. Made — everything you have made
 
-Everything you make is a **row** in a list called the **manifest**. **Forge**
-in the top menu shows it.
+**Made** in the top menu (it used to be called Forge) shows the numbers first:
+made, today, waiting, failed, spent, and a count by engine. Below them is every
+picture, sheet, GIF and puppet, each with its exact date, engine and status.
 
 ![The Forge](site/public/screens/forge.png)
 
-One row is one picture: a filename, a prompt (the description), a look, a
-shape, and optionally which engine should draw it. You can add rows, import a
-CSV, edit any row, and press **Run queue** to make everything still pending.
+*(The screenshot above is the spreadsheet view, now behind **Edit as a table**.)*
+
+- **Redo** on a picture makes it again, the same way. **Redo N marked or
+  failed** at the top remakes every marked and every failed one together.
+- **♥** and **✕** mark what you liked or did not; the filter chips show only
+  pictures, sheets, GIFs or puppets.
+- **GIF** turns a picture into a short moving one. Click any picture to zoom.
+- **Edit as a table** opens the spreadsheet: every row and column, import and
+  export CSV, **Run queue**.
+- Thumbnails are kept between restarts. For pictures made before that, **Find
+  them in my folder** looks in your linked folder and brings them back.
+- When something is waiting, the header shows one **Make the N waiting**
+  button (everywhere except Made).
+
+Under the pictures is a list called the **manifest**. One row is one picture: a
+filename, a prompt (the description), a look, a shape, and optionally which
+engine should draw it. You can add rows, import a CSV and edit any row in the
+table.
 
 A row goes **pending → generating → done**, or **failed** with a plain-words
 reason. Rows that hit an engine's daily limit wait and retry by themselves.
@@ -77,8 +100,13 @@ Two always apply: no characters Windows refuses, and no two rows with the same
 name. A file's ending follows what the engine actually returned — Google and
 Cloudflare send JPEG, so those files end in `.jpg`.
 
-The **Wizard** (under **Wizards**) sets up a whole batch one question at a
-time, if you prefer being walked through it.
+**Wizards** are four makers, if you prefer being walked through it:
+
+- **Make pictures** — three steps: what to make, how it looks, go.
+- **Make a puppet** — a talking character for Video Forge (section 9).
+- **Animate a character** — sprite sheets, turnarounds, expressions, mouth shapes.
+- **Prompt factory** — a huge list of prompts, copied for Google Sheets or saved
+  as Excel or CSV.
 
 ---
 
@@ -90,7 +118,9 @@ Pictures live inside the app until you take them out. Three ways:
   there as it finishes, sorted into `images/`, `vectors/`, `lottie/`,
   `sheets/` and `gifs/`. Point it at a OneDrive or Google Drive folder for free
   cloud backup.
-- **Download** → ZIP — every picture in its folder, plus the list as a CSV.
+- **Download** (top bar) → ZIP of every picture in its folder plus the list as
+  a CSV; the list alone as CSV or a spreadsheet; or **Upload to WordPress**
+  straight into your media library.
 - **Save picture** — one at a time, from its row.
 
 ---
@@ -133,6 +163,11 @@ In **Settings → Text engines**, add an account once under **Your accounts**
 **Load its models**, then pick a model for each job. One free Mistral key
 covers all three.
 
+If a writing job has no key of its own, the app takes a provider that has one.
+When a text engine is busy (429) or its model has been retired, the next engine
+with a key answers instead. NVIDIA and Cloudflare go through a small relay that
+the app runs for you.
+
 **Chat** in the top menu lets you ask for a picture in your own words, write a
 whole list of rows at once, change rows you already have (you see every
 change before it is applied), or ask how the app works.
@@ -145,6 +180,8 @@ change before it is applied), or ask how the app works.
 
 - **Looks** (Gallery → Styles) — 36 styles in six families. Star the ones you
   use. A few need readable words and are limited to models that can spell.
+- **Templates** (Gallery → Templates) — picture setups saved at the end of the
+  picture wizard, and puppet templates saved with *Save as template*.
 - **Sheets** — sets of frames of one character: walk cycles, turnarounds,
   expressions, and **visemes** (mouth shapes for a talking avatar). Each frame
   gets its own seed and a "change only this" instruction.
@@ -153,14 +190,36 @@ change before it is applied), or ask how the app works.
   four corners so it sits on a sign or a wall.
 - **Vectors** — SVG and Lottie written by the code engine, cleaned of
   anything unsafe before they are shown or saved.
+- **Hover help** — hold the mouse over any button, field or link and a small
+  bubble says what it does. Some end with a *More about this* link.
+- **Cursor pet** — a violet fox runs after your mouse, sits when it catches up
+  and naps when you stop. **Settings → Language & pet** turns it off. Make a
+  walk cycle in *Animate a character* and press *Make it my cursor pet* to use
+  that character instead.
+- **Language** — English now; Greek, French, German, Spanish and Portuguese are
+  coming, in simple words (Settings → Language & pet).
 
 ---
 
-## 9. Working with BYOK Vid Creator
+## 9. Working with Video Forge (BYOK Vid Creator)
 
-If both apps are installed on the same computer, **BYOK Vid Creator can ask
-Image Forge for pictures** — for example mouth-shape sheets for its talking
-characters:
+If both apps are installed on the same computer they recognise each other.
+
+- **Shared keys.** A key typed into either app works in both: Google,
+  OpenRouter, NVIDIA, Mistral, Cloudflare, Pollinations, OpenAI, Groq,
+  ElevenLabs and Fish. A shared key only fills an empty box; it never replaces
+  one you typed. Windows only.
+- **The twin switch.** The Video Forge mark in the header opens that app. It is
+  hidden when Video Forge is not installed.
+- **Puppets.** *Make a puppet* makes a character that talks, blinks, raises its
+  brows, nods and waves, and **Send to Video Forge** puts it on the shared
+  shelf (`%APPDATA%\Forge\puppets`). Video Forge can also **order** a puppet
+  (Cast → Look → *Order a new puppet…*): Image Forge notices within about 20
+  seconds and opens the puppet maker filled in. In plain words:
+  [docs/puppets-eli5.md](docs/puppets-eli5.md). The method:
+  [docs/puppet-recipe.md](docs/puppet-recipe.md).
+- **Pictures on request.** Video Forge can ask for mouth-shape sheets and the
+  like:
 
 ```bash
 npm run ask-forge -- visemes kaiti --sheets viseme-sheets-v2
@@ -170,9 +229,8 @@ npm run ask-forge -- visemes kaiti --sheets viseme-sheets-v2
 
 - Image Forge does not need to be open when asked; the request waits in its
   inbox until it is.
-- Requests on free engines start by themselves and appear in the Forge with
-  the note *"asked for by BYOK Vid Creator"*. Paid ones stop at the usual
-  dialog.
+- Requests on free engines start by themselves and appear in Made with the note
+  *"asked for by BYOK Vid Creator"*. Paid ones stop at the usual dialog.
 - Your keys never leave Image Forge.
 - **Check sheets by eye.** Free engines often draw one picture when asked for
   a grid of nine panels; the tools say so every time. A Google model follows
@@ -207,6 +265,8 @@ pictures are not touched.
 | "Every key is resting" | The engine hit its limit; rows retry by themselves |
 | Google: "prepayment credits are depleted" | The account has no picture balance — the key check says which fix you need |
 | Settings say "NOT saved" | Press **Back up to a file** before closing |
+| Keys or settings look empty on the desktop app | They are kept in a file the app owns, so a changed port cannot empty them; press **Restore** with your backup if they are gone anyway |
+| A puppet part is marked unsure or missing | Press *Try the unsure/missing again*; the puppet works without a missing part |
 | "Could not read your manifest" | Nothing was overwritten; the original is kept aside. Press **Try again**, or restore a backup |
 | Text in a picture is gibberish | Most engines cannot spell; use a Google model or the Letterer |
 | Everything feels off | **Settings → Advanced → Run repair** |
