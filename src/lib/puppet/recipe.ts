@@ -13,7 +13,30 @@
  * lands back where it came from, so nothing has to be lined up by hand.
  */
 
-export type PuppetFraming = "head" | "waist";
+/** head: face and shoulders · waist: waist up, with arms · full: head to feet,
+ *  standing (legs do not move, but they are there — Ak, 13 Oct 2026). */
+export type PuppetFraming = "head" | "waist" | "full";
+
+/**
+ * OTHER VIEWS of the same puppet (13 Oct 2026), each a whole second set of
+ * parts made from an edit of the finished front picture:
+ *  · side — turned three-quarters, for two characters talking to each other
+ *    ("too many animated videos have 2 people talking", Ak). Facing the
+ *    viewer's left; Video Forge mirrors it for the other side.
+ *  · sit — the same character sitting, full-body puppets only.
+ */
+export type PuppetViewId = "side" | "sit";
+export const VIEW_EDITS: Record<PuppetViewId, string> = {
+  side:
+    "Edit this picture: turn the character to a three-quarter view — the head and body turned about 35 degrees towards the viewer's left, eyes looking towards the viewer's left too, as if talking to someone standing there. The same character at the same size and position, the same face, clothes, colours and style, mouth closed, the same flat background.",
+  sit:
+    "Edit this picture: the same character now SITTING on a simple plain wooden stool, seen from the front, full body from head to feet, hands resting on the knees, facing the viewer, mouth closed. The same face, clothes, colours, style and the same flat background; the head about the same size as before.",
+};
+/** The parts a view gets: enough to talk, blink and react — fewer than the front. */
+export const VIEW_PARTS: Record<PuppetViewId, string[]> = {
+  side: ["lid_closed", "lid_half", "mouth_AH", "mouth_EE", "mouth_OH", "mouth_OO", "mouth_FV", "mouth_L", "mouth_halfAH", "mouth_halfOH", "mouth_halfEE", "mouth_SMILE", "brow_happy", "brow_raised", "arms_explain", "arms_point"],
+  sit: ["lid_closed", "lid_half", "mouth_AH", "mouth_EE", "mouth_OH", "mouth_OO", "mouth_FV", "mouth_L", "mouth_halfAH", "mouth_halfOH", "mouth_halfEE", "mouth_SMILE", "brow_happy", "brow_raised", "arms_explain"],
+};
 
 export interface PuppetStyle {
   id: string;
@@ -123,7 +146,9 @@ export function basePrompt(o: { description: string; style: string; framing: Pup
   const style = styleById(o.style);
   const look = o.look ?? DEFAULT_LOOK;
   const frame =
-    o.framing === "waist"
+    o.framing === "full"
+      ? "FULL BODY from the top of the head to the feet, standing, facing the viewer, both arms relaxed at the sides, both feet on the ground, with empty space all around — above the head, beside the hands and below the feet. The head is in the top quarter of the picture."
+      : o.framing === "waist"
       ? "Shown from the waist up, facing the viewer, BOTH ARMS AND BOTH HANDS fully visible and relaxed at the sides, with generous empty space on both sides and above the head so a raised hand would still fit inside the picture. The head sits in the upper third."
       : "Head, neck and shoulders only, filling the frame, with generous headroom so the top of the head (and any ears or hair) is well clear of the top edge.";
   return [
@@ -228,7 +253,7 @@ export const PUPPET_PARTS: PuppetPart[] = [
 ];
 
 export const partsFor = (framing: PuppetFraming): PuppetPart[] =>
-  PUPPET_PARTS.filter((p) => framing === "waist" || !p.waistOnly);
+  PUPPET_PARTS.filter((p) => framing !== "head" || !p.waistOnly);
 
 /** Added after every edit's own instruction. */
 export const keepFor = (look: PuppetLook = DEFAULT_LOOK) =>
@@ -245,6 +270,8 @@ export const editPrompt = (part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): s
  */
 export function bandFor(kind: PartKind, framing: PuppetFraming): [number, number] {
   if (framing === "head") return { mouth: [0.42, 1], lid: [0.2, 0.7], brow: [0.12, 0.62], arms: [0, 1] }[kind] as [number, number];
+  // Full body: the face is small and near the top.
+  if (framing === "full") return { mouth: [0.06, 0.34], lid: [0.02, 0.28], brow: [0.0, 0.26], arms: [0, 1] }[kind] as [number, number];
   return { mouth: [0.12, 0.62], lid: [0.04, 0.48], brow: [0.02, 0.45], arms: [0, 1] }[kind] as [number, number];
 }
 

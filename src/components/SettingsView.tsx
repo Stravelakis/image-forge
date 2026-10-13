@@ -1,3 +1,4 @@
+import { loadPet, savePet, type PetChoice } from "./CursorPet";
 import { useRef, useState, useEffect } from "react";
 import DesktopModeCard from "./DesktopModeCard";
 import type { ManifestRow, Toast } from "../types";
@@ -51,7 +52,7 @@ const SECTIONS: { id: SettingsSection; label: string; hint: string }[] = [
   { id: "filenames", label: "Filenames", hint: "the rules" },
   { id: "folders", label: "Folders", hint: "where files go" },
   { id: "wp", label: "WP connections", hint: "the hand-off" },
-  { id: "appearance", label: "Language", hint: "the app's own words" },
+  { id: "appearance", label: "Language & pet", hint: "the app's words, your cursor pet" },
   { id: "advanced", label: "Advanced", hint: "care & updates" },
 ];
 
@@ -1460,6 +1461,7 @@ export default function SettingsView({
                 </div>
               ))}
             </div>
+            <PetCard />
           </>
         )}
 
@@ -1654,6 +1656,45 @@ export default function SettingsView({
               </p>
             </div>
           </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** The cursor pet: on or off, the built-in fox or a walk cycle you made. */
+function PetCard() {
+  const [pet, setPet] = useState<PetChoice>(loadPet);
+  const set = (p: PetChoice) => {
+    savePet(p);
+    setPet(p);
+  };
+  return (
+    <div className="mt-8 max-w-xl">
+      <H>Your cursor pet</H>
+      <p className="mt-1 text-[13px] text-parch">
+        A little creature that runs after your mouse, sits when it catches up and naps if you stop. Make your own with
+        Wizards → Animate a character → Walk cycle → “Make it my cursor pet”.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          data-tip="Show the pet."
+          onClick={() => set({ ...pet, on: true })}
+          className={`btn-press rounded-lg border px-4 py-2 text-[13px] ${pet.on ? "border-ember/60 bg-ember/15 text-cream" : "border-line text-parch"}`}
+        >
+          On
+        </button>
+        <button
+          data-tip="No pet."
+          onClick={() => set({ ...pet, on: false })}
+          className={`btn-press rounded-lg border px-4 py-2 text-[13px] ${!pet.on ? "border-ember/60 bg-ember/15 text-cream" : "border-line text-parch"}`}
+        >
+          Off
+        </button>
+        {pet.custom && (
+          <button data-tip={`Go back to the little fox instead of ${pet.custom.name}.`} onClick={() => set({ on: true })} className="btn-press rounded-lg border border-line px-4 py-2 text-[13px] text-parch">
+            Back to the fox (now: {pet.custom.name})
+          </button>
         )}
       </div>
     </div>

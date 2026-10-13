@@ -30,7 +30,7 @@ export const DEFAULT_SETUP: BatchSetup = {
 export interface PuppetTemplate {
   description: string;
   style: string;
-  framing: "head" | "waist";
+  framing: "head" | "waist" | "full";
   faceEngine: string;
   partEngine: string;
 }

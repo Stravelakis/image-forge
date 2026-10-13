@@ -17,7 +17,7 @@
  * test passes stand-ins; a headless overnight run could pass anything.
  */
 import { composite, crop, cutPart, resize, sideBySide, type Box, type Img } from "./pixels";
-import { BASE_NEGATIVE, DEFAULT_LOOK, EDIT_NEGATIVE, basePrompt, editPrompt, partsFor, type PuppetFraming, type PuppetLook, type PuppetPart } from "./recipe";
+import { BASE_NEGATIVE, DEFAULT_LOOK, EDIT_NEGATIVE, VIEW_EDITS, basePrompt, editPrompt, partsFor, type PuppetFraming, type PuppetLook, type PuppetPart, type PuppetViewId } from "./recipe";
 import type { CutPart } from "./rig";
 
 export interface Verdict {
@@ -81,7 +81,11 @@ export function baseQuestion(framing: PuppetFraming, look: PuppetLook = DEFAULT_
     "the face, eyes and ears are fully inside the picture (a hat or hair touching the top edge is fine);",
     `the background is one flat plain colour, and none of that colour shows on the character itself;`,
     look.lips ? "the mouth has drawn lips;" : "the mouth has no separate drawn lips;",
-    framing === "waist" ? "both arms and both hands are visible." : "head and shoulders are shown.",
+    framing === "full"
+      ? "the whole body from head to feet is visible, both arms and both hands too."
+      : framing === "waist"
+      ? "both arms and both hands are visible."
+      : "head and shoulders are shown.",
   ].join(" ");
 }
 
@@ -103,6 +107,30 @@ export async function makeBaseOptions(req: BaseRequest, io: MakerIO, onEvent: (e
     onEvent({ type: "base", index: i, picture, verdict });
   }
   return out;
+}
+
+/**
+ * A VIEW's own starting picture: the finished front picture, edited (turned to
+ * the side, or sat down). Up to `tries` attempts; the checker, when there is
+ * one, must agree it is still one clean character on a flat background.
+ */
+export async function makeViewBase(
+  o: { base: Img; view: PuppetViewId; framing: PuppetFraming; look?: PuppetLook; tries?: number },
+  io: MakerIO,
+  signal?: AbortSignal
+): Promise<Img | null> {
+  const framing: PuppetFraming = o.view === "sit" ? "full" : o.framing;
+  for (let t = 1; t <= (o.tries ?? 3); t++) {
+    if (signal?.aborted) throw new DOMException("stopped", "AbortError");
+    const pic = resize(
+      await io.generate({ prompt: `${VIEW_EDITS[o.view]}\n\nNever draw letters or extra characters.`, negative: BASE_NEGATIVE, refs: [o.base], seed: seedFor(900 + t), width: o.base.width, height: o.base.height }, signal),
+      o.base.width,
+      o.base.height
+    );
+    const verdict = io.judge ? await io.judge(baseQuestion(framing, o.look), shrink(pic, 512), signal).catch(() => null) : null;
+    if (!verdict || verdict.ok) return pic;
+  }
+  return null;
 }
 
 /* ---------------- 2. the parts ---------------- */

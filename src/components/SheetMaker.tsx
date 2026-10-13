@@ -19,6 +19,8 @@ import {
 } from "../lib/sheets";
 import { downloadBlob } from "../lib/output";
 import { Btn, IX } from "./ui";
+import { savePet } from "./CursorPet";
+import { borderColour, keyOut, resize } from "../lib/puppet/pixels";
 
 const field =
   "w-full rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[13px] text-cream placeholder:text-dust/60";
@@ -206,6 +208,31 @@ export default function SheetMaker({
       pushToast("ok", "Sheet assembled and saved.");
     }, "image/png");
   }, [character, def, frames, pushToast]);
+
+  /** A walk cycle becomes the cursor pet: each frame small, background cut away. */
+  const makePet = useCallback(async () => {
+    const out: string[] = [];
+    for (const f of frames.filter((x) => x.url)) {
+      const im = await new Promise<HTMLImageElement>((res) => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.src = f.url!;
+      });
+      const c = document.createElement("canvas");
+      c.width = 128;
+      c.height = 128;
+      const g = c.getContext("2d")!;
+      g.drawImage(im, 0, 0, 128, 128);
+      const d = g.getImageData(0, 0, 128, 128);
+      const img = { width: 128, height: 128, data: new Uint8ClampedArray(d.data) };
+      const keyed = keyOut(resize(img, 128, 128), borderColour(img));
+      g.putImageData(new ImageData(new Uint8ClampedArray(keyed.data), 128, 128), 0, 0);
+      out.push(c.toDataURL("image/png"));
+    }
+    if (!out.length) return;
+    savePet({ on: true, custom: { name: character.split(/\s+/)[0] || "pet", frames: out, frameMs: 90 } });
+    pushToast("ok", "It's your cursor pet now — move the mouse. Settings → Language & pet brings the fox back.");
+  }, [frames, character, pushToast]);
 
   const saveFrames = useCallback(() => {
     const base = character.split(/\s+/)[0] || "character";
@@ -404,6 +431,11 @@ export default function SheetMaker({
                 <div className="flex flex-wrap gap-2">
                   <Btn data-tip="Joins all the finished frames into one picture file and saves it." onClick={assemble}>Save as one sheet</Btn>
                   <Btn data-tip="Saves every finished frame as its own separate picture." onClick={saveFrames}>Save each frame</Btn>
+                  {def.kind === "sprite-walk" && (
+                    <Btn data-tip="This character runs after your mouse from now on, instead of the little fox. Change it back in Settings → Language & pet." onClick={() => void makePet()}>
+                      Make it my cursor pet
+                    </Btn>
+                  )}
                 </div>
 
                 <div className="rounded-lg border border-line bg-[var(--color-field)] p-3">

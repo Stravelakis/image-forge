@@ -51,6 +51,39 @@ export interface ForgePuppetJson {
   posesReplaceBody?: boolean;
   /** How this puppet was made — engine, style, date. Read by people, not code. */
   madeBy?: Record<string, string>;
+  /** Other views of the same character (recipe.ts VIEW_EDITS): the same
+   *  fields as the front, their files prefixed with the view's name. Video
+   *  Forge swaps them in whole: "side" for dialogue, "sit" for sitting. */
+  views?: Partial<Record<"side" | "sit", PuppetView>>;
+}
+
+/** One view: everything a face needs, with its own pictures. */
+export type PuppetView = Pick<ForgePuppetJson, "base" | "head" | "sourceHeadWidth" | "zoom" | "eyes" | "brows" | "mouths" | "neck" | "poses" | "posesReplaceBody">;
+
+/**
+ * Put a second puppet (built from a view's own base and parts) inside the
+ * first, as `views[name]`. Its files are renamed `<name>_<file>` so the two
+ * sets live side by side in one folder; empty.png is shared.
+ */
+export function embedView(main: ForgePuppet, name: "side" | "sit", view: ForgePuppet): ForgePuppet {
+  const ren = (f: string) => (f === "empty.png" ? f : `${name}_${f}`);
+  const files = { ...main.files };
+  for (const [f, img] of Object.entries(view.files)) if (f !== "empty.png") files[ren(f)] = img;
+  const L = <T extends ForgeLayer | undefined>(l: T): T => (l ? ({ ...l, file: ren(l.file) } as T) : l);
+  const mapRec = <T,>(r: Record<string, T>, fn: (v: T) => T) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, fn(v)]));
+  const j = view.json;
+  const v: PuppetView = {
+    base: ren(j.base),
+    head: j.head,
+    sourceHeadWidth: j.sourceHeadWidth,
+    zoom: j.zoom,
+    eyes: { whites: L(j.eyes.whites), lids: mapRec(j.eyes.lids, L) },
+    brows: mapRec(j.brows, (b) => ({ left: L(b.left), right: L(b.right) })),
+    mouths: mapRec(j.mouths, L),
+    ...(j.neck ? { neck: j.neck } : {}),
+    ...(j.poses ? { poses: mapRec(j.poses, L), posesReplaceBody: j.posesReplaceBody } : {}),
+  };
+  return { files, json: { ...main.json, views: { ...(main.json.views ?? {}), [name]: v } } };
 }
 
 export interface ForgePuppet {
