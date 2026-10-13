@@ -25,7 +25,11 @@ import os from "node:os";
 import path from "node:path";
 
 /** Names both apps understand. Anything else is ignored, both ways. */
-export const SHARED_NAMES = ["gemini", "openrouter", "nvidia", "mistral", "cloudflare-account", "cloudflare-token", "pollinations"];
+export const SHARED_NAMES = [
+  "gemini", "openrouter", "nvidia", "mistral", "cloudflare-account", "cloudflare-token", "pollinations",
+  // 13 Oct 2026: every key either app can use, and room for the forges to come.
+  "openai", "groq", "elevenlabs", "fish",
+];
 
 const MAX_VALUE = 4096;
 

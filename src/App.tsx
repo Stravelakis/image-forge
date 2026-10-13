@@ -83,6 +83,7 @@ import UpdateReadyDialog from "./components/UpdateReadyDialog";
 import { MOVED_EVENT } from "./components/DesktopModeCard";
 import { SparkField } from "./components/SparkField";
 import { loadThumbs, saveThumb, makeThumb } from "./lib/thumbStore";
+import { flushVault } from "./lib/vault";
 import MadeView from "./components/MadeView";
 import type { PuppetTemplate } from "./lib/batches";
 import { DEFAULT_SETUP } from "./lib/batches";
@@ -1399,7 +1400,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       if (c.market) localStorage.removeItem("emberfair-v1");
       imagesRef.current.clear();
       pushToast("info", "Wiped the checked stores — reloading with a clean slate…");
-      setTimeout(() => window.location.reload(), 600);
+      // The vault must hear about it first, or the reload brings it all back.
+      void flushVault().finally(() => setTimeout(() => window.location.reload(), 600));
     },
     [pushToast]
   );

@@ -21,6 +21,7 @@ export const TEXT_PROVIDERS = {
   mistral: { host: "api.mistral.ai", base: "https://api.mistral.ai/v1", label: "mistral.ai" },
   openrouter: { host: "openrouter.ai", base: "https://openrouter.ai/api/v1", label: "openrouter.ai" },
   nvidia: { host: "integrate.api.nvidia.com", base: "https://integrate.api.nvidia.com/v1", label: "nvidia" },
+  groq: { host: "api.groq.com", base: "https://api.groq.com/openai/v1", label: "groq" },
 } as const;
 type TextName = keyof typeof TEXT_PROVIDERS;
 
@@ -42,6 +43,7 @@ export function keysFromSettings(s: ForgeSettings): Record<string, string> {
   put("pollinations", s.pollinationsToken);
   put("cloudflare-account", s.cloudflare.accountId);
   put("cloudflare-token", s.cloudflare.token);
+  put("openai", s.openaiKeys.find((k) => k.key.trim())?.key);
   for (const [name, p] of Object.entries(TEXT_PROVIDERS)) {
     put(name, s.textProviders.find((t) => hostOf(t.base) === p.host && t.key.trim())?.key);
   }
@@ -59,6 +61,10 @@ export function fillFromShared(s: ForgeSettings, keys: Record<string, string>): 
   if (keys.gemini && !next.geminiKeys.some((k) => k.key.trim())) {
     const first = next.geminiKeys[0] ?? newKey("free-1");
     edit({ geminiKeys: [{ ...first, key: keys.gemini, label: first.label || "from Video Forge" }, ...next.geminiKeys.slice(1)] });
+  }
+  if (keys.openai && !next.openaiKeys.some((k) => k.key.trim())) {
+    const first = next.openaiKeys[0] ?? newKey("key-1");
+    edit({ openaiKeys: [{ ...first, key: keys.openai }, ...next.openaiKeys.slice(1)] });
   }
   if (keys.pollinations && !next.pollinationsToken.trim()) edit({ pollinationsToken: keys.pollinations });
   if (keys["cloudflare-account"] && !next.cloudflare.accountId.trim()) {

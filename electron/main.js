@@ -26,6 +26,7 @@ import {
 } from "./link.mjs";
 import { readMode, writeMode, writeHandover, takeHandover, isTrustedInstallerUrl, download, MODES } from "./appctl.mjs";
 import { sharedValues, putShared } from "./forgeKeys.mjs";
+import { openVault, HARVEST_PAGE } from "./vault.mjs";
 import { shelfRoot, openOrders, orderPicture, finishOrder, savePuppetFile, listPuppets, puppetFile } from "./forgeShelf.mjs";
 import os from "node:os";
 import { spawn } from "node:child_process";
@@ -122,7 +123,12 @@ function proxyUpstream(prefix, req, res) {
  * Stable on purpose — see the note in startServer. Chosen high and unusual to
  * avoid colliding with anything a developer is likely to be running.
  */
-const PORTS = [47821, 47822, 47823, 47824, 47825];
+// A test copy names its own (IMAGEFORGE_PORTS=47901,47902) so it can never
+// take the real app's port — which is what emptied Ak's settings on 13 Oct.
+const PORTS = (process.env.IMAGEFORGE_PORTS || "47821,47822,47823,47824,47825")
+  .split(",")
+  .map((p) => Number(p.trim()))
+  .filter((p) => Number.isInteger(p) && p > 1024 && p < 65536);
 
 /* ---------------- the link (see link.mjs) ---------------- */
 
@@ -205,6 +211,19 @@ async function handleApp(req, res) {
   try {
     if (route === "GET /app/info") {
       return json(res, 200, { desktop: true, mode: readMode(userData), version: app.getVersion() });
+    }
+    // THE VAULT (electron/vault.mjs): the page's storage, kept in a file.
+    if (route === "GET /app/vault") {
+      const v = vault();
+      return json(res, 200, { values: await v.read(), harvests: await v.harvests() });
+    }
+    if (route === "PUT /app/vault") {
+      const body = JSON.parse((await readBody(req, 40 * 1024 * 1024)).toString("utf8") || "{}");
+      return json(res, 200, { changed: await vault().write(body.changes ?? {}) });
+    }
+    if (route === "POST /app/vault/harvested") {
+      await vault().clearHarvests();
+      return json(res, 200, { ok: true });
     }
     if (route === "GET /app/handover") {
       const me = String(req.headers["x-forge-side"] || "");
@@ -407,6 +426,81 @@ function startServer(distDir) {
   });
 }
 
+/* ---------------- the vault ---------------- */
+
+let VAULT = null;
+const vault = () => (VAULT ??= openVault(app.getPath("userData")));
+
+/**
+ * ONCE: gather what the OTHER ports' boxes hold, so the page can merge them.
+ *
+ * Each port has its own box (see startServer). Before the vault existed, a
+ * launch on the "wrong" port wrote its settings and list into that port's box,
+ * where the next launch could not see them. For each other port we serve a
+ * tiny page on it for a moment, in a hidden window, that reads its box and
+ * hands it back. A port something else is using is skipped.
+ */
+let HARVESTING = false;
+async function harvestPorts(myPort) {
+  HARVESTING = true;
+  try {
+    await harvestEach(myPort);
+  } finally {
+    HARVESTING = false;
+  }
+}
+async function harvestEach(myPort) {
+  const marker = path.join(app.getPath("userData"), "vault-harvest-done");
+  if (fs.existsSync(marker)) return;
+  for (const port of PORTS.filter((p) => p !== myPort)) {
+    await new Promise((done) => {
+      let win = null;
+      let finished = false;
+      const server = http.createServer(async (req, res) => {
+        if (req.method === "POST" && req.url === "/harvest") {
+          try {
+            const values = JSON.parse((await readBody(req, 40 * 1024 * 1024)).toString("utf8") || "{}");
+            if (values && Object.keys(values).length) await vault().putHarvest(port, values);
+          } catch {
+            /* an unreadable box is left alone */
+          }
+          res.end("ok");
+          finish();
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(HARVEST_PAGE);
+      });
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        try {
+          win?.destroy();
+        } catch {
+          /* already gone */
+        }
+        server.close(() => done());
+      };
+      const timer = setTimeout(finish, 8000);
+      server.on("error", () => {
+        finished = true;
+        clearTimeout(timer);
+        done();
+      });
+      server.listen(port, "127.0.0.1", () => {
+        win = new BrowserWindow({ show: false, webPreferences: { contextIsolation: true, nodeIntegration: false } });
+        win.loadURL(`http://127.0.0.1:${port}/`).catch(finish);
+      });
+    });
+  }
+  try {
+    fs.writeFileSync(marker, new Date().toISOString());
+  } catch {
+    /* it will simply look again next time */
+  }
+}
+
 /* ---------------- app ---------------- */
 
 /**
@@ -552,6 +646,7 @@ if (!app.requestSingleInstanceLock()) {
     app.on("will-quit", () => removePresence(LINK));
 
     APP_CTL.port = port;
+    await harvestPorts(port).catch(() => {});
     if (readMode(app.getPath("userData")) === "browser") openBrowser(port);
     else openWindow(port);
   });
@@ -585,7 +680,23 @@ if (!app.requestSingleInstanceLock()) {
       if (saved?.maximized) mainWindow.maximize();
       mainWindow.show();
     });
-    mainWindow.on("close", () => writeWindowState(mainWindow));
+    // Before the window goes: copy the last changes into the vault file.
+    let vaultFlushed = false;
+    mainWindow.on("close", (e) => {
+      writeWindowState(mainWindow);
+      if (vaultFlushed) return;
+      e.preventDefault();
+      const win = mainWindow;
+      Promise.race([
+        win.webContents.executeJavaScript("window.__flushVault ? window.__flushVault() : null"),
+        new Promise((r) => setTimeout(r, 2500)),
+      ])
+        .catch(() => {})
+        .finally(() => {
+          vaultFlushed = true;
+          if (!win.isDestroyed()) win.close();
+        });
+    });
 
     // external links open in the real browser, Windows deep-links open in the OS
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -646,6 +757,8 @@ if (!app.requestSingleInstanceLock()) {
   // Windows convention: closing the window quits. Not in browser mode, where
   // the window was closed on purpose and the tray keeps the app alive.
   app.on("window-all-closed", () => {
+    // The vault's hidden harvest windows closing is not you closing the app.
+    if (HARVESTING) return;
     if (readMode(app.getPath("userData")) !== "browser") app.quit();
   });
 }
