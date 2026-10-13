@@ -250,6 +250,25 @@ signtool" even so; `Get-AuthenticodeSignature` reports `NotSigned`.
   end of `index.css`.
 - **Test copy** — `IMAGEFORGE_USER_DATA=<folder>` runs on a separate profile.
 
+### The 13 October round
+
+- **Made** (`src/components/MadeView.tsx`) is the landing tab and the gallery:
+  stats, every row with status and exact date, puppets from the shelf, Redo,
+  batches as a filter; the spreadsheet is behind "Edit as a table".
+  Thumbnails persist in IndexedDB (`src/lib/thumbStore.ts`) — before this,
+  previews lived only in memory and vanished on restart. Rows record
+  `made_with` for engine counts and spend.
+- **Halt** aborts in-flight requests (`runAbortRef`).
+- **Start:** 2 pictures, "Style" (links to styles), engine drop-down of what is
+  set up (`src/lib/readyEngines.ts`) + "Add more engines…".
+- **Settings:** a Test beside every key, run on paste.
+- **Wizards menu:** Make pictures (3 screens: `GROUPS` in WizardView), Make a
+  puppet, Animate a character, Prompt factory (Google Sheets by copy-paste,
+  Excel, CSV). WordPress moved to Download.
+- **Templates:** picture setups and puppet templates (`SavedSetup.type`).
+- **Forge look:** accent "forge" (violet) with `FORGE_PALETTE`, black ground,
+  no specks, Sora, pill buttons (`.forge-primary/.forge-ghost`).
+
 ### The puppet maker (12–13 October 2026)
 
 The third kind of character art: a talking, blinking, nodding, waving puppet
