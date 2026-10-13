@@ -238,6 +238,9 @@ export const KINDS: KindDef[] = [
 export const kindById = (id?: string): KindDef => KINDS.find((k) => k.id === id) ?? KINDS[0];
 
 export const ACCENTS: { id: string; name: string; hex: string }[] = [
+  // The Forge look (Ak, 13 Oct 2026: option A, "violet glass") — the twin of
+  // Video Forge's mint. With it the page is pure black, Sora, round, glass.
+  { id: "forge", name: "Forge Violet", hex: "#a897ff" },
   { id: "ember", name: "Lantern Ember", hex: "#f2a33c" },
   { id: "lagoon", name: "Lagoon", hex: "#56b8a5" },
   { id: "potion", name: "Potion", hex: "#b18ce0" },

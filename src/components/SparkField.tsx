@@ -26,10 +26,13 @@ interface Spark { x: number; y: number; px: number; py: number; vx: number; vy: 
 /** One speck per this many square pixels. Ak halved the first density. */
 const AREA_PER_SPECK = 5200;
 
-export function SparkField({ moving }: { moving: boolean }) {
+/** `field` off: no specks on the ground, only the burst on a click — Image
+ *  Forge's ground is pure black (Ak, 13 Oct 2026). */
+export function SparkField({ moving, field = true }: { moving: boolean; field?: boolean }) {
   const skyRef = useRef<HTMLCanvasElement>(null);
   const fxRef = useRef<HTMLCanvasElement>(null);
   const movingRef = useRef(moving);
+  const fieldOn = field;
   movingRef.current = moving;
 
   useEffect(() => {
@@ -57,7 +60,7 @@ export function SparkField({ moving }: { moving: boolean }) {
       for (const c of [sky, fx]) { c.width = W * dpr; c.height = H * dpr; }
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
       f.setTransform(dpr, 0, 0, dpr, 0, 0);
-      field = Array.from({ length: Math.round((W * H) / AREA_PER_SPECK) }, speck);
+      field = fieldOn ? Array.from({ length: Math.round((W * H) / AREA_PER_SPECK) }, speck) : [];
     };
     const burst = (e: PointerEvent) => {
       if (!movingRef.current || reduced.matches) return;

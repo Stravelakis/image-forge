@@ -82,6 +82,7 @@ import GifMaker from "./components/GifMaker";
 import UpdateReadyDialog from "./components/UpdateReadyDialog";
 import { MOVED_EVENT } from "./components/DesktopModeCard";
 import { SparkField } from "./components/SparkField";
+import { FORGE_PALETTE } from "./lib/theme";
 import imageMark from "./assets/image-mark.jpg";
 import videoMark from "./assets/video-mark.jpg";
 import { keysFromSettings, fillFromShared, loadSharedKeys, saveSharedKeys } from "./lib/sharedKeys";
@@ -1776,8 +1777,11 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
    */
   useEffect(() => {
     const root = document.documentElement;
-    const palette = surfacesFor(accentHex(settings.ambient.accent));
+    const palette = settings.ambient.accent === "forge" ? FORGE_PALETTE : surfacesFor(accentHex(settings.ambient.accent));
     for (const [name, value] of Object.entries(palette)) root.style.setProperty(name, value);
+    // The Forge look's type and its switch for index.css (html[data-forge]).
+    if (settings.ambient.accent === "forge") root.setAttribute("data-forge", "");
+    else root.removeAttribute("data-forge");
     root.style.setProperty("--color-ember", accentHex(settings.ambient.accent));
     root.style.setProperty("--accent", accentHex(settings.ambient.accent));
   }, [settings.ambient.accent]);
@@ -1804,8 +1808,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
   return (
     <div
-      className="grain relative isolate flex h-screen flex-col overflow-hidden bg-black"
-      data-glow={settings.ambient.glow}
+      className={`${settings.ambient.accent === "forge" ? "" : "grain"} relative isolate flex h-screen flex-col overflow-hidden bg-black`}
+      data-glow={settings.ambient.accent === "forge" ? "off" : settings.ambient.glow}
       style={
         {
           // The palette itself is set on <html> in the effect above, because
@@ -1818,7 +1822,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     >
       {/* The Forge ground, shared with Video Forge: tiny sparks on black, and a
           burst up-and-right on every click (12 Oct 2026). */}
-      <SparkField moving={motionLevel !== "off"} />
+      <SparkField moving={motionLevel !== "off"} field={settings.ambient.accent !== "forge"} />
       {settings.ambient.background === "dots" && (
         <DotField
           className="absolute inset-0 z-0"

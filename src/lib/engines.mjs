@@ -278,7 +278,10 @@ export function textQualityFor(row, s) {
   const { def, engine } = resolveRoute(row, s);
   if (def) return MODEL_TRAITS[def.id]?.textQuality ?? "fair";
   // A model on your own machine — you tell us, because we cannot know.
-  if (engine === "local") return s.localTextQuality || "poor";
+  // Z-Image is known for readable lettering (signs, labels, posters), so it is
+  // never told to avoid text — the setting defaults to "poor" for the unknown
+  // models people run, which wrongly muzzled it (Ak, 13 Oct 2026).
+  if (engine === "local") return /z-?image/i.test(s.localModel || "") ? "good" : s.localTextQuality || "poor";
   return "fair";
 }
 

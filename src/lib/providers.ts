@@ -136,6 +136,8 @@ export interface ForgeSettings {
   wp: { url: string; user: string; appPassword: string };
   ambient: {
     accent: string;
+    /** 2 = the Forge look was applied once (13 Oct 2026) */
+    lookVersion?: number;
     background: "none" | "dots" | "embers" | "stars";
     density: number;
     wave: boolean;
@@ -231,12 +233,13 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   metaPrompts: { promptWriter: "", filenameForger: "", stylePicker: "", wpMeta: "", factory: "" },
   wp: { url: "", user: "", appPassword: "" },
   ambient: {
-    accent: "ember",
-    background: "dots",
+    accent: "forge",
+    lookVersion: 2,
+    background: "none",
     density: 55,
     wave: true,
-    sparkle: true,
-    glow: "accent",
+    sparkle: false,
+    glow: "off",
     cursor: "lantern",
     cursorSize: 240,
     motion: "system",
@@ -278,6 +281,9 @@ export function normalizeSettings(s: Partial<ForgeSettings>): ForgeSettings {
       if (typeof a.glow !== "string" && typeof (a as { glow?: boolean }).glow === "boolean")
         migrated.glow = (a as { glow?: boolean }).glow ? "accent" : "off";
       delete (migrated as { dots?: boolean }).dots;
+      // Once, for everyone: the Forge look — violet, black, no corner glow,
+      // no dot grid. Anyone may pick another colour afterwards and keep it.
+      if ((a.lookVersion ?? 1) < 2) Object.assign(migrated, { accent: "forge", glow: "off", background: "none", sparkle: false, lookVersion: 2 });
       return { ...DEFAULT_SETTINGS.ambient, ...migrated };
     })(),
     customStyles: s.customStyles ?? [],

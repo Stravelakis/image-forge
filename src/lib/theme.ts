@@ -60,6 +60,29 @@ const ACCENT_ROLES: { name: string; dl: number; ds: number }[] = [
   { name: "on-accent", dl: -52, ds: -10 }, // text sitting on the accent
 ];
 
+/**
+ * The Forge look's own surfaces (13 Oct 2026). Not derived from the accent:
+ * Ak asked for a totally black background with near-black panels, the same
+ * ground Video Forge stands on, so only the colour tells the twins apart.
+ */
+export const FORGE_PALETTE: Record<string, string> = {
+  "--color-ink": "#000000",
+  "--color-coal": "#060609",
+  "--color-panel": "#0c0b13",
+  "--color-panel2": "#12111b",
+  "--color-raise": "#191724",
+  "--color-line": "#24212f",
+  "--color-line2": "#312d40",
+  "--color-field": "#050508",
+  "--color-scroll": "#2b2738",
+  "--color-cream": "#eef1f8",
+  "--color-parch": "#c3c9d6",
+  "--color-dust": "#8f98ab",
+  "--color-accent-deep": "#4b3fa8",
+  "--color-accent-lift": "#c4b8ff",
+  "--color-on-accent": "#0d0826",
+};
+
 /** Which returned tokens are backgrounds, which are text, which are accent. */
 export const SURFACE_VARS = SURFACES.map((x) => `--color-${x.name}`);
 export const TEXT_VARS = TEXTS.map((x) => `--color-${x.name}`);
