@@ -18,7 +18,12 @@ export default function PromptFactory({
   items,
   setItems,
   pushToast,
+  world,
+  onWorld,
 }: {
+  /** When given, the world is the caller's (the wizard's), not the factory's own. */
+  world?: string;
+  onWorld?: (id: string) => void;
   settings: ForgeSettings;
   styleId: string;
   /** null = keep prompts style-free (wizard adds the style later) */
@@ -30,7 +35,9 @@ export default function PromptFactory({
   const [mode, setMode] = useState<"write" | "paste" | "file">("write");
   const [theme, setTheme] = useState("");
   const [count, setCount] = useState(8);
-  const [kindId, setKindId] = useState("none");
+  const [ownKind, setOwnKind] = useState("none");
+  const kindId = world ?? ownKind;
+  const setKindId = (id: string) => (onWorld ? onWorld(id) : setOwnKind(id));
   const [pasteText, setPasteText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -185,6 +192,26 @@ export default function PromptFactory({
     downloadCsv("factory-prompts.csv", [head, ...body].join("\n"));
   };
 
+  // GOOGLE SHEETS: copied as tab-separated text, which a sheet splits into
+  // columns on paste — no account link, no key (Ak, 13 Oct 2026).
+  const copyForSheets = async () => {
+    const t = (s: string) => s.replace(/[\t\r\n]+/g, " ");
+    const rows = [["filename", "prompt", "negative_prompt", "category"], ...items.filter((i) => i.filename && i.prompt).map((i) => [t(i.filename), t(i.prompt), t(i.negative_prompt ?? ""), i.category ?? "image"])];
+    try {
+      await navigator.clipboard.writeText(rows.map((r) => r.join("\t")).join("\n"));
+      pushToast("ok", `Copied ${rows.length - 1} rows. In Google Sheets, click cell A1 and paste (Ctrl+V).`);
+    } catch {
+      pushToast("err", "Could not copy — use Export CSV instead.");
+    }
+  };
+  const exportXlsx = async () => {
+    const XLSX = await import("xlsx");
+    const ws = XLSX.utils.json_to_sheet(items.filter((i) => i.filename && i.prompt).map((i) => ({ filename: i.filename, prompt: i.prompt, negative_prompt: i.negative_prompt ?? "", category: i.category ?? "image" })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "prompts");
+    XLSX.writeFile(wb, "factory-prompts.xlsx");
+  };
+
   const valid = items.filter((i) => i.filename.trim() && i.prompt.trim()).length;
 
   return (
@@ -320,8 +347,14 @@ export default function PromptFactory({
               <Btn onClick={addManual}>
                 <IPlus size={13} /> Add row
               </Btn>
+              <Btn onClick={() => void copyForSheets()} disabled={valid === 0} title="Copy the list, then paste it into Google Sheets — the columns land in place">
+                Copy for Google Sheets
+              </Btn>
+              <Btn onClick={() => void exportXlsx()} disabled={valid === 0}>
+                Excel
+              </Btn>
               <Btn onClick={exportCsv} disabled={valid === 0}>
-                <IWand size={12} /> Export CSV
+                <IWand size={12} /> CSV
               </Btn>
             </div>
           </div>

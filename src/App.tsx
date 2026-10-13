@@ -1977,6 +1977,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
           }}
           onWpImport={() => setWpOpen(true)}
           onPuppet={() => setPuppet({ order: null })}
+          onAnimate={() => setSheetOpen(true)}
           onZip={zipAll}
           motion={motionLevel}
               onExportCsv={exportCsv}

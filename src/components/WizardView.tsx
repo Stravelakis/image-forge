@@ -11,16 +11,20 @@ import PromptFactory from "./PromptFactory";
 import { BorderGlow } from "./effects";
 import { Btn, CatChip, IAlert, ICheck, IFolder, IGear, IPlay, IStar, IX } from "./ui";
 
+// THREE SCREENS, not nine (Ak, 13 Oct 2026: "can we simplify the start the
+// wizard?"). The nine parts are all still here — each screen shows a few of
+// them (GROUPS), so nothing a part does had to change.
 const STEPS = [
-  { name: "Name it", short: "what is this batch for?" },
-  { name: "Pick a world", short: "the flavor in every picture" },
-  { name: "List the pictures", short: "what should we make?" },
-  { name: "Pick a look", short: "one visual style for all" },
-  { name: "Pick a painter", short: "who draws the pictures?" },
-  { name: "Pick a shape", short: "wide, square or tall" },
-  { name: "Pick a home", short: "where the files land" },
-  { name: "The little extras", short: "save recipe · start now" },
-  { name: "Ready!", short: "read and press go" },
+  { name: "What to make", short: "the list — name and world are optional" },
+  { name: "How it looks", short: "style, shape and engine" },
+  { name: "Go", short: "where files land · read and press go" },
+];
+/** Which of the original nine parts each screen shows. */
+const GROUPS: number[][] = [
+  // part 1 (the world) lives inside the list's own chooser now — one choice, not two
+  [0, 2],
+  [3, 5, 4],
+  [6, 7, 8],
 ];
 
 const card = "rounded-xl border border-line bg-panel/50 px-4 py-3.5";
@@ -158,25 +162,19 @@ export default function WizardView({
   const canNext = (): boolean => {
     switch (step) {
       case 0:
-        return setup.name.trim().length > 0;
-      case 1:
-        return true;
+        return setup.name.trim().length > 0 && items.filter((i) => i.filename.trim() && i.prompt.trim()).length > 0;
       case 2:
-        return items.filter((i) => i.filename.trim() && i.prompt.trim()).length > 0;
-      case 3:
-      case 4:
-      case 5:
-      case 6:
-        return true;
-      case 7:
         return !wantSave || saveName.trim().length > 0;
       default:
         return true;
     }
   };
+  const show = (part: number) => GROUPS[step].includes(part);
 
   const next = () => {
-    if (step === 6 && setup.linkFolder && !folder.linked && fsSupported()) onLinkFolder();
+    // Leaving "How it looks" for "Go": ask for the folder now, so it is linked
+    // by the time the summary shows where the files land.
+    if (step === 1 && setup.linkFolder && !folder.linked && fsSupported()) onLinkFolder();
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   };
 
@@ -247,15 +245,14 @@ export default function WizardView({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto pb-6 pr-1">
+        <div className="flex min-h-0 flex-1 flex-col gap-12 overflow-y-auto pb-6 pr-1">
           {/* 0 · name */}
-          {step === 0 && (
+          {show(0) && (
             <div className="rise-in max-w-xl">
               <p className="text-[15px] leading-relaxed text-parch">
                 Give this batch a name so you can find it later. Think of it like labeling a box of pictures before you fill it.
               </p>
               <input
-                autoFocus
                 value={setup.name}
                 onChange={(e) => patch({ name: e.target.value })}
                 placeholder="e.g. Spring shop fronts"
@@ -269,7 +266,7 @@ export default function WizardView({
           )}
 
           {/* 1 · world / kind */}
-          {step === 1 && (
+          {show(1) && (
             <div className="rise-in">
               <p className="max-w-xl text-[15px] leading-relaxed text-parch">
                 What world do these pictures live in? This one choice flavors every prompt, fills in the negative
@@ -308,17 +305,17 @@ export default function WizardView({
           )}
 
           {/* 2 · pictures */}
-          {step === 2 && (
-            <div className="rise-in">
+          {show(2) && (
+            <div className="rise-in order-first">
               <p className="mb-4 max-w-xl text-[15px] leading-relaxed text-parch">
                 Now the fun part — list every picture you want. The AI can write the list for you, or paste/upload your own.
               </p>
-              <PromptFactory settings={settings} styleId={setup.styleId} styleBlock={null} items={items} setItems={setItems} pushToast={pushToast} />
+              <PromptFactory settings={settings} styleId={setup.styleId} styleBlock={null} items={items} setItems={setItems} pushToast={pushToast} world={setup.kind} onWorld={(k) => patch({ kind: k })} />
             </div>
           )}
 
           {/* 3 · style */}
-          {step === 3 && (
+          {show(3) && (
             <div className="rise-in">
               <p className="max-w-xl text-[15px] leading-relaxed text-parch">
                 Choose one visual style for the whole batch. When every picture shares a style, the set feels like it
@@ -358,7 +355,7 @@ export default function WizardView({
           )}
 
           {/* 4 · painter */}
-          {step === 4 && (
+          {show(4) && (
             <div className="rise-in max-w-2xl">
               <p className="text-[15px] leading-relaxed text-parch">
                 Who should draw these pictures? You only need to set this up once — the forge remembers your keys.
@@ -465,7 +462,7 @@ export default function WizardView({
           )}
 
           {/* 5 · shape */}
-          {step === 5 && (
+          {show(5) && (
             <div className="rise-in max-w-2xl">
               <p className="text-[15px] leading-relaxed text-parch">
                 What shape should the pictures be? One shape for everything looks tidy; “match the picture” picks a
@@ -505,7 +502,7 @@ export default function WizardView({
           )}
 
           {/* 6 · home */}
-          {step === 6 && (
+          {show(6) && (
             <div className="rise-in max-w-xl">
               <p className="text-[15px] leading-relaxed text-parch">
                 Where should the finished picture files go? The forge sorts them into folders by what they are:{" "}
@@ -545,7 +542,7 @@ export default function WizardView({
           )}
 
           {/* 7 · extras */}
-          {step === 7 && (
+          {show(7) && (
             <div className="rise-in max-w-xl space-y-4">
               <p className="text-[15px] leading-relaxed text-parch">Two small choices. You can skip both.</p>
               <div className={card}>
@@ -582,7 +579,7 @@ export default function WizardView({
           )}
 
           {/* 8 · review */}
-          {step === 8 && (
+          {show(8) && (
             <div className="rise-in">
               <div className="mb-4 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
                 {[
@@ -641,7 +638,7 @@ export default function WizardView({
           <Btn onClick={() => (step === 0 ? onExit() : setStep((s) => s - 1))}>{step === 0 ? "Cancel" : "← Back"}</Btn>
           {step < STEPS.length - 1 ? (
             <Btn variant="primary" onClick={next} disabled={!canNext()}>
-              {step === 2 ? `Next · ${items.filter((i) => i.filename && i.prompt).length} pictures →` : "Next →"}
+              {step === 0 ? `Next · ${items.filter((i) => i.filename && i.prompt).length} pictures →` : "Next →"}
             </Btn>
           ) : (
             <Btn

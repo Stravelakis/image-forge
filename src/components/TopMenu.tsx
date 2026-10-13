@@ -226,6 +226,7 @@ export default function TopMenu({
   onRerunMarked,
   onWpImport,
   onPuppet,
+  onAnimate,
   onZip,
   onExportCsv,
   onExportXlsx,
@@ -243,6 +244,7 @@ export default function TopMenu({
   onRerunMarked: () => void;
   onWpImport: () => void;
   onPuppet: () => void;
+  onAnimate: () => void;
   onZip: () => void;
   onExportCsv: () => void;
   onExportXlsx: () => void;
@@ -266,12 +268,13 @@ export default function TopMenu({
               ? "settings"
               : "workbench";
 
+  // Four things you make (Ak, 13 Oct 2026: "the wizard menu needs help").
+  // Redo moved into Made; WordPress into Download, with the other ways out.
   const wizardCards: NavCard[] = [
-    { id: "wizard", title: "Start the wizard", hint: "a new batch, one easy choice at a time", icon: <IWand size={15} />, onPick: () => onNav("wizard") },
-    { id: "factory", title: "Prompt factory", hint: "write a huge list — AI or your own CSV", icon: <ISparkle size={15} />, onPick: () => onNav("factory") },
-    { id: "rerun", title: "Rerun marked & failed", hint: "notes become extra instructions", icon: <IRetry size={15} />, badge: markedCount > 0 ? String(markedCount) : undefined, onPick: onRerunMarked },
+    { id: "wizard", title: "Make pictures", hint: "describe what you need — three easy steps", icon: <IWand size={15} />, onPick: () => onNav("wizard") },
     { id: "puppet", title: "Make a puppet", hint: "a character that talks, blinks and waves — for Video Forge", icon: <span className="text-[13px] leading-none">☺</span>, onPick: onPuppet },
-    { id: "wp", title: "Import to WordPress", hint: "real upload with an app password", icon: <IUpload size={15} />, badge: doneCount > 0 ? String(doneCount) : undefined, onPick: onWpImport },
+    { id: "sheet", title: "Animate a character", hint: "sprite sheets, turnarounds, mouth shapes, blinks", icon: <span className="text-[13px] leading-none">◈</span>, onPick: onAnimate },
+    { id: "factory", title: "Prompt factory", hint: "a huge list of prompts — to Google Sheets, Excel or CSV", icon: <ISparkle size={15} />, onPick: () => onNav("factory") },
   ];
 
   const galleryCards: NavCard[] = [
@@ -378,6 +381,14 @@ export default function TopMenu({
                   hint: "for handing to someone who wants Excel",
                   icon: <IDownload size={15} />,
                   onPick: onExportXlsx,
+                },
+                {
+                  id: "wp",
+                  title: "Upload to WordPress",
+                  hint: "straight into your site's media library",
+                  icon: <IUpload size={15} />,
+                  badge: doneCount > 0 ? String(doneCount) : undefined,
+                  onPick: onWpImport,
                 },
               ]}
             />

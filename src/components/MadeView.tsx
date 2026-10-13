@@ -149,6 +149,7 @@ export default function MadeView({
   const showPuppets = (kind === "all" || kind === "puppets") && status === "all" && batch === "all";
   const puppetsShown = puppets.filter((p) => !search.trim() || p.name.toLowerCase().includes(search.trim().toLowerCase()));
   const missingThumbs = rows.filter((r) => r.status === "done" && !r.preview).length;
+  const marked = rows.filter((r) => r.status === "failed" || r.rating === "dislike").map((r) => r.id);
 
   const chip = (on: boolean) =>
     `rounded-full px-3 py-1.5 text-[12px] transition ${on ? "bg-[var(--color-ember)] text-[var(--color-on-accent)] font-semibold" : "border border-white/12 text-parch hover:border-[var(--color-ember)]"}`;
@@ -172,6 +173,15 @@ export default function MadeView({
                 Make the {stats.waiting} waiting
               </button>
             ))}
+          {marked.length > 0 && (
+            <button
+              className="forge-ghost px-4 py-2 text-[13px] text-parch"
+              onClick={() => onRedo(marked)}
+              title="Make again every picture marked ✕ or that failed. A note on a picture becomes an extra instruction."
+            >
+              Redo {marked.length} marked or failed
+            </button>
+          )}
           <button className="forge-ghost px-4 py-2 text-[13px] text-parch" onClick={onOpenTable} title="The spreadsheet view: every row, every column, editable — and CSV in and out">
             Edit as a table
           </button>
