@@ -17,7 +17,7 @@
  * test passes stand-ins; a headless overnight run could pass anything.
  */
 import { composite, crop, cutPart, resize, sideBySide, type Box, type Img } from "./pixels";
-import { BASE_NEGATIVE, DEFAULT_LOOK, EDIT_NEGATIVE, VIEW_EDITS, basePrompt, editPrompt, partsFor, type PuppetFraming, type PuppetLook, type PuppetPart, type PuppetViewId } from "./recipe";
+import { BASE_NEGATIVE, DEFAULT_LOOK, baseNegative, EDIT_NEGATIVE, VIEW_EDITS, basePrompt, editPrompt, partsFor, type PuppetFraming, type PuppetLook, type PuppetPart, type PuppetViewId } from "./recipe";
 import type { CutPart } from "./rig";
 
 export interface Verdict {
@@ -97,7 +97,7 @@ export async function makeBaseOptions(req: BaseRequest, io: MakerIO, onEvent: (e
   for (let i = 0; i < count; i++) {
     if (signal?.aborted) break;
     const picture = resize(
-      await io.generate({ prompt, negative: BASE_NEGATIVE, refs: req.inspirations.slice(0, 3), seed: seedFor((req.round ?? 0) * 100 + i + 1), width: size, height: size }, signal),
+      await io.generate({ prompt, negative: baseNegative(req.style), refs: req.inspirations.slice(0, 3), seed: seedFor((req.round ?? 0) * 100 + i + 1), width: size, height: size }, signal),
       size,
       size
     );

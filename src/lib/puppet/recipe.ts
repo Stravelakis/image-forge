@@ -83,6 +83,24 @@ export const PUPPET_STYLES: PuppetStyle[] = [
     blurb: "Cel-shaded, expressive",
     prompt: "an ANIME-STYLE CHARACTER, clean cel shading, crisp line art, large expressive eyes, like a modern TV anime",
   },
+  // CLOSEST TO REAL (Ak, 14 Oct 2026). Lifelike 3D is the realistic end that
+  // still cuts cleanly: a rendered character with real-looking skin and hair.
+  // Photoreal works for the picture, but a real face's fine texture shifts
+  // between edits, so more mouths come back "unsure" — hence "experimental".
+  {
+    id: "lifelike",
+    label: "Lifelike 3D",
+    blurb: "Cinematic, high detail, nearly real",
+    prompt:
+      "a LIFELIKE, HIGH-DETAIL 3D CHARACTER like a modern video-game cinematic or a high-end animated film — realistic skin, hair and fabric texture, natural proportions, soft cinematic studio lighting; believable and detailed, but still a rendered character, not a photograph",
+  },
+  {
+    id: "photo",
+    label: "Photoreal (experimental)",
+    blurb: "Like a studio photo · more retries",
+    prompt:
+      "a PHOTOREALISTIC studio portrait that looks like a real photograph — natural skin texture, real hair, real fabric, soft even studio light, sharp focus, shot on a 50mm lens",
+  },
   {
     id: "doodle",
     label: "Simple doodle",
@@ -168,6 +186,10 @@ export function basePrompt(o: { description: string; style: string; framing: Pup
     .filter(Boolean)
     .join(" ");
 }
+
+/** What the base picture must not be — a photo, unless a photo is the point. */
+export const baseNegative = (style: string): string =>
+  style === "photo" ? BASE_NEGATIVE.replace(", photorealistic photo", ", cartoon, illustration, 3d render, plastic skin") : BASE_NEGATIVE;
 
 export const BASE_NEGATIVE =
   "cross-eyed, converging eyes, wall-eyed, uneven pupils, wide staring eyes, bulging eyes, startled, open mouth, cropped head, cut-off ears, tight crop, text, watermark, extra characters, extra limbs, photorealistic photo, letters, words";

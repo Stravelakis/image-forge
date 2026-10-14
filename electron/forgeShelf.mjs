@@ -25,7 +25,7 @@ export const SHELF_VERSION = 1;
 const ID = /^[a-z0-9][a-z0-9-]{5,63}$/;
 const SLUG = /^[a-z0-9][a-z0-9-]{0,59}$/;
 const FILE = /^[a-z0-9][a-z0-9_.-]{0,80}\.(png|json)$/i;
-const STYLES = new Set(["pixar", "flat", "clay", "paper", "anime", "doodle"]);
+const STYLES = new Set(["pixar", "lifelike", "photo", "flat", "clay", "paper", "anime", "doodle"]);
 const MAX_PICTURE = 12 * 1024 * 1024;
 
 export function shelfRoot(env = process.env) {
@@ -185,7 +185,7 @@ export function listPuppets(root) {
         name: String(j.madeBy?.name || j.name || slug),
         rigPath: rig,
         basePath: path.join(puppets, slug, String(j.base || "base.png")),
-        framing: j.poses ? "waist" : "head",
+        framing: j.madeBy?.framing === "full" ? "full" : j.poses ? "waist" : "head",
         madeAt: String(j.madeBy?.madeAt || fs.statSync(rig).mtime.toISOString()),
       });
     } catch {
