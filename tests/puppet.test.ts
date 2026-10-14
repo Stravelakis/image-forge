@@ -10,7 +10,7 @@ import { PNG } from "pngjs";
 import { borderColour, cutPart, keyOut, resize, type Img } from "../src/lib/puppet/pixels";
 import { buildRig, embedView, poseBody, puppetSlug } from "../src/lib/puppet/rig";
 import { makeParts, makeBaseOptions, pictureBudget, type MakerIO } from "../src/lib/puppet/maker";
-import { basePrompt, editPrompt, keyColourFor, lipsFor, partsFor, PUPPET_PARTS } from "../src/lib/puppet/recipe";
+import { basePrompt, editPrompt, keyColourFor, lipsFor, partsFor, PUPPET_PARTS, editNegative } from "../src/lib/puppet/recipe";
 
 const load = (name: string): Img => {
   const png = PNG.sync.read(fs.readFileSync(path.join(__dirname, "fixtures", "puppet", `${name}.png`)));
@@ -107,13 +107,20 @@ describe("the recipe", () => {
       const e = editPrompt(p);
       expect(e).not.toMatch(/saying|sound|letter|'f+'/i);
     }
-    expect(editPrompt(PUPPET_PARTS.find((p) => p.id === "mouth_L")!)).toMatch(/INSIDE the mouth/);
+    expect(editPrompt(PUPPET_PARTS.find((p) => p.id === "mouth_L")!)).toMatch(/never reaches past the teeth/);
+    // AH never mentions the tongue (it drew one sticking out, 14 Oct 2026)
+    expect(editPrompt(PUPPET_PARTS.find((p) => p.id === "mouth_AH")!)).toMatch(/NO tongue showing/);
   });
 
   it("one lips rule per puppet, in the base and every mouth", () => {
     const noLips = { key: keyColourFor("an owl"), lips: false };
-    expect(basePrompt({ description: "an owl", style: "pixar", framing: "head", inspirations: 0, look: noLips })).toMatch(/NO separate drawn lips/);
-    expect(editPrompt(PUPPET_PARTS[0], noLips)).toMatch(/NO separate drawn lips/);
+    expect(basePrompt({ description: "an owl", style: "pixar", framing: "head", inspirations: 0, look: noLips })).toMatch(/plain opening cut straight into the face/);
+    // a lipless puppet never sees the word "lip" in any mouth (14 Oct 2026)
+    for (const p of PUPPET_PARTS.filter((x) => x.kind === "mouth")) expect(editPrompt(p, noLips)).not.toMatch(/blips?b/i);
+    expect(editNegative(noLips)).toMatch(/lipstick/);
+    expect(editNegative({ ...noLips, lips: true })).not.toMatch(/lipstick/);
+    // beards, freckles and marks stay as they are
+    expect(editPrompt(PUPPET_PARTS[0])).toMatch(/facial hair, freckles, moles, scars and marks/);
     expect(editPrompt(PUPPET_PARTS.find((p) => p.kind === "brow")!, noLips)).not.toMatch(/lips/);
     expect(lipsFor("a grey owl librarian", "pixar")).toBe(false);
     expect(lipsFor("a cheerful baker woman", "pixar")).toBe(true);

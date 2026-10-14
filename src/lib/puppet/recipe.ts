@@ -173,7 +173,24 @@ export const DEFAULT_LOOK: PuppetLook = { key: { name: "magenta", hex: KEY_COLOU
 const lipsClause = (look: PuppetLook) =>
   look.lips
     ? "The mouth has clearly drawn LIPS, the same colour and thickness in every picture."
-    : "The mouth has NO separate drawn lips: it is a simple opening drawn straight into the face, the same in every picture.";
+    : "The mouth is a plain opening cut straight into the face: its edge is the same colour as the skin or fur around it, with no outline, no rim and no colour change around it, the same in every picture.";
+
+/**
+ * Mouth wording for a puppet without lips (Ak, 14 Oct 2026: EE, OH, OO, the
+ * halves and the smile grew lips on lipless characters). The word "lip" in a
+ * prompt draws lips, so a lipless puppet never sees it.
+ */
+export const withoutLipWords = (text: string): string =>
+  text
+    .replace(/the lower lip tucked slightly under them/g, "the lower edge of the mouth tucked slightly under them")
+    .replace(/the middle of the lower lip/g, "the middle of the lower edge of the mouth")
+    .replace(/the lips are pushed forward and squared off/g, "the mouth is pushed forward and squared off")
+    .replace(/lips pushed forward and squared/g, "mouth pushed forward and squared")
+    .replace(/the lower lip/g, "the lower edge of the mouth");
+
+/** The negative prompt for an edit: a lipless puppet also says no to lips. */
+export const editNegative = (look: PuppetLook = DEFAULT_LOOK): string =>
+  look.lips ? EDIT_NEGATIVE : `${EDIT_NEGATIVE}, lips, lipstick, coloured lips, outlined lips, red rim around the mouth`;
 
 /**
  * The base picture's prompt. Each clause is there because its absence caused a
@@ -259,12 +276,12 @@ export const PUPPET_PARTS: PuppetPart[] = [
   // SHAPES, NEVER SOUNDS. "Saying fff" put letters on the teeth and "saying
   // L" stuck the tongue out (Ak, 13 Oct 2026): only what the lips, teeth and
   // tongue do is described. editPrompt adds the puppet's lips rule.
-  { id: "mouth_AH", kind: "mouth", label: "AH", change: "Change only the mouth so it is open wide in a relaxed tall oval, the jaw dropped, the tongue resting low inside and the lower teeth just visible.", expect: "mouth open wide in a tall oval" },
+  { id: "mouth_AH", kind: "mouth", label: "AH", change: "Change only the mouth so it is open wide in a relaxed tall oval, the jaw dropped. The inside of the mouth is a plain dark shape with NO tongue showing; at most a thin line of the upper teeth at the top edge.", expect: "mouth open wide in a tall oval, no tongue showing" },
   { id: "mouth_EE", kind: "mouth", label: "EE", change: "Change only the mouth so it is stretched wide to the sides and only slightly open, both rows of teeth showing close together, like a wide grin.", expect: "mouth stretched wide, teeth showing close together" },
   { id: "mouth_OH", kind: "mouth", label: "OH", change: "Change only the mouth so it forms a round open circle of medium size, the inside of the mouth dark.", expect: "mouth rounded into a medium open circle" },
   { id: "mouth_OO", kind: "mouth", label: "OO", change: "Change only the mouth so it is pushed forward into a small, tight, round opening, much smaller than a circle.", expect: "small tight round mouth" },
   { id: "mouth_FV", kind: "mouth", label: "F·V", change: "Change only the mouth so the upper front teeth rest lightly on the middle of the lower lip, the lower lip tucked slightly under them, and the mouth otherwise closed. The teeth are plain and white.", expect: "upper teeth resting on the lower lip, plain white teeth with nothing drawn on them" },
-  { id: "mouth_L", kind: "mouth", label: "L", change: "Change only the mouth so it is slightly open, with the tip of the tongue touching just behind the upper front teeth. The tongue stays INSIDE the mouth; only its tip shows, behind the teeth.", expect: "mouth slightly open, tongue tip behind the upper teeth, the tongue NOT sticking out" },
+  { id: "mouth_L", kind: "mouth", label: "L", change: "Change only the mouth so it is only a little open, the upper front teeth showing, and behind them, deep inside the mouth, the smallest hint of the tongue tip — a tiny sliver, mostly hidden by the teeth. The tongue never reaches past the teeth.", expect: "mouth a little open, at most a tiny sliver of tongue behind the upper teeth" },
   { id: "mouth_CHSH", kind: "mouth", label: "SH", change: "Change only the mouth so the lips are pushed forward and squared off, slightly open, with the teeth close together and visible.", expect: "lips pushed forward and squared, teeth close together" },
   // HALF-OPEN (13 Oct 2026): the steps between shapes and the quiet syllables,
   // so the mouth flows rather than snapping (Video Forge timeline.ts).
@@ -313,11 +330,11 @@ export const partsFor = (framing: PuppetFraming): PuppetPart[] =>
 
 /** Added after every edit's own instruction. */
 export const keepFor = (look: PuppetLook = DEFAULT_LOOK) =>
-  `Keep absolutely everything else in the picture identical: the same character at the same size, position and angle, the same face, eyes, hair or fur, clothing, colours, lighting and the same flat ${look.key.name} background. Change ONLY what is described. Do not redraw the picture.`;
+  `Keep absolutely everything else in the picture identical: the same character at the same size, position and angle, the same face, eyes, hair or fur, the same facial hair, freckles, moles, scars and marks — no more and no fewer, in the same places — the same clothing, colours, lighting and the same flat ${look.key.name} background. Change ONLY what is described. Do not redraw the picture.`;
 export const KEEP = keepFor();
 
 export const editPrompt = (part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): string =>
-  `Edit this picture. ${part.change}${part.kind === "mouth" ? ` ${lipsClause(look)} Keep the lips exactly as they are in the original picture — the same colour and thickness, and if it has none, still none.` : ""}\n\n${keepFor(look)}`;
+  `Edit this picture. ${part.kind === "mouth" && !look.lips ? withoutLipWords(part.change) : part.change}${part.kind === "mouth" ? ` ${lipsClause(look)} ${look.lips ? "Keep the lips exactly as they are in the original picture — the same colour and thickness." : "The edge of the mouth stays exactly like the original: no rim and no colour around it."}` : ""}\n\n${keepFor(look)}`;
 
 /**
  * Where on the picture each kind of part may sit, as fractions of the height.
