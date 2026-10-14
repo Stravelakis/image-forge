@@ -20,6 +20,7 @@ import {
 import { downloadBlob } from "../lib/output";
 import { Btn, IX } from "./ui";
 import { useEffect } from "react";
+import { RecipeHelpBox } from "./RecipeHelpBox";
 import { borderColour, keyOut } from "../lib/puppet/pixels";
 import { CHASER_FRAMES, chaserDemo, chaserReadme, chaserScript, tryChaser } from "../lib/cursorChaser";
 
@@ -524,6 +525,8 @@ export default function SheetMaker({
                 </div>
               </>
             )}
+
+            {frames.length > 0 && <RecipeHelpBox def={def} name={character} frames={frames.length} />}
 
             {!frames.length && !sheetUrl && (
               <p className="rounded-lg border border-line bg-[var(--color-field)] px-3 py-6 text-center text-[12px] text-dust">
