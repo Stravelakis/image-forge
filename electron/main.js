@@ -29,6 +29,7 @@ import { sharedValues, putShared } from "./forgeKeys.mjs";
 import { openVault, HARVEST_PAGE } from "./vault.mjs";
 import { recordMade } from "./forgeHub.mjs";
 import { authLink, canvaClient, exchangeCode, tokenStore } from "./canva.mjs";
+import { listWorkshop, readWorkshopFile, removeWorkshop, workshopRoot, writeWorkshopFile } from "./workshop.mjs";
 import { shelfRoot, openOrders, orderPicture, finishOrder, savePuppetFile, listPuppets, puppetFile, removePuppet } from "./forgeShelf.mjs";
 import os from "node:os";
 import { spawn } from "node:child_process";
@@ -286,6 +287,26 @@ async function handleApp(req, res) {
         }
       }
       return json(res, r.ok ? 200 : 400, r.ok ? { ok: true } : r);
+    }
+    // THE PUPPET WORKSHOP (electron/workshop.mjs): every puppet, saved as made.
+    if (seg[2] === "workshop") {
+      const root = workshopRoot(userData);
+      if (req.method === "GET" && seg.length === 3) return json(res, 200, { puppets: listWorkshop(root) });
+      if (req.method === "GET" && seg.length === 5) {
+        const bytes = readWorkshopFile(root, seg[3], seg[4]);
+        if (!bytes) return json(res, 404, { error: "no such file" });
+        res.writeHead(200, { "Content-Type": seg[4].endsWith(".json") ? "application/json" : "image/png" });
+        return res.end(bytes);
+      }
+      if (req.method === "PUT" && seg.length === 5) {
+        const r = writeWorkshopFile(root, seg[3], seg[4], await readBody(req, 20 * 1024 * 1024));
+        return json(res, r.ok ? 200 : 400, r);
+      }
+      if (req.method === "DELETE" && seg.length === 4) {
+        const r = removeWorkshop(root, seg[3]);
+        return json(res, r.ok ? 200 : 400, r);
+      }
+      return json(res, 404, { error: "no such workshop call" });
     }
     // CANVA (electron/canva.mjs). The page sends your integration's ID and
     // secret with each call; the tokens stay here, locked.

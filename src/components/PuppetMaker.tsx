@@ -15,6 +15,7 @@ import { PUPPET_STYLES, VIEW_PARTS, keyColourFor, lipsFor, partsFor, type Puppet
 import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, PUPPET_SIZE, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, embedView, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
+import { loadImg, loadWorkshop, removeWorkshop, saveImg, saveMeta, savePart, workshopUrl, type PartReview, type WorkshopMeta } from "../lib/puppet/workshop";
 import { type PuppetEngine, sizeFor, blobToImg, describeInspiration, imgToPng, imgToUrl, judgeName, listLocalImageModels, pageGenerate, pageJudge, puppetEngines, unloadLocal } from "../lib/puppet/pageIO";
 import { finishOrder, orderPictures, removeFromShelf, shelfAvailable, shelvePuppet, type PuppetOrder } from "../lib/puppet/shelf";
 import type { PuppetTemplate } from "../lib/batches";
@@ -51,7 +52,10 @@ export default function PuppetMaker({
   pushToast,
   pushLog,
   onExhaust,
+  open,
 }: {
+  /** a puppet from the workshop to open again (Made → a puppet) */
+  open?: WorkshopMeta | null;
   settings: ForgeSettings;
   /** an order from Video Forge, if that is what opened this */
   order?: PuppetOrder | null;
@@ -92,7 +96,11 @@ export default function PuppetMaker({
   const [base, setBase] = useState<Pic | null>(null);
   const baseRef = useRef(base);
   baseRef.current = base;
-  const [reports, setReports] = useState<PartReport[]>([]);
+  const [reports, setReports] = useState<PartReview[]>([]);
+  // Your notes per part, while you type them (sent with "Redo with my note").
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // The puppet's workshop record (lib/puppet/workshop.ts): saved as it is made.
+  const metaRef = useRef<WorkshopMeta | null>(open ?? null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [parts, setParts] = useState<Record<string, CutPart>>({});
   const [pictures, setPictures] = useState(0);
@@ -155,6 +163,86 @@ export default function PuppetMaker({
     if (err?.name === "AbortError" || /halted|stopped/.test(err?.message ?? "")) return "Stopped. Everything made so far is kept — press Continue to carry on.";
     return err?.message ?? "something went wrong";
   };
+
+  /* ---------- the workshop: saved as it is made ---------- */
+  // One write at a time, in order — a part's files and the meta naming it.
+  const saveChain = useRef<Promise<unknown>>(Promise.resolve());
+  const persist = useCallback((job: () => Promise<unknown>) => {
+    saveChain.current = saveChain.current.then(job, job).catch(() => {});
+    return saveChain.current;
+  }, []);
+  const writeMeta = useCallback(
+    (patch: Partial<WorkshopMeta>) => {
+      if (!metaRef.current) return;
+      metaRef.current = { ...metaRef.current, ...patch };
+      const m = metaRef.current;
+      void persist(() => saveMeta(m));
+    },
+    [persist]
+  );
+  /** The record for this puppet, made the first time its parts start. */
+  const ensureMeta = useCallback(
+    async (baseImg: Img) => {
+      if (metaRef.current) return;
+      const now = new Date().toISOString();
+      metaRef.current = {
+        v: 1, slug, name: name || slug, description, style, framing, look,
+        faceEngine: faceEng.id, partEngine: partEng.id, createdAt: now, updatedAt: now,
+        status: "making", reports: [], boxes: {},
+      };
+      const m = metaRef.current;
+      await persist(async () => {
+        await saveImg(slug, "base.png", baseImg);
+        await saveMeta(m);
+      });
+    },
+    [slug, name, description, style, framing, look, faceEng.id, partEng.id, persist]
+  );
+
+  // OPENED FROM MADE: the saved face and parts back, the rig rebuilt, the review.
+  useEffect(() => {
+    if (!open) return;
+    let alive = true;
+    void (async () => {
+      setName(open.name);
+      setDescription(open.description);
+      setStyle(open.style);
+      setFraming(open.framing);
+      setLipsTouched(open.look?.lips ?? null);
+      setFaceId(open.faceEngine);
+      setPartId(open.partEngine);
+      setBusy("Opening the puppet…");
+      const { base: b, parts: p } = await loadWorkshop(open);
+      if (!alive || !b) {
+        setBusy("");
+        setProblem("This puppet's face could not be read back.");
+        return;
+      }
+      const pic = { img: b, url: await imgToUrl(b), verdict: null };
+      setBase(pic);
+      setBases([pic]);
+      const front = Object.fromEntries(Object.entries(p).filter(([k]) => !/^(side|sit)_/.test(k)));
+      setParts(front);
+      setReports(open.reports ?? []);
+      setPreviews(Object.fromEntries((open.reports ?? []).map((r) => [r.id, workshopUrl(open.slug, `${r.id}.pair.png`)])));
+      setShelved(open.shelved ? open.slug : "");
+      let made = buildRig({ name: open.slug, framing: open.framing, base: b, parts: front });
+      for (const v of (open.views ?? []) as ("side" | "sit")[]) {
+        const vb = await loadImg(open.slug, `${v}_base.png`);
+        if (!vb) continue;
+        const vp = Object.fromEntries(Object.entries(p).filter(([k]) => k.startsWith(`${v}_`)).map(([k, x]) => [k.slice(v.length + 1), x]));
+        made = embedView(made, v, buildRig({ name: open.slug, framing: v === "sit" ? "full" : open.framing, base: vb, parts: vp }));
+      }
+      if (!alive) return;
+      setRig(made);
+      setStep("done");
+      setBusy("");
+    })();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open?.slug]);
 
   /* ---------- step 1 → 2: four faces ---------- */
   const makeFaces = useCallback(async () => {
@@ -220,9 +308,10 @@ export default function PuppetMaker({
 
   /* ---------- step 3: the parts ---------- */
   const build = useCallback(
-    async (only?: string[], picked?: Pic) => {
+    async (only?: string[], picked?: Pic, notes?: Record<string, string>) => {
       const base = picked ?? baseRef.current;
       if (!base) return;
+      await ensureMeta(base.img);
       setProblem("");
       setStep("build");
       setBusy("Making the parts…");
@@ -236,15 +325,28 @@ export default function PuppetMaker({
           await unloadLocal(settings, faceEng.id.slice(6));
         }
         const res = await makeParts(
-          { base: base.img, framing, done: keep, only, look },
+          { base: base.img, framing, done: keep, only, look, notes },
           io,
           async (e) => {
             if (e.type === "picture") setPictures((n) => n + 1);
+            if (e.type === "kept") {
+              const { id, part } = e;
+              void persist(() => savePart(slug, id, part));
+              writeMeta({ boxes: { ...(metaRef.current?.boxes ?? {}), [id]: part.box } });
+            }
             if (e.type === "part") {
+              // A redo starts a fresh look: your earlier "looks good" no longer applies.
+              const rev: PartReview = { ...e.report, approved: false, note: notes?.[e.report.id] ?? metaRef.current?.reports.find((r) => r.id === e.report.id)?.note };
+              const list = metaRef.current?.reports ?? [];
+              writeMeta({ reports: list.some((r) => r.id === rev.id) ? list.map((r) => (r.id === rev.id ? rev : r)) : [...list, rev] });
+              if (e.preview) {
+                const pv = e.preview;
+                void persist(() => saveImg(slug, `${e.report.id}.pair.png`, pv));
+              }
               setReports((prev) => {
-                const next = prev.length ? [...prev] : partsFor(framing).map((p) => ({ id: p.id, label: p.label, status: "waiting" as const, tries: 0, why: "" }));
+                const next: PartReview[] = prev.length ? [...prev] : partsFor(framing).map((p) => ({ id: p.id, label: p.label, status: "waiting" as const, tries: 0, why: "" }));
                 const i = next.findIndex((r) => r.id === e.report.id);
-                if (i >= 0) next[i] = e.report;
+                if (i >= 0) next[i] = { ...e.report, approved: false, note: notes?.[e.report.id] ?? next[i].note };
                 return next;
               });
               if (e.preview) {
@@ -277,13 +379,23 @@ export default function PuppetMaker({
               continue;
             }
             const vf: PuppetFraming = v === "sit" ? "full" : framing;
-            const vr = await makeParts({ base: vb, framing: vf, only: VIEW_PARTS[v], look }, io, (e) => e.type === "picture" && setPictures((n) => n + 1), ctrl.signal);
+            void persist(() => saveImg(slug, `${v}_base.png`, vb));
+            const vr = await makeParts({ base: vb, framing: vf, only: VIEW_PARTS[v], look }, io, (e) => {
+              if (e.type === "picture") setPictures((n) => n + 1);
+              if (e.type === "kept") {
+                const { id, part } = e;
+                void persist(() => savePart(slug, `${v}_${id}`, part));
+                writeMeta({ boxes: { ...(metaRef.current?.boxes ?? {}), [`${v}_${id}`]: part.box } });
+              }
+            }, ctrl.signal);
             made = embedView(made, v, buildRig({ name: slug, framing: vf, base: vb, parts: vr.parts }));
+            writeMeta({ views: [...new Set([...(metaRef.current?.views ?? []), v])] });
             setRig(made);
             pushLog(`✓ ${v} view: ${Object.keys(vr.parts).length} parts`, "ok");
           }
         }
         setStep("done");
+        writeMeta({ status: "review" });
         const missing = res.reports.filter((r) => r.status === "missing").length;
         pushLog(`✓ puppet ${name || slug}: ${Object.keys(all).length} parts${missing ? `, ${missing} missing` : ""}, ${res.pictures} pictures`, "ok");
       } catch (e) {
@@ -294,7 +406,7 @@ export default function PuppetMaker({
         setBusy("");
       }
     },
-    [framing, io, parts, slug, name, description, style, faceEng, partEng, settings, pushLog, look, views]
+    [framing, io, parts, slug, name, description, style, faceEng, partEng, settings, pushLog, look, views, ensureMeta, persist, writeMeta]
   );
   const buildRef = useRef(build);
   buildRef.current = build;
@@ -320,8 +432,9 @@ export default function PuppetMaker({
     if (!r.ok) return setProblem(r.problem ?? "could not save the puppet");
     if (order) await finishOrder(order.id, { slug });
     setShelved(slug);
+    writeMeta({ shelved: true });
     pushToast("ok", `${name || slug} is ready in Video Forge (Cast → Face).`);
-  }, [rig, slug, order, name, pushToast]);
+  }, [rig, slug, order, name, pushToast, writeMeta]);
 
   const saveZip = useCallback(async () => {
     if (!rig) return;
@@ -337,6 +450,8 @@ export default function PuppetMaker({
   const deletePuppet = useCallback(async () => {
     stop();
     if (shelved) await removeFromShelf(shelved);
+    if (metaRef.current) await removeWorkshop(metaRef.current.slug);
+    metaRef.current = null;
     if (order) void finishOrder(order.id, { problem: "deleted in Image Forge" });
     setRig(null);
     setParts({});
@@ -354,6 +469,48 @@ export default function PuppetMaker({
     stop();
     if (order && !shelved && step !== "describe") void finishOrder(order.id, { problem: "closed before it was finished" });
     onClose();
+  };
+
+  /** "Looks good": you agree with this part as it is. */
+  const approve = (id: string, yes: boolean) => {
+    setReports((prev) => {
+      const next = prev.map((r) => (r.id === id ? { ...r, approved: yes } : r));
+      writeMeta({ reports: next, status: next.every((r) => r.approved || r.status === "ok") ? "approved" : "review" });
+      return next;
+    });
+  };
+  /** "Redo with my note": that one part again, with your words added. */
+  const redoWithNote = (id: string) => {
+    const note = (drafts[id] ?? "").trim();
+    void build([id], undefined, note ? { [id]: note } : undefined);
+  };
+  /** A side-facing view for a puppet that does not have one yet. */
+  const addSideView = async () => {
+    if (!base || !rig) return;
+    setBusy("Turning them to the side, for dialogue…");
+    const ctrl = new AbortController();
+    stopRef.current = ctrl;
+    try {
+      const vb = await makeViewBase({ base: base.img, view: "side", framing, look }, io, ctrl.signal);
+      if (!vb) throw new Error("no clean side-facing picture after 3 tries — try again, or change engines");
+      void persist(() => saveImg(slug, "side_base.png", vb));
+      const vr = await makeParts({ base: vb, framing, only: VIEW_PARTS.side, look }, io, (e) => {
+        if (e.type === "picture") setPictures((n) => n + 1);
+        if (e.type === "kept") {
+          const { id, part } = e;
+          void persist(() => savePart(slug, `side_${id}`, part));
+          writeMeta({ boxes: { ...(metaRef.current?.boxes ?? {}), [`side_${id}`]: part.box } });
+        }
+      }, ctrl.signal);
+      setRig((r) => (r ? embedView(r, "side", buildRig({ name: slug, framing, base: vb, parts: vr.parts })) : r));
+      writeMeta({ views: [...new Set([...(metaRef.current?.views ?? []), "side"])] });
+      pushToast("ok", "Side view added — send it to Video Forge again to use it there.");
+      setShelved("");
+    } catch (e) {
+      setProblem(fail(e));
+    } finally {
+      setBusy("");
+    }
   };
 
   const counts = reports.reduce((m, r) => ((m[r.status] = (m[r.status] ?? 0) + 1), m), {} as Record<string, number>);
@@ -597,7 +754,7 @@ export default function PuppetMaker({
               <button className="forge-btn" disabled={!!busy} onClick={() => setStep("describe")}>
                 Change the description
               </button>
-              {busy && <button className="forge-btn" onClick={stop}>Stop</button>}
+              {busy && <button className="forge-btn" onClick={stop} data-tip="Stops after the picture being made now. Everything made so far is kept.">Stop</button>}
             </div>
           </div>
         )}
@@ -611,25 +768,71 @@ export default function PuppetMaker({
                 </span>
                 {busy && <span className="text-[var(--color-ember)]">{busy}</span>}
               </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {(reports.length ? reports : partsFor(framing).map((p) => ({ id: p.id, label: p.label, status: "waiting" as const, tries: 0, why: "" }))).map((r) => (
-                  <div key={r.id} className="forge-tile !p-2" title={r.why}>
+              {/* THE REVIEW (Ak, 14 Oct 2026): every part with its before/after,
+                  what the checker said, your note, and your verdict. A redo
+                  takes your note along. */}
+              {step === "done" && (
+                <p className="mb-2 text-[12.5px] text-[#c4cbe0]">
+                  Look at each part. <b>Looks good</b> when you agree; otherwise write what is wrong (“less tongue”, “no smile”) and press{" "}
+                  <b>Redo with my note</b>. {reports.filter((r) => r.approved).length} of {reports.length} looked at.
+                </p>
+              )}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {(reports.length ? reports : partsFor(framing).map((p) => ({ id: p.id, label: p.label, status: "waiting" as const, tries: 0, why: "" }) as PartReview)).map((r) => (
+                  <div key={r.id} className={`forge-tile !p-3 ${r.approved ? "ring-1 ring-emerald-400/60" : ""}`}>
                     {previews[r.id] ? (
                       <img
                         src={previews[r.id]}
                         alt=""
-                        className="zoomable mb-1.5 h-16 w-full rounded-[12px] object-cover"
-                        onClick={() => setZoom({ url: previews[r.id], caption: `${r.label}: before and after${r.why && r.status !== "ok" ? ` — ${r.why}` : ""}` })}
+                        className="zoomable mb-2 h-32 w-full rounded-[12px] bg-black/30 object-contain"
+                        onClick={() => setZoom({ url: previews[r.id], caption: `${r.label}: before and after${r.why ? ` — checker: ${r.why}` : ""}` })}
+                        data-tip="Before (left) and after (right). Click to see it big."
                       />
                     ) : (
-                      <div className="mb-1.5 h-16 rounded-[12px] bg-black/30" />
+                      <div className="mb-2 h-32 rounded-[12px] bg-black/30" />
                     )}
-                    <div className="flex items-center gap-1.5 text-[11.5px] text-[#eef1f8]">
+                    <div className="flex items-center gap-1.5 text-[12.5px] text-[#eef1f8]">
                       <span className={`h-2 w-2 rounded-full ${STATUS_LOOK[r.status].dot}`} />
                       {r.label}
-                      <span className="ml-auto font-mono text-[10px] text-[#8f98ab]">{STATUS_LOOK[r.status].word}{r.tries > 1 ? ` · try ${r.tries}` : ""}</span>
+                      <span className="ml-auto font-mono text-[10px] text-[#8f98ab]">
+                        {r.approved ? "✓ you agreed" : STATUS_LOOK[r.status].word}
+                        {r.tries > 1 ? ` · try ${r.tries}` : ""}
+                      </span>
                     </div>
-                    {(r.status === "unsure" || r.status === "missing") && r.why && <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-[#8f98ab]">{r.why}</p>}
+                    {r.why && r.why !== "checked" && (
+                      <p className="mt-1 text-[11.5px] leading-snug text-[#c4cbe0]">
+                        <span className="text-[#8f98ab]">Checker:</span> {r.why}
+                      </p>
+                    )}
+                    {r.note && <p className="mt-1 text-[11.5px] leading-snug text-[var(--color-ember)]">Your last note: {r.note}</p>}
+                    {step === "done" && !busy && (
+                      <>
+                        <textarea
+                          rows={2}
+                          value={drafts[r.id] ?? ""}
+                          onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
+                          placeholder="Your note, e.g. less tongue, mouth smaller"
+                          className="mt-2 w-full rounded-[10px] border border-white/10 bg-black/40 px-2 py-1.5 text-[12px] text-[#eef1f8]"
+                          data-tip="What should change in this part. It is added to the request when you press Redo."
+                        />
+                        <div className="mt-1.5 flex gap-1.5">
+                          <button
+                            className={`forge-btn flex-1 !px-2 !py-1.5 !text-[12px] ${r.approved ? "primary" : ""}`}
+                            onClick={() => approve(r.id, !r.approved)}
+                            data-tip={r.approved ? "Take back your OK." : "You agree this part is right."}
+                          >
+                            {r.approved ? "✓ Looks good" : "Looks good"}
+                          </button>
+                          <button
+                            className="forge-btn flex-1 !px-2 !py-1.5 !text-[12px]"
+                            onClick={() => redoWithNote(r.id)}
+                            data-tip="Make this one part again, with your note added. Everything else stays."
+                          >
+                            Redo{(drafts[r.id] ?? "").trim() ? " with my note" : ""}
+                          </button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -638,26 +841,31 @@ export default function PuppetMaker({
 
             <div className="space-y-3">
               {rig ? (
-                <PuppetPreview rig={rig} onClick={() => setZoom("live")} />
+                <div data-tip="The puppet, alive: talking, blinking, nodding. Click to see it big."><PuppetPreview rig={rig} onClick={() => setZoom("live")} /></div>
               ) : (
-                base && <img src={base.url} alt="" className="zoomable aspect-square w-full rounded-[20px] object-cover opacity-70" onClick={() => setZoom({ url: base.url, caption: "The chosen face" })} />
+                base && <img src={base.url} alt="" className="zoomable aspect-square w-full rounded-[20px] object-cover opacity-70" onClick={() => setZoom({ url: base.url, caption: "The chosen face" })} data-tip="The chosen face. Click to see it big." />
               )}
               <div className="flex flex-col gap-2">
                 {busy ? (
-                  <button className="forge-btn" onClick={stop}>Stop</button>
+                  <button className="forge-btn" onClick={stop} data-tip="Stops after the picture being made now. Everything made so far is kept.">Stop</button>
                 ) : step === "build" ? (
-                  <button className="forge-btn primary" onClick={() => void build()}>
+                  <button className="forge-btn primary" onClick={() => void build()} data-tip="Carries on making the parts that are still missing.">
                     Continue
                   </button>
                 ) : (
                   <>
                     {canShelve && (
-                      <button className="forge-btn primary" onClick={() => void sendToVideoForge()} disabled={!!shelved}>
+                      <button className="forge-btn primary" onClick={() => void sendToVideoForge()} disabled={!!shelved} data-tip="Puts the puppet on the shelf Video Forge reads: it appears in Cast → +.">
                         {shelved ? "✓ In Video Forge" : "Send to Video Forge"}
                       </button>
                     )}
-                    <button className="forge-btn" onClick={() => void saveZip()}>Save the puppet (zip)</button>
-                    {redo.length > 0 && <button className="forge-btn" onClick={() => void build(redo)}>Try the {redo.length} unsure/missing again</button>}
+                    {framing !== "head" && !rig?.json.views?.side && (
+                      <button className="forge-btn" onClick={() => void addSideView()} data-tip="Makes a second set turned three-quarters, so two characters can talk to each other in Video Forge. About 17 more pictures.">
+                        Add a side-facing view
+                      </button>
+                    )}
+                    <button className="forge-btn" onClick={() => void saveZip()} data-tip="Saves every picture of the puppet and its rig file in one zip.">Save the puppet (zip)</button>
+                    {redo.length > 0 && <button className="forge-btn" onClick={() => void build(redo)} data-tip="Makes every unsure or missing part again, with any notes you wrote.">Try the {redo.length} unsure/missing again</button>}
                     {confirmDelete ? (
                       <div className="flex gap-2">
                         <button className="forge-btn danger flex-1" onClick={() => void deletePuppet()} title="Throw it away for good. If it went to Video Forge, it comes off the shelf too.">
@@ -680,7 +888,7 @@ export default function PuppetMaker({
         )}
       </div>
       {zoom && (
-        <div className="forge-zoom" onClick={() => setZoom(null)} role="dialog" aria-label="Picture, large">
+        <div className="forge-zoom" onClick={() => setZoom(null)} role="dialog" aria-label="Picture, large" data-tip="Click outside the picture, or press Esc, to close.">
           <div onClick={(e) => e.stopPropagation()} className="cursor-default">
             {zoom === "live" ? rig && <PuppetPreview rig={rig} size={720} /> : <img src={zoom.url} alt="" />}
             <p>{zoom === "live" ? "talking, blinking, nodding, shaking and laughing in turn" : zoom.caption} · Esc or click outside to close</p>

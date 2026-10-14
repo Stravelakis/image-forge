@@ -95,11 +95,30 @@ export const PUPPET_STYLES: PuppetStyle[] = [
       "a LIFELIKE, HIGH-DETAIL 3D CHARACTER like a modern video-game cinematic or a high-end animated film — realistic skin, hair and fabric texture, natural proportions, soft cinematic studio lighting; believable and detailed, but still a rendered character, not a photograph",
   },
   {
+    // TOUCHED-UP PHOTOREAL (Ak, 14 Oct 2026: "the art of the possible — the
+    // best that can reasonably be done with consistency"). A real photograph's
+    // fine detail moves between edits, so the things that move most are left
+    // out on purpose — see PHOTO_EXCLUDED, said in the prompt and in the
+    // things-to-avoid list.
     id: "photo",
-    label: "Photoreal (experimental)",
-    blurb: "Like a studio photo · more retries",
+    label: "Touched-up photoreal",
+    blurb: "Like a retouched studio photo · fewer details",
     prompt:
-      "a PHOTOREALISTIC studio portrait that looks like a real photograph — natural skin texture, real hair, real fabric, soft even studio light, sharp focus, shot on a 50mm lens",
+      "a TOUCHED-UP PHOTOREALISTIC studio portrait, like a magazine photo retouched for a clean look — smooth even skin, neat short hair kept off the face, plain solid-colour matte clothing, soft even studio light, sharp focus. Clean-shaven, no glasses, no jewellery, no patterns, no logos",
+  },
+  {
+    id: "stick",
+    label: "Stick figure",
+    blurb: "Hand-drawn, simplest of all",
+    prompt:
+      "a SIMPLE HAND-DRAWN STICK FIGURE — a round head with a simple face (dot eyes, a line mouth), single black lines for the body, arms and legs, drawn with a marker on white paper, charming and minimal",
+  },
+  {
+    id: "stick2d",
+    label: "2D vector stick figure",
+    blurb: "Clean vector animation, bold lines",
+    prompt:
+      "a 2D VECTOR ANIMATION STICK FIGURE, like a modern motion-graphics explainer or an Alan Becker-style animation — perfectly clean, smooth, bold uniform strokes, a round head with a simple expressive face, flat solid colours, no texture, no shading",
   },
   {
     id: "doodle",
@@ -140,7 +159,7 @@ export function keyColourFor(description: string): KeyColour {
  * like two characters. Animals, doodles and anime faces default to no lips.
  */
 export function lipsFor(description: string, style: string): boolean {
-  if (style === "doodle" || style === "anime") return false;
+  if (style === "doodle" || style === "anime" || style === "stick" || style === "stick2d") return false;
   return !/\b(owl|bird|parrot|penguin|duck|chick|fox|dog|puppy|cat|kitten|bear|rabbit|bunny|mouse|rat|wolf|lion|tiger|monkey|frog|fish|dragon|dinosaur|monster|robot|blob|alien|creature|animal|beast|cow|pig|sheep|goat|horse|deer|squirrel|hedgehog|owlet|bee|bug|insect)\b/i.test(description);
 }
 
@@ -187,9 +206,24 @@ export function basePrompt(o: { description: string; style: string; framing: Pup
     .join(" ");
 }
 
+/**
+ * What touched-up photoreal leaves out, because it changes between edits and
+ * breaks the cut parts (Ak asked for the list, 14 Oct 2026):
+ *  · face: beards, stubble and moustaches; freckles, moles and scars; heavy
+ *    make-up and lipstick; glasses (the reflections change); piercings;
+ *    hair falling over the face or eyes; curly or flyaway hair near the face
+ *  · clothing: patterns (stripes, checks, florals), knits and wool, fur and
+ *    fluffy collars, lace, sequins and glitter, shiny or see-through fabric,
+ *    logos and printed text; earrings, necklaces and other jewellery; hats
+ * What stays: a clean face, neat short or tied-back hair, plain matte clothes.
+ */
+export const PHOTO_EXCLUDED =
+  "beard, stubble, moustache, freckles, moles, scars, heavy make-up, lipstick, glasses, sunglasses, piercings, hair over the face, curly hair near the face, " +
+  "striped clothing, checked clothing, floral pattern, knitwear, wool, fur, fluffy collar, lace, sequins, glitter, shiny fabric, see-through fabric, logo, printed text, earrings, necklace, jewellery, hat";
+
 /** What the base picture must not be — a photo, unless a photo is the point. */
 export const baseNegative = (style: string): string =>
-  style === "photo" ? BASE_NEGATIVE.replace(", photorealistic photo", ", cartoon, illustration, 3d render, plastic skin") : BASE_NEGATIVE;
+  style === "photo" ? `${BASE_NEGATIVE.replace(", photorealistic photo", ", cartoon, illustration, 3d render, plastic skin")}, ${PHOTO_EXCLUDED}` : BASE_NEGATIVE;
 
 export const BASE_NEGATIVE =
   "cross-eyed, converging eyes, wall-eyed, uneven pupils, wide staring eyes, bulging eyes, startled, open mouth, cropped head, cut-off ears, tight crop, text, watermark, extra characters, extra limbs, photorealistic photo, letters, words";
@@ -283,7 +317,7 @@ export const keepFor = (look: PuppetLook = DEFAULT_LOOK) =>
 export const KEEP = keepFor();
 
 export const editPrompt = (part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): string =>
-  `Edit this picture. ${part.change}${part.kind === "mouth" ? ` ${lipsClause(look)}` : ""}\n\n${keepFor(look)}`;
+  `Edit this picture. ${part.change}${part.kind === "mouth" ? ` ${lipsClause(look)} Keep the lips exactly as they are in the original picture — the same colour and thickness, and if it has none, still none.` : ""}\n\n${keepFor(look)}`;
 
 /**
  * Where on the picture each kind of part may sit, as fractions of the height.

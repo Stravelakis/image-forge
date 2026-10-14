@@ -46,6 +46,8 @@ export interface PartReport {
 export type MakerEvent =
   | { type: "base"; index: number; picture: Img; verdict: Verdict | null }
   | { type: "part"; report: PartReport; preview?: Img }
+  /** a part was kept (checked, or the best of three) — save it now */
+  | { type: "kept"; id: string; part: CutPart }
   | { type: "picture" }; // one more picture generated — for the running count
 
 export const PUPPET_SIZE = 1024;
@@ -135,8 +137,9 @@ export async function makeViewBase(
 
 /* ---------------- 2. the parts ---------------- */
 
-export function partQuestion(part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): string {
+export function partQuestion(part: PuppetPart, look: PuppetLook = DEFAULT_LOOK, note?: string): string {
   return [
+    ...(note ? [`The person asked for this change too: "${note}". It must be done.`] : []),
     ...(part.kind === "mouth" ? [look.lips ? "The mouth must have drawn lips." : "The mouth must have no separate drawn lips."] : []),
     ...(part.kind === "arms" ? ["Each arm must appear exactly once — no extra arm left resting at the side."] : []),
     "Left: a cartoon character. Right: the same character after an edit.",
@@ -173,6 +176,8 @@ export interface PartsRequest {
   only?: string[];
   tries?: number;
   look?: PuppetLook;
+  /** your notes per part, for a redo ("less tongue", "no smile") — added to the request and told to the checker */
+  notes?: Record<string, string>;
 }
 
 export interface PartsResult {
@@ -212,7 +217,7 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
       if (signal?.aborted) throw new DOMException("stopped", "AbortError");
       report.tries = t;
       const edit = resize(
-        await io.generate({ prompt: editPrompt(part, req.look), negative: EDIT_NEGATIVE, refs: [req.base], seed: seedFor(n * 31 + t), width: req.base.width, height: req.base.height }, signal),
+        await io.generate({ prompt: editPrompt(part, req.look) + (req.notes?.[part.id] ? ` Also, and this matters most: ${req.notes[part.id]}.` : ""), negative: EDIT_NEGATIVE, refs: [req.base], seed: seedFor(n * 31 + t + (req.notes?.[part.id] ? Date.now() % 9973 : 0)), width: req.base.width, height: req.base.height }, signal),
         req.base.width,
         req.base.height
       );
@@ -230,9 +235,10 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
       const view = viewBox(cut.box, req.base);
       const after = composite(req.base, cut.layer, cut.box.x, cut.box.y);
       const pair = shrink(sideBySide(crop(req.base, view), crop(after, view)), 768);
-      const verdict = io.judge ? await io.judge(partQuestion(part, req.look), pair, signal).catch(() => null) : null;
+      const verdict = io.judge ? await io.judge(partQuestion(part, req.look, req.notes?.[part.id]), pair, signal).catch(() => null) : null;
       if (!verdict || verdict.ok) {
         parts[part.id] = candidate;
+        onEvent({ type: "kept", id: part.id, part: candidate });
         report.status = "ok";
         report.why = verdict ? "checked" : "not checked (no picture checker set up)";
         fallback = null;
@@ -248,6 +254,7 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
     if (report.status !== "ok") {
       if (fallback) {
         parts[part.id] = fallback;
+        onEvent({ type: "kept", id: part.id, part: fallback });
         report.status = "unsure";
       } else {
         report.status = "missing";

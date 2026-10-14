@@ -89,6 +89,7 @@ import MadeView from "./components/MadeView";
 import { TipLayer } from "./components/TipLayer";
 import CanvaFill from "./components/CanvaFill";
 import { canvaUpload } from "./lib/canva";
+import type { WorkshopMeta } from "./lib/puppet/workshop";
 import type { PuppetTemplate } from "./lib/batches";
 import { DEFAULT_SETUP } from "./lib/batches";
 import { CATEGORY_FOLDER } from "./lib/output";
@@ -267,7 +268,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [canvaFillOpen, setCanvaFillOpen] = useState(false);
   // The puppet maker, opened from a menu (no order) or by Video Forge's order.
-  const [puppet, setPuppet] = useState<{ order: PuppetOrder | null; template?: PuppetTemplate | null } | null>(null);
+  const [puppet, setPuppet] = useState<{ order: PuppetOrder | null; template?: PuppetTemplate | null; open?: WorkshopMeta | null } | null>(null);
   const [vectorOpen, setVectorOpen] = useState(false);
   const [animateOpen, setAnimateOpen] = useState(false);
   const [paidAsk, setPaidAsk] = useState<null | { check: PaidRunCheck; targets: number[] }>(null);
@@ -2196,6 +2197,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               onBackfill={backfillThumbs}
               onMakeGif={openGifMaker}
               onSendToCanva={(ids) => void sendToCanva(ids)}
+              onOpenPuppet={(m) => setPuppet({ order: null, open: m })}
             />
           </main>
         ) : view === "workbench" ? (
@@ -2517,6 +2519,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
           settings={settings}
           order={puppet.order}
           template={puppet.template}
+          open={puppet.open}
           onSaveTemplate={(name, t) =>
             setSetups((s) => [{ id: uid(), name, createdAt: new Date().toISOString(), data: { ...DEFAULT_SETUP, name }, type: "puppet", puppet: t }, ...s])
           }

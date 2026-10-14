@@ -8,6 +8,7 @@
  * Thumbnails come from lib/thumbStore, so the list is complete after a
  * restart; puppets come from the Forge shelf.
  */
+import { listWorkshop, workshopUrl, type WorkshopMeta } from "../lib/puppet/workshop";
 import { useEffect, useMemo, useState } from "react";
 import type { ManifestRow, Status } from "../types";
 import type { Batch } from "../lib/batches";
@@ -61,6 +62,7 @@ export default function MadeView({
   onBackfill,
   onMakeGif,
   onSendToCanva,
+  onOpenPuppet,
 }: {
   rows: ManifestRow[];
   batches: Batch[];
@@ -76,6 +78,8 @@ export default function MadeView({
   onMakeGif?: (row: ManifestRow) => void;
   /** put these pictures into your Canva uploads (Settings → Canva) */
   onSendToCanva?: (ids: number[]) => void;
+  /** open a workshop puppet in the puppet maker, to review and tweak */
+  onOpenPuppet?: (m: WorkshopMeta) => void;
 }) {
   const [kind, setKind] = useState<Kind>("all");
   const [status, setStatus] = useState<Status | "all">("all");
@@ -85,6 +89,9 @@ export default function MadeView({
   const [puppets, setPuppets] = useState<Puppet[]>([]);
   const [puppetThumbs, setPuppetThumbs] = useState<Record<string, string>>({});
   const [filling, setFilling] = useState("");
+  // Every puppet made, sent or not (lib/puppet/workshop.ts) — 14 Oct 2026.
+  const [workshop, setWorkshop] = useState<WorkshopMeta[]>([]);
+  useEffect(() => void listWorkshop().then(setWorkshop), []);
 
   // Puppets from the Forge shelf (desktop app only), with their faces.
   useEffect(() => {
@@ -156,7 +163,8 @@ export default function MadeView({
 
   const chip = (on: boolean) =>
     `rounded-full px-3 py-1.5 text-[12px] transition ${on ? "bg-[var(--color-ember)] text-[var(--color-on-accent)] font-semibold" : "border border-white/12 text-parch hover:border-[var(--color-ember)]"}`;
-  const count = (k: Kind) => (k === "puppets" ? puppets.length : k === "all" ? rows.length + puppets.length : rows.filter((r) => KIND_OF(r) === k).length);
+  const allPuppets = workshop.length + puppets.filter((p) => !workshop.some((w) => w.slug === p.slug)).length;
+  const count = (k: Kind) => (k === "puppets" ? allPuppets : k === "all" ? rows.length + allPuppets : rows.filter((r) => KIND_OF(r) === k).length);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5 p-6">
@@ -282,7 +290,40 @@ export default function MadeView({
       {/* the list */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {showPuppets &&
-          puppetsShown.map((p) => (
+          workshop
+            .filter((w) => !search.trim() || w.name.toLowerCase().includes(search.trim().toLowerCase()))
+            .map((w) => {
+              const looked = w.reports.filter((r) => r.approved).length;
+              const state =
+                w.status === "making"
+                  ? { word: "being made — open to carry on", tone: "text-amber-300" }
+                  : w.status === "approved"
+                    ? { word: w.shelved ? "approved · in Video Forge" : "approved — ready to send", tone: "text-emerald-300" }
+                    : { word: `to review · ${looked} of ${w.reports.length} looked at`, tone: "text-[var(--color-ember)]" };
+              return (
+                <div key={`w-${w.slug}`} className="overflow-hidden rounded-[20px] border border-white/10 bg-panel">
+                  <button
+                    data-tip="Opens this puppet: every part with its notes — review, tweak, add a side view, send to Video Forge."
+                    className="block aspect-square w-full bg-[radial-gradient(circle_at_50%_35%,#1a2a52,#0a1122_70%)]"
+                    onClick={() => onOpenPuppet?.(w)}
+                  >
+                    <img src={workshopUrl(w.slug, "base.png")} alt="" className="h-full w-full object-contain" />
+                  </button>
+                  <div className="space-y-0.5 p-3">
+                    <p className="truncate text-[13px] font-medium text-cream">{w.name}</p>
+                    <p className="text-[11px] text-dust">
+                      puppet · {w.framing === "full" ? "full body" : w.framing === "waist" ? "waist up" : "head"} · {w.style}
+                      {w.views?.includes("side") ? " · side view" : ""} · {when(w.updatedAt)}
+                    </p>
+                    <p className={`text-[11px] ${state.tone}`}>{state.word}</p>
+                  </div>
+                </div>
+              );
+            })}
+        {showPuppets &&
+          puppetsShown
+            .filter((p) => !workshop.some((w) => w.slug === p.slug))
+            .map((p) => (
             <div key={`p-${p.slug}`} className="overflow-hidden rounded-[20px] border border-white/10 bg-panel">
               <button data-tip="Shows this puppet picture larger."
                 className="block aspect-square w-full bg-[radial-gradient(circle_at_50%_35%,#1a2a52,#0a1122_70%)] cursor-zoom-in"
@@ -355,7 +396,7 @@ export default function MadeView({
           </div>
         ))}
       </div>
-      {!shown.length && !(showPuppets && puppetsShown.length) && <p className="py-10 text-center text-[13px] text-dust">Nothing here yet.</p>}
+      {!shown.length && !(showPuppets && (puppetsShown.length || workshop.length)) && <p className="py-10 text-center text-[13px] text-dust">Nothing here yet.</p>}
 
       {zoom && (
         <div data-tip="Click anywhere outside the picture to close it." className="forge-zoom" onClick={() => setZoom(null)} role="dialog" aria-label="Picture, large">
