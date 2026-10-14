@@ -284,6 +284,20 @@ models, and pick one per job. One free Mistral key covers all three:
 
 ---
 
+## Showcase: from a photo to a talking puppet
+
+Two of the sample puppets started from photographs — the puppet maker borrows
+the look and draws a new character in a style of your choosing. *(Pictures of
+the finished puppets go here once they are approved.)*
+
+| Photo | Puppet |
+|---|---|
+| A black and tan dog, by [Jane Thomson](https://www.pexels.com/@jane-thomson-1710934398) on [Pexels](https://www.pexels.com/collections/dog-puppet-x5klyxw/) | **Lucky** — 3D animated style |
+| A man in a red sweater and cap, by [Andrea Piacquadio](https://www.pexels.com/@olly) on [Pexels](https://www.pexels.com/collections/guy-puppet-cn95tcb/) | **Alex** — claymation style |
+
+Photos used as inspiration under the [Pexels licence](https://www.pexels.com/license/);
+the puppets themselves carry no credit line.
+
 ## What it does
 
 **Start** — the front door. Describe it once, say how many, pick a Style, a
