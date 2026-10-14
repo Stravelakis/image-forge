@@ -157,12 +157,12 @@ export default function DocsView({
         </li>
 
         <li className="reveal">
-          <h3 className="font-display text-lg text-cream">05 · Your cursor pet, language and keys</h3>
+          <h3 className="font-display text-lg text-cream">05 · Cursor chasers, language and keys</h3>
           <p className="mt-2 text-[13.5px] text-parch">
-            A little violet fox runs after the mouse, sits when it catches up and naps when you stop.{" "}
-            <span className="text-cream">Settings → Language &amp; pet</span> turns it off. Any walk cycle you make in{" "}
-            <em>Animate a character</em> can take its place with <em>Make it my cursor pet</em>. The same page picks the app&apos;s
-            language: English now; Greek, French, German, Spanish and Portuguese are coming, in simple words.
+            <em>Animate a character → Cursor chaser</em> makes a little creature that runs after the mouse on a website, sits when it
+            catches up and naps when the mouse rests. <em>Try it here</em> lets it chase your mouse in the app for a moment;{" "}
+            <em>Download for a website</em> saves a folder with everything a site needs. <span className="text-cream">Settings → Language</span>{" "}
+            picks the app&apos;s language: English now; Greek, French, German, Spanish and Portuguese are coming, in simple words.
           </p>
           <p className="mt-3 text-[13.5px] text-parch">
             On the desktop app, your settings and keys are kept in a file the app owns, so a changed port or an update cannot empty

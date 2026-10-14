@@ -192,12 +192,11 @@ change before it is applied), or ask how the app works.
   anything unsafe before they are shown or saved.
 - **Hover help** — hold the mouse over any button, field or link and a small
   bubble says what it does. Some end with a *More about this* link.
-- **Cursor pet** — a violet fox runs after your mouse, sits when it catches up
-  and naps when you stop. **Settings → Language & pet** turns it off. Make a
-  walk cycle in *Animate a character* and press *Make it my cursor pet* to use
-  that character instead.
+- **Cursor chasers** — *Animate a character → Cursor chaser* makes a little
+  creature that runs after the mouse on a website, sits and naps. *Try it here*,
+  then *Download for a website*.
 - **Language** — English now; Greek, French, German, Spanish and Portuguese are
-  coming, in simple words (Settings → Language & pet).
+  coming, in simple words (Settings → Language).
 
 ---
 

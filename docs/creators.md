@@ -84,17 +84,18 @@ sheets are for.
 
 ---
 
-## Puppets and the cursor pet
+## Puppets and cursor chasers
 
 A **puppet** is a character cut into parts so Video Forge can make it talk,
 blink, raise its brows, nod and, from the waist up, wave and point. It is the
 newest kind of character art Image Forge makes; read
 [Making a puppet, in plain words](puppets-eli5.md).
 
-A **walk cycle** from *Animate a character* can also become your **cursor
-pet**: press *Make it my cursor pet*, and that character runs after your mouse
-instead of the built-in violet fox. Settings → Language & pet turns it off or
-brings the fox back.
+A **cursor chaser** is a little creature that runs after the mouse on a
+website, sits when it catches up and naps when the mouse rests. Make one in
+*Animate a character → Cursor chaser*, press *Try it here* to watch it chase
+your mouse, then *Download for a website*: a folder with the picture strip, one
+small script, a demo page and how to add it (WordPress too).
 
 ---
 

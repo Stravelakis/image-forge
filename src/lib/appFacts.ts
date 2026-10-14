@@ -65,8 +65,9 @@ WIZARDS (four makers)
 - Make pictures: three steps (what to make, how it looks, go).
 - Make a puppet: a character for Video Forge that talks, blinks and waves.
 - Animate a character: sprite sheets, turnarounds, expressions, mouth shapes
-  (visemes), walk cycles, eyes and brows. A walk cycle can become the cursor
-  pet ("Make it my cursor pet").
+  (visemes), walk cycles, eyes and brows, and CURSOR CHASERS: a little creature
+  that runs after the mouse on a website ("Try it here", then "Download for a
+  website" — a folder with the picture strip, a script, a demo and how-to).
 - Prompt factory: writes or loads a big list of prompts and copies it for
   Google Sheets, or saves Excel or CSV.
 Uploading to WordPress is under Download (top bar), not Wizards.
@@ -178,9 +179,7 @@ OTHER FEATURES BY NAME
 - Vectors: SVG and Lottie written by the code model, sanitised before use.
 - Hover help: hold the mouse over any control and a small bubble says what it
   does; some have a "More about this" link to the docs.
-- Cursor pet: a violet fox that runs after the mouse, sits when it catches up,
-  naps when you stop. Settings -> Language & pet turns it off; any walk cycle
-  from Animate a character can replace it.
+- Cursor chasers: a little creature that runs after the mouse on a WEBSITE, made with Animate a character → Cursor chaser (Try it here, then Download for a website). The app itself has no pet.
 - Check the forge (Settings -> Advanced): duplicate keys, paused engines, rows
   on dead models, missing free fallbacks.
 - Video Forge twin switch: the Video Forge mark in the header opens that app
@@ -195,8 +194,8 @@ Header: the engine button, Download (pictures as ZIP, manifest as CSV or
 spreadsheet, upload to WordPress), "Make the N waiting".
 Settings -> Image engines: keys, models, cooldowns, pausing an engine.
 Settings -> Image styles, Text engines, Text prompts, Filenames, Folders,
-WP connections, Language & pet (English now; Greek, French, German, Spanish and
-Portuguese are coming, in simple words; and the cursor pet), Advanced (check
+WP connections, Canva, Language (English now; Greek, French, German, Spanish and
+Portuguese are coming, in simple words), Advanced (check
 the forge, repair, backup, reset, update, where it opens). There is no
 Appearance page any more.
 On the desktop app, data lives in %APPDATA%\\image-forge; Help -> Where is my

@@ -39,7 +39,7 @@ and the app asks before spending a penny.
 > picture, sheet, GIF and puppet and a Redo on each; a **puppet maker** for
 > [Video Forge](#i-make-videos-with-byok-vid-creator); keys and settings kept in
 > a file the app owns (no more empty settings); keys shared with Video Forge;
-> a hover-help bubble on every control; and a cursor pet.
+> a hover-help bubble on every control; and cursor chasers for your website.
 > Already out: **1.0.3** Update now and browser mode; **1.0.2** the Start screen.
 > [Everything that changed](CHANGELOG.md).
 
@@ -330,8 +330,9 @@ key. Keys are shared with Video Forge when both are installed.
 **Hover help** — hold the mouse over anything and a small bubble says what it
 does, in two short sentences.
 
-**A cursor pet** — a violet fox that runs after your mouse. Any walk cycle you
-make can replace it. Off in Settings → Language & pet.
+**Cursor chasers** — make a little creature that runs after the mouse on your
+website (Animate a character → Cursor chaser), try it in the app, download it
+ready to add.
 
 **Files** — a linked folder (point it at a Drive sync folder for free cloud
 backup), a ZIP with the structure and CSV, or one picture at a time.

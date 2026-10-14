@@ -4,7 +4,7 @@
 > non-obvious decisions, and ends with recipes for the changes you are most
 > likely to make. True as of **13 October 2026**, package version **1.0.4**
 > plus the unreleased `forge-twins` work (Made, puppet maker, vault, shared keys,
-> hover help, cursor pet — see CHANGELOG `[Unreleased]`). 715 tests in 39 files.
+> hover help, cursor chasers — see CHANGELOG `[Unreleased]`). 715 tests in 39 files.
 > If this file and the code disagree, the code wins — then fix this file.
 
 Also read: **[STANDARDS.md](STANDARDS.md)** (what "done" means here, and how
@@ -127,7 +127,7 @@ Templates), Docs (the manual, Agents & API), Settings. The app opens on
 | `lib/vault.ts` + `electron/vault.mjs` | the vault | page storage mirrored to a file the app owns; loaded first; other ports' boxes merged once; `flushVault()` before a reset |
 | `electron/forgeShelf.mjs` + `lib/puppet/shelf.ts` | puppet orders and puppets | `%APPDATA%\Forge\` — same file as Video Forge's |
 | `components/TipLayer.tsx` | hover help | `data-tip` / `data-tip-more` / `title`; `tests/hoverHelp.test.ts` + `scripts/hoverHelp.mjs` fail on any naked control. Same file in Video Forge |
-| `components/CursorPet.tsx` | the cursor pet | built-in fox, or a walk cycle from `SheetMaker.tsx` ("Make it my cursor pet") |
+| `lib/cursorChaser.ts` | cursor chasers | one chase script (CHASER_CORE) shared by "Try it here" in `SheetMaker.tsx` and the website download |
 | `components/AgentsView.tsx`, `DocsView.tsx` | the in-app Docs and Agents pages | must match `scripts/mcp-server.js` (8 tools) and the real menus |
 | `electron/main.js` | desktop shell | see §9 |
 | `scripts/build-exe.js` + `build/installer.nsh` | packaging | see §9 |

@@ -57,7 +57,7 @@ rest silently.
 | `electron/forgeKeys.mjs` + `src/lib/sharedKeys.ts` | keys shared with Video Forge: gemini, openrouter, nvidia, mistral, cloudflare-account/-token, pollinations, openai, groq, elevenlabs, fish. A shared key only fills an empty box |
 | `electron/forgeShelf.mjs` | puppet orders and puppets under `%APPDATA%\Forge\` (same file in Video Forge) |
 | `src/components/TipLayer.tsx` | the hover bubble for the window (`data-tip`, `data-tip-more`, or `title`); `tests/hoverHelp.test.ts` fails on a naked control |
-| `src/components/CursorPet.tsx` | the cursor pet; a walk cycle can replace it |
+| `src/lib/cursorChaser.ts` | cursor chasers: one chase script used by "Try it here" and the website download |
 | `electron/main.js` | adds `/local-api/<port>` (LocalAI refuses page requests: CSRF), `/app/vault`, `/app/keys`, `/app/video-forge`, `/app/orders`, `/app/puppets`; test copies use `IMAGEFORGE_PORTS` and `IMAGEFORGE_USER_DATA` |
 
 Text jobs: `scribeChat` falls back to the next provider with a key on 429, 5xx or

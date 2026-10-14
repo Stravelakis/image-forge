@@ -67,11 +67,12 @@ the parts follow, each with at most three tries and a picture checker. Then
 **Send to Video Forge**, **Save zip** or **Save as template**.
 [Step by step, in plain words](https://github.com/Stravelakis/image-forge/blob/master/docs/puppets-eli5.md).
 
-## Hover help and the cursor pet
+## Hover help and cursor chasers
 
-Hold the mouse over any control and a bubble says what it does. A little violet
-fox runs after your mouse; **Settings → Language & pet** turns it off, or swaps in
-any walk cycle you made. The same page shows the app's language: English now,
+Hold the mouse over any control and a bubble says what it does. *Animate a
+character → Cursor chaser* makes a little creature that runs after the mouse on
+your website; try it in the app, then download it ready to add. **Settings →
+Language** shows the app's language: English now,
 Greek, French, German, Spanish and Portuguese are coming, in simple words.
 
 ## Faster or better pictures

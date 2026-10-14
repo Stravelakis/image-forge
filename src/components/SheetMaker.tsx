@@ -19,8 +19,9 @@ import {
 } from "../lib/sheets";
 import { downloadBlob } from "../lib/output";
 import { Btn, IX } from "./ui";
-import { savePet } from "./CursorPet";
-import { borderColour, keyOut, resize } from "../lib/puppet/pixels";
+import { useEffect } from "react";
+import { borderColour, keyOut } from "../lib/puppet/pixels";
+import { CHASER_FRAMES, chaserDemo, chaserReadme, chaserScript, tryChaser } from "../lib/cursorChaser";
 
 const field =
   "w-full rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[13px] text-cream placeholder:text-dust/60";
@@ -209,30 +210,63 @@ export default function SheetMaker({
     }, "image/png");
   }, [character, def, frames, pushToast]);
 
-  /** A walk cycle becomes the cursor pet: each frame small, background cut away. */
-  const makePet = useCallback(async () => {
-    const out: string[] = [];
-    for (const f of frames.filter((x) => x.url)) {
+  /** The cursor chaser's frames: small, background cut away, in a strip. */
+  const chaserStrip = useCallback(async (): Promise<string | null> => {
+    const ready = CHASER_FRAMES.map((id) => frames.find((f) => f.id === id && f.url));
+    if (ready.some((f) => !f)) {
+      pushToast("info", "All six frames are needed — make the missing ones again first.");
+      return null;
+    }
+    const S = 128;
+    const strip = document.createElement("canvas");
+    strip.width = S * ready.length;
+    strip.height = S;
+    const sg = strip.getContext("2d")!;
+    for (const [i, f] of ready.entries()) {
       const im = await new Promise<HTMLImageElement>((res) => {
-        const i = new Image();
-        i.onload = () => res(i);
-        i.src = f.url!;
+        const x = new Image();
+        x.onload = () => res(x);
+        x.src = f!.url!;
       });
       const c = document.createElement("canvas");
-      c.width = 128;
-      c.height = 128;
+      c.width = S;
+      c.height = S;
       const g = c.getContext("2d")!;
-      g.drawImage(im, 0, 0, 128, 128);
-      const d = g.getImageData(0, 0, 128, 128);
-      const img = { width: 128, height: 128, data: new Uint8ClampedArray(d.data) };
-      const keyed = keyOut(resize(img, 128, 128), borderColour(img));
-      g.putImageData(new ImageData(new Uint8ClampedArray(keyed.data), 128, 128), 0, 0);
-      out.push(c.toDataURL("image/png"));
+      g.drawImage(im, 0, 0, S, S);
+      const d = g.getImageData(0, 0, S, S);
+      const img = { width: S, height: S, data: new Uint8ClampedArray(d.data) };
+      const keyed = keyOut(img, borderColour(img));
+      g.putImageData(new ImageData(new Uint8ClampedArray(keyed.data), S, S), 0, 0);
+      sg.drawImage(c, i * S, 0);
     }
-    if (!out.length) return;
-    savePet({ on: true, custom: { name: character.split(/\s+/)[0] || "pet", frames: out, frameMs: 90 } });
-    pushToast("ok", "It's your cursor pet now — move the mouse. Settings → Language & pet brings the fox back.");
-  }, [frames, character, pushToast]);
+    return strip.toDataURL("image/png");
+  }, [frames, pushToast]);
+
+  const [trying, setTrying] = useState<null | (() => void)>(null);
+  const tryIt = useCallback(async () => {
+    if (trying) {
+      trying();
+      setTrying(null);
+      return;
+    }
+    const strip = await chaserStrip();
+    if (strip) setTrying(() => tryChaser(strip, 72));
+  }, [trying, chaserStrip]);
+
+  const downloadChaser = useCallback(async () => {
+    const strip = await chaserStrip();
+    if (!strip) return;
+    const name = character.split(/[\s,]+/)[0] || "chaser";
+    const { default: JSZip } = await import("jszip");
+    const zip = new JSZip();
+    const dir = zip.folder(`${name}-cursor-chaser`)!;
+    dir.file("chaser.png", strip.split(",")[1], { base64: true });
+    dir.file("chaser.js", chaserScript());
+    dir.file("demo.html", chaserDemo(name));
+    dir.file("README.txt", chaserReadme(name));
+    downloadBlob(`${name}-cursor-chaser.zip`, await zip.generateAsync({ type: "blob" }));
+    pushToast("ok", "Saved — open demo.html inside the folder to see it run.");
+  }, [chaserStrip, character, pushToast]);
 
   const saveFrames = useCallback(() => {
     const base = character.split(/\s+/)[0] || "character";
@@ -431,10 +465,15 @@ export default function SheetMaker({
                 <div className="flex flex-wrap gap-2">
                   <Btn data-tip="Joins all the finished frames into one picture file and saves it." onClick={assemble}>Save as one sheet</Btn>
                   <Btn data-tip="Saves every finished frame as its own separate picture." onClick={saveFrames}>Save each frame</Btn>
-                  {def.kind === "sprite-walk" && (
-                    <Btn data-tip="This character runs after your mouse from now on, instead of the little fox. Change it back in Settings → Language & pet." onClick={() => void makePet()}>
-                      Make it my cursor pet
-                    </Btn>
+                  {def.kind === "cursor-chaser" && (
+                    <>
+                      <Btn data-tip="Lets it chase your mouse here for a moment, to see it before you download it. Press again to stop." onClick={() => void tryIt()}>
+                        {trying ? "■ Stop trying" : "Try it here"}
+                      </Btn>
+                      <Btn data-tip="Saves a folder ready for any website: the picture strip, a small script, a demo page and how-to." onClick={() => void downloadChaser()}>
+                        Download for a website
+                      </Btn>
+                    </>
                   )}
                 </div>
 

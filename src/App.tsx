@@ -89,7 +89,6 @@ import MadeView from "./components/MadeView";
 import { TipLayer } from "./components/TipLayer";
 import CanvaFill from "./components/CanvaFill";
 import { canvaUpload } from "./lib/canva";
-import { CursorPet } from "./components/CursorPet";
 import type { PuppetTemplate } from "./lib/batches";
 import { DEFAULT_SETUP } from "./lib/batches";
 import { CATEGORY_FOLDER } from "./lib/output";
@@ -215,7 +214,6 @@ export default function App() {
     <>
       {mode === "market" ? <MarketApp onOpenForge={() => setMode("forge")} /> : <ForgeApp onOpenMarket={() => setMode("market")} />}
       <TipLayer />
-      <CursorPet />
     </>
   );
 }

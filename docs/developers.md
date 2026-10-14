@@ -97,7 +97,7 @@ src/
 │  ├─ StartView.tsx      the front door
 │  ├─ PuppetMaker.tsx    the puppet maker pop-up
 │  ├─ TipLayer.tsx       the hover-help bubble for the whole window
-│  └─ CursorPet.tsx      the cursor pet (fox, or a walk cycle you made)
+│  └─ (lib/cursorChaser.ts  cursor chasers: the shared chase script, Try it here, the website download)
 scripts/
 ├─ mcp-server.js         the agent API — 8 tools over stdio
 ├─ hoverHelp.mjs         the scanner behind tests/hoverHelp.test.ts

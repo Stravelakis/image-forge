@@ -57,9 +57,10 @@ Tests: 715 across 39 files.
 - **Hover help on every control:** one bubble over everything (two short
   sentences, optionally a link to the docs), and a test that fails on any
   control without one.
-- **Cursor pet:** a violet fox runs after the mouse, sits, naps. Any walk cycle
-  from Animate a character can replace it (**Make it my cursor pet**).
-- **Settings → Language & pet** (was Appearance): English now; Greek, French,
+- **Cursor chasers:** Animate a character → Cursor chaser makes a little creature
+  that runs after the mouse on a website (run, sit, sleep); Try it here, then
+  Download for a website (strip, script, demo, how-to).
+- **Settings → Language** (was Appearance): English now; Greek, French,
   German, Spanish and Portuguese are coming, in simple words.
 - A **Test** beside every key, run on paste.
 - The **Forge ground:** a black ground, the violet "forge" accent, Sora type and
