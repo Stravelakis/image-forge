@@ -546,3 +546,19 @@ step.
 ## Next round (13 Oct 2026)
 
 The full review and work list for both forges lives in Video Forge's `docs/FORGES-PLAN.md` (private repo). Done since this note was written: settings and keys moved out of the page storage into the vault file (§9), and the docs were brought up to date (README, GUIDE, `docs/`, the site's three levels, the in-app Docs/Agents pages and `appFacts.ts`). Still to do: translations (Settings → Language & pet lists them as coming), and keeping `appFacts.ts` in step with the app each time a menu or button changes.
+
+## 14 Oct 2026 — review studio and the sample run
+
+- Every puppet is saved as it is made: `electron/workshop.mjs` +
+  `src/lib/puppet/workshop.ts` (`<userData>/workshop/<slug>/`: meta.json with
+  every part's state, checker's note, your note, approval; base.png; each part's
+  layer/keyed/full/pair PNGs; `side_*` / `sit_*` for views). Made lists them
+  (to review / approved / in Video Forge) and opens them in the puppet maker.
+- Review: per part before/after, checker comment, your note, Looks good, Redo
+  with my note (`makeParts({ notes })`), Add a side-facing view.
+- Styles added: Stick figure, 2D vector stick figure, Touched-up photoreal
+  (`PHOTO_EXCLUDED` lists what it leaves out). Cursor chasers are made, not
+  shown (`lib/cursorChaser.ts`); How to use it under every sheet
+  (`lib/recipeHelp.ts`, links checked).
+- The 10 sample puppets are being made by the installed app; status and how
+  to resume: Video Forge `docs/HANDOFF.md` → "Running now".
