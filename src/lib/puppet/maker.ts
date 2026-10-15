@@ -19,6 +19,7 @@
 import { composite, crop, cutPart, resize, sideBySide, type Box, type Img } from "./pixels";
 import { BASE_NEGATIVE, DEFAULT_LOOK, baseNegative, EDIT_NEGATIVE, editNegative, VIEW_EDITS, basePrompt, editPrompt, partsFor, type PuppetFraming, type PuppetLook, type PuppetPart, type PuppetViewId } from "./recipe";
 import type { CutPart } from "./rig";
+import { fixNote, type PanelVerdict } from "./quality";
 
 export interface Verdict {
   ok: boolean;
@@ -30,6 +31,11 @@ export interface MakerIO {
   generate(req: { prompt: string; negative?: string; refs: Img[]; seed: number; width: number; height: number }, signal?: AbortSignal): Promise<Img>;
   /** Look at a picture and answer a yes/no question. Null when no checker is set up. */
   judge?(question: string, picture: Img, signal?: AbortSignal): Promise<Verdict | null>;
+  /**
+   * The picture panel (quality.ts): several checkers report facts about a
+   * part, the rules decide. Used for parts instead of judge when present.
+   */
+  inspect?(part: PuppetPart, look: PuppetLook, picture: Img, signal?: AbortSignal): Promise<PanelVerdict | null>;
 }
 
 export type PartStatus = "waiting" | "working" | "ok" | "unsure" | "missing";
@@ -178,6 +184,8 @@ export interface PartsRequest {
   look?: PuppetLook;
   /** your notes per part, for a redo ("less tongue", "no smile") — added to the request and told to the checker */
   notes?: Record<string, string>;
+  /** a fresh set of seeds — a re-run after the panel turned a part down */
+  reseed?: boolean;
 }
 
 export interface PartsResult {
@@ -211,13 +219,19 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
     const report = reports[n];
     if (parts[part.id]) continue;
     let fallback: CutPart | null = null;
+    // The best turned-down try so far — fewest things wrong — and its picture,
+    // so the card shows exactly the picture the puppet keeps (Ak, 15 Oct 2026).
+    let fallbackPair: Img | null = null;
+    let fallbackScore = Infinity;
+    // What the panel found wrong last try, told to the picture engine next try.
+    let fix = "";
     report.status = "working";
     onEvent({ type: "part", report: { ...report } });
     for (let t = 1; t <= tries; t++) {
       if (signal?.aborted) throw new DOMException("stopped", "AbortError");
       report.tries = t;
       const edit = resize(
-        await io.generate({ prompt: editPrompt(part, req.look) + (req.notes?.[part.id] ? ` Also, and this matters most: ${req.notes[part.id]}.` : ""), negative: editNegative(req.look), refs: [req.base], seed: seedFor(n * 31 + t + (req.notes?.[part.id] ? Date.now() % 9973 : 0)), width: req.base.width, height: req.base.height }, signal),
+        await io.generate({ prompt: editPrompt(part, req.look) + (req.notes?.[part.id] ? ` Also, and this matters most: ${req.notes[part.id]}.` : "") + (fix ? ` Make sure: ${fix}.` : ""), negative: editNegative(req.look), refs: [req.base], seed: seedFor(n * 31 + t + (req.notes?.[part.id] || req.reseed ? Date.now() % 9973 : 0)), width: req.base.width, height: req.base.height }, signal),
         req.base.width,
         req.base.height
       );
@@ -235,20 +249,30 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
       const view = viewBox(cut.box, req.base);
       const after = composite(req.base, cut.layer, cut.box.x, cut.box.y);
       const pair = shrink(sideBySide(crop(req.base, view), crop(after, view)), 768);
-      const verdict = io.judge ? await io.judge(partQuestion(part, req.look, req.notes?.[part.id]), pair, signal).catch(() => null) : null;
-      if (!verdict || verdict.ok) {
+      // Arms are judged on the whole picture: a missing hand is outside any close-up.
+      const whole = part.kind === "arms" ? shrink(sideBySide(req.base, edit), 1024) : pair;
+      const panel = io.inspect ? await io.inspect(part, req.look ?? DEFAULT_LOOK, whole, signal).catch(() => null) : null;
+      const verdict: Verdict | null = panel ?? (io.judge ? await io.judge(partQuestion(part, req.look, req.notes?.[part.id]), pair, signal).catch(() => null) : null);
+      if (panel && !panel.ok) fix = fixNote(panel.reasons, part);
+      // With a panel set up, "nobody could look" is not a pass.
+      if ((!verdict && !io.inspect) || verdict?.ok) {
         parts[part.id] = candidate;
         onEvent({ type: "kept", id: part.id, part: candidate });
         report.status = "ok";
-        report.why = verdict ? "checked" : "not checked (no picture checker set up)";
+        report.why = verdict ? (panel ? panel.why : "checked") : "not checked (no picture checker set up)";
         fallback = null;
         onEvent({ type: "part", report: { ...report }, preview: pair });
         break;
       }
       // The checker said no, but the cut itself was clean. Keep the best
       // so far, so three "no"s still leave a usable — flagged — part.
-      fallback ??= candidate;
-      report.why = verdict.why || "the checker turned it down";
+      const score = panel ? panel.reasons.length : 1;
+      if (score < fallbackScore) {
+        fallback = candidate;
+        fallbackPair = pair;
+        fallbackScore = score;
+      }
+      report.why = verdict?.why || (io.inspect ? "no checker could look at it" : "the checker turned it down");
       onEvent({ type: "part", report: { ...report }, preview: pair });
     }
     if (report.status !== "ok") {
@@ -259,7 +283,7 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
       } else {
         report.status = "missing";
       }
-      onEvent({ type: "part", report: { ...report } });
+      onEvent({ type: "part", report: { ...report }, ...(fallbackPair ? { preview: fallbackPair } : {}) });
     }
   }
   return { parts, reports, pictures };
@@ -269,4 +293,43 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
 export function pictureBudget(framing: PuppetFraming, tries = 3, baseOptions = 4): { best: number; worst: number } {
   const n = partsFor(framing).length;
   return { best: baseOptions + n, worst: baseOptions + n * tries };
+}
+
+/* ---------------- 3. checking what is already made ---------------- */
+
+/** The before/after picture a checker looks at, for a part already made. */
+export function reviewPicture(base: Img, part: PuppetPart, cut: CutPart): Img {
+  if (part.kind === "arms" && cut.full) return shrink(sideBySide(base, cut.full), 1024);
+  const view = viewBox(cut.box, base);
+  const after = composite(base, cut.layer, cut.box.x, cut.box.y);
+  return shrink(sideBySide(crop(base, view), crop(after, view)), 768);
+}
+
+/**
+ * Look at every part already made with the panel, without drawing anything:
+ * which are green, which are not and why. A puppet made before the panel
+ * existed gets its honest report this way.
+ */
+export async function recheckParts(
+  req: { base: Img; framing: PuppetFraming; parts: Record<string, CutPart>; look?: PuppetLook; only?: string[] },
+  io: Required<Pick<MakerIO, "inspect">>,
+  onReport: (report: PartReport, preview: Img) => void,
+  signal?: AbortSignal
+): Promise<PartReport[]> {
+  const out: PartReport[] = [];
+  for (const part of partsFor(req.framing)) {
+    if (req.only && !req.only.includes(part.id)) continue;
+    const cut = req.parts[part.id];
+    if (signal?.aborted) throw new DOMException("stopped", "AbortError");
+    if (!cut) {
+      out.push({ id: part.id, label: part.label, status: "missing", tries: 0, why: "not made yet" });
+      continue;
+    }
+    const pic = reviewPicture(req.base, part, cut);
+    const v = await io.inspect(part, req.look ?? DEFAULT_LOOK, pic, signal).catch(() => null);
+    const report: PartReport = { id: part.id, label: part.label, status: v?.ok ? "ok" : "unsure", tries: 0, why: v ? v.why : "no checker could look at it" };
+    out.push(report);
+    onReport(report, pic);
+  }
+  return out;
 }

@@ -12,11 +12,11 @@ import type { Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { formatUsd } from "../lib/providers";
 import { PUPPET_STYLES, VIEW_PARTS, keyColourFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
-import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, PUPPET_SIZE, type PartReport, type Verdict } from "../lib/puppet/maker";
+import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, recheckParts, PUPPET_SIZE, type MakerEvent, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, embedView, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
 import { loadImg, loadWorkshop, removeWorkshop, saveImg, saveMeta, savePart, workshopPic, type PartReview, type WorkshopMeta } from "../lib/puppet/workshop";
-import { type PuppetEngine, sizeFor, blobToImg, describeInspiration, imgToPng, imgToUrl, judgeName, listLocalImageModels, pageGenerate, pageJudge, puppetEngines, unloadLocal } from "../lib/puppet/pageIO";
+import { type PuppetEngine, sizeFor, blobToImg, describeInspiration, imgToPng, imgToUrl, judgeName, listLocalImageModels, pageGenerate, pageInspect, pageJudge, puppetEngines, unloadLocal } from "../lib/puppet/pageIO";
 import { finishOrder, orderPictures, removeFromShelf, shelfAvailable, shelvePuppet, type PuppetOrder } from "../lib/puppet/shelf";
 import type { PuppetTemplate } from "../lib/batches";
 import { downloadBlob } from "../lib/output";
@@ -103,6 +103,11 @@ export default function PuppetMaker({
   const metaRef = useRef<WorkshopMeta | null>(open ?? null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
   const [parts, setParts] = useState<Record<string, CutPart>>({});
+  const partsRef = useRef(parts);
+  partsRef.current = parts;
+  // The other views' pictures and parts (side, sit), so a redo of one part
+  // rebuilds the whole puppet with every view still on it (Ak, 15 Oct 2026).
+  const viewsRef = useRef<Partial<Record<PuppetViewId, { base: Img; parts: Record<string, CutPart> }>>>({});
   const [pictures, setPictures] = useState(0);
   const [busy, setBusy] = useState("");
   const [problem, setProblem] = useState("");
@@ -143,7 +148,7 @@ export default function PuppetMaker({
   const cost = { best: faceEng.price * 4 + partEng.price * nParts, worst: faceEng.price * 4 + partEng.price * nParts * 3 };
   const checker = judgeName(settings);
   const faceIO = useMemo(() => ({ generate: pageGenerate(settings, faceEng.id, onExhaust as never), judge: pageJudge(settings) }), [settings, faceEng.id, onExhaust]);
-  const io = useMemo(() => ({ generate: pageGenerate(settings, partEng.id, onExhaust as never), judge: pageJudge(settings) }), [settings, partEng.id, onExhaust]);
+  const io = useMemo(() => ({ generate: pageGenerate(settings, partEng.id, onExhaust as never), judge: pageJudge(settings), inspect: pageInspect(settings) }), [settings, partEng.id, onExhaust]);
   const slug = puppetSlug(name || description.split(/[,.]/)[0] || "puppet");
 
   const addInspo = useCallback(async (files: FileList | File[]) => {
@@ -231,6 +236,7 @@ export default function PuppetMaker({
         const vb = await loadImg(open.slug, `${v}_base.png`);
         if (!vb) continue;
         const vp = Object.fromEntries(Object.entries(p).filter(([k]) => k.startsWith(`${v}_`)).map(([k, x]) => [k.slice(v.length + 1), x]));
+        viewsRef.current[v] = { base: vb, parts: vp };
         made = embedView(made, v, buildRig({ name: open.slug, framing: v === "sit" ? "full" : open.framing, base: vb, parts: vp }));
       }
       if (!alive) return;
@@ -388,6 +394,7 @@ export default function PuppetMaker({
                 writeMeta({ boxes: { ...(metaRef.current?.boxes ?? {}), [`${v}_${id}`]: part.box } });
               }
             }, ctrl.signal);
+            viewsRef.current[v] = { base: vb, parts: vr.parts };
             made = embedView(made, v, buildRig({ name: slug, framing: vf, base: vb, parts: vr.parts }));
             writeMeta({ views: [...new Set([...(metaRef.current?.views ?? []), v])] });
             setRig(made);
@@ -482,8 +489,157 @@ export default function PuppetMaker({
   /** "Redo with my note": that one part again, with your words added. */
   const redoWithNote = (id: string) => {
     const note = (drafts[id] ?? "").trim();
-    void build([id], undefined, note ? { [id]: note } : undefined);
+    setDrafts((d) => ({ ...d, [id]: "" }));
+    void fixParts([id], note ? { [id]: note } : undefined);
   };
+  /** Every card with a note, in one go (Ak, 15 Oct 2026: notes first, then one wait). */
+  const noted = Object.entries(drafts).filter(([, n]) => n.trim()).map(([id]) => id);
+  const redoAllNoted = () => {
+    const notes = Object.fromEntries(noted.map((id) => [id, drafts[id].trim()]));
+    setDrafts({});
+    void fixParts(noted, notes);
+  };
+
+  /** The whole puppet, every view on it, from the parts as they are now. */
+  const rigFrom = useCallback(
+    (front: Record<string, CutPart>, b: Img) => {
+      let made = buildRig({
+        name: slug,
+        framing,
+        base: b,
+        parts: front,
+        madeBy: { name: name || slug, description, style, framing, engine: `faces: ${faceEng.label}; parts: ${partEng.label}`, app: "Image Forge", madeAt: new Date().toISOString() },
+      });
+      for (const [v, x] of Object.entries(viewsRef.current) as [PuppetViewId, { base: Img; parts: Record<string, CutPart> }][])
+        made = embedView(made, v, buildRig({ name: slug, framing: v === "sit" ? "full" : framing, base: x.base, parts: x.parts }));
+      return made;
+    },
+    [slug, framing, name, description, style, faceEng.label, partEng.label]
+  );
+
+  /** One part's news, front or a view ("side_" before the id): saved, and on its card. */
+  const onPartEvent = useCallback(
+    async (e: MakerEvent, pre: string, notes?: Record<string, string>) => {
+      if (e.type === "picture") setPictures((n) => n + 1);
+      if (e.type === "kept") {
+        const { id, part } = e;
+        void persist(() => savePart(slug, pre + id, part));
+        writeMeta({ boxes: { ...(metaRef.current?.boxes ?? {}), [pre + id]: part.box } });
+      }
+      if (e.type !== "part") return;
+      const id = pre + e.report.id;
+      const label = pre ? `${pre === "side_" ? "side" : "sitting"} · ${e.report.label}` : e.report.label;
+      const old = metaRef.current?.reports.find((r) => r.id === id);
+      const rev: PartReview = { ...e.report, id, label, approved: false, note: notes?.[id] ?? old?.note };
+      const list = metaRef.current?.reports ?? [];
+      writeMeta({ reports: list.some((r) => r.id === id) ? list.map((r) => (r.id === id ? rev : r)) : [...list, rev] });
+      setReports((prev) => (prev.some((r) => r.id === id) ? prev.map((r) => (r.id === id ? rev : r)) : [...prev, rev]));
+      if (e.preview) {
+        const pv = e.preview;
+        void persist(() => saveImg(slug, `${id}.pair.png`, pv));
+        const url = await imgToUrl(pv);
+        setPreviews((p) => ({ ...p, [id]: url }));
+      }
+    },
+    [slug, persist, writeMeta]
+  );
+
+  /**
+   * Make some parts again — front, side or sitting — and put the new ones on
+   * the puppet. The redo, "redo all with my notes" and the fixing rounds all
+   * come here.
+   */
+  const fixParts = useCallback(
+    async (ids: string[], notes?: Record<string, string>, reseed = false) => {
+      const b = baseRef.current;
+      if (!b || !ids.length) return;
+      setProblem("");
+      setBusy(`Making ${ids.length} part${ids.length === 1 ? "" : "s"} again…`);
+      const ctrl = new AbortController();
+      stopRef.current = ctrl;
+      let front = partsRef.current;
+      try {
+        const groups: Record<string, string[]> = {};
+        for (const id of ids) {
+          const m = id.match(/^(side|sit)_(.+)$/);
+          (groups[m ? m[1] : ""] ??= []).push(m ? m[2] : id);
+        }
+        for (const [v, only] of Object.entries(groups)) {
+          const view = v ? viewsRef.current[v as PuppetViewId] : undefined;
+          if (v && !view) continue;
+          const pre = v ? `${v}_` : "";
+          const have = view ? view.parts : front;
+          const own = notes ? Object.fromEntries(only.filter((id) => notes[pre + id]).map((id) => [id, notes[pre + id]])) : undefined;
+          const res = await makeParts(
+            { base: view ? view.base : b.img, framing: v === "sit" ? "full" : framing, done: Object.fromEntries(Object.entries(have).filter(([k]) => !only.includes(k))), only, look, notes: own, reseed },
+            io,
+            (e) => void onPartEvent(e, pre, notes),
+            ctrl.signal
+          );
+          if (view) viewsRef.current[v as PuppetViewId] = { base: view.base, parts: { ...have, ...res.parts } };
+          else {
+            front = { ...front, ...res.parts };
+            partsRef.current = front;
+            setParts(front);
+          }
+        }
+        setRig(rigFrom(front, b.img));
+        // The shelf has the old puppet — send it again to use the new parts.
+        setShelved("");
+        writeMeta({ shelved: false });
+      } catch (e) {
+        setProblem(fail(e));
+        setReports((prev) => prev.map((r) => (r.status === "working" ? { ...r, status: "waiting" } : r)));
+      } finally {
+        setBusy("");
+      }
+    },
+    [framing, look, io, onPartEvent, rigFrom, writeMeta]
+  );
+
+  /**
+   * CHECK AND FIX (Ak, 15 Oct 2026: "all green by at least 2 models"): every
+   * part of every view is looked at by the picture panel; what is not green
+   * is made again — the panel's findings go with it — and looked at again.
+   */
+  const [fixing, setFixing] = useState("");
+  const checkAndFix = useCallback(
+    async (rounds = 3) => {
+      const inspect = io.inspect;
+      const b = baseRef.current;
+      if (!inspect || !b) return;
+      const ctrl = new AbortController();
+      stopRef.current = ctrl;
+      try {
+        setFixing("checking every part with two checkers…");
+        setBusy("Checking every part with two checkers…");
+        const groups: [string, Img, Record<string, CutPart>, PuppetFraming, string[] | undefined][] = [["", b.img, partsRef.current, framing, undefined]];
+        for (const [v, x] of Object.entries(viewsRef.current) as [PuppetViewId, { base: Img; parts: Record<string, CutPart> }][])
+          groups.push([`${v}_`, x.base, x.parts, v === "sit" ? "full" : framing, VIEW_PARTS[v]]);
+        let bad: string[] = [];
+        for (const [pre, vb, have, vf, only] of groups) {
+          const reps = await recheckParts({ base: vb, framing: vf, parts: have, look, only }, { inspect }, (r, pic) => void onPartEvent({ type: "part", report: r, preview: pic }, pre), ctrl.signal);
+          bad.push(...reps.filter((r) => r.status !== "ok").map((r) => pre + r.id));
+        }
+        for (let i = 1; i <= rounds && bad.length; i++) {
+          if (ctrl.signal.aborted) break;
+          setFixing(`round ${i} of ${rounds}: making ${bad.length} part${bad.length === 1 ? "" : "s"} again…`);
+          await fixParts(bad, undefined, true);
+          bad = (metaRef.current?.reports ?? []).filter((r) => r.status !== "ok").map((r) => r.id);
+        }
+        setFixing(bad.length ? `${bad.length} still not green after ${rounds} rounds — see their cards` : "every part green by two checkers");
+        writeMeta({ status: "review" });
+        pushLog(`✓ check and fix ${name || slug}: ${bad.length ? `${bad.length} not green` : "all green"}`, bad.length ? "info" : "ok");
+      } catch (e) {
+        setProblem(fail(e));
+        setFixing("");
+      } finally {
+        setBusy("");
+      }
+    },
+    [io.inspect, framing, look, onPartEvent, fixParts, pushLog, name, slug, writeMeta]
+  );
+
   /** A side-facing view for a puppet that does not have one yet. */
   const addSideView = async () => {
     if (!base || !rig) return;
@@ -502,6 +658,7 @@ export default function PuppetMaker({
           writeMeta({ boxes: { ...(metaRef.current?.boxes ?? {}), [`side_${id}`]: part.box } });
         }
       }, ctrl.signal);
+      viewsRef.current.side = { base: vb, parts: vr.parts };
       setRig((r) => (r ? embedView(r, "side", buildRig({ name: slug, framing, base: vb, parts: vr.parts })) : r));
       writeMeta({ views: [...new Set([...(metaRef.current?.views ?? []), "side"])] });
       pushToast("ok", "Side view added — send it to Video Forge again to use it there.");
@@ -865,7 +1022,18 @@ export default function PuppetMaker({
                       </button>
                     )}
                     <button className="forge-btn" onClick={() => void saveZip()} data-tip="Saves every picture of the puppet and its rig file in one zip.">Save the puppet (zip)</button>
-                    {redo.length > 0 && <button className="forge-btn" onClick={() => void build(redo)} data-tip="Makes every unsure or missing part again, with any notes you wrote.">Try the {redo.length} unsure/missing again</button>}
+                    {noted.length > 0 && (
+                      <button className="forge-btn primary" onClick={redoAllNoted} data-tip="Makes every part you wrote a note on again, in one go, each with its own note.">
+                        Redo all {noted.length} with my notes
+                      </button>
+                    )}
+                    {io.inspect && (
+                      <button className="forge-btn" onClick={() => void checkAndFix()} data-tip="Two picture checkers look at every part, side view too. What is not green by two is made again with what they found, and checked again — up to three rounds.">
+                        Check and fix every part
+                      </button>
+                    )}
+                    {fixing && <p className="text-[12px] text-[#c4cbe0]">{fixing}</p>}
+                    {redo.length > 0 && <button className="forge-btn" onClick={() => void fixParts(redo, undefined, true)} data-tip="Makes every unsure or missing part again.">Try the {redo.length} unsure/missing again</button>}
                     {confirmDelete ? (
                       <div className="flex gap-2">
                         <button className="forge-btn danger flex-1" onClick={() => void deletePuppet()} title="Throw it away for good. If it went to Video Forge, it comes off the shelf too.">
