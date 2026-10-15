@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { formatUsd } from "../lib/providers";
-import { PUPPET_STYLES, VIEW_PARTS, keyColourFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
+import { PUPPET_STYLES, VIEW_PARTS, isAnimal, keyColourFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
 import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, recheckParts, PUPPET_SIZE, type MakerEvent, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, embedView, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
@@ -83,7 +83,7 @@ export default function PuppetMaker({
   // Lips or none, the same in every picture; guessed from the words until set by hand.
   const [lipsTouched, setLipsTouched] = useState<boolean | null>(null);
   const lips = lipsTouched ?? lipsFor(description, style);
-  const look = useMemo(() => ({ key: keyColourFor(description), lips }), [description, lips]);
+  const look = useMemo(() => ({ key: keyColourFor(description), lips, animal: isAnimal(description) }), [description, lips]);
   const [confirmDelete, setConfirmDelete] = useState(false);
   // The other views (recipe.ts VIEW_EDITS): side-facing for dialogue, sitting for full body.
   const [wantSide, setWantSide] = useState(true);

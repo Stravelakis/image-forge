@@ -107,7 +107,7 @@ describe("the recipe", () => {
       const e = editPrompt(p);
       expect(e).not.toMatch(/saying|sound|letter|'f+'/i);
     }
-    expect(editPrompt(PUPPET_PARTS.find((p) => p.id === "mouth_L")!)).toMatch(/never reaches past the teeth/);
+    expect(editPrompt(PUPPET_PARTS.find((p) => p.id === "mouth_L")!)).toMatch(/stays inside the mouth, behind the teeth/);
     // AH never mentions the tongue (it drew one sticking out, 14 Oct 2026)
     expect(editPrompt(PUPPET_PARTS.find((p) => p.id === "mouth_AH")!)).toMatch(/plain, empty dark shape/);
   });
@@ -143,7 +143,7 @@ describe("the whole run, with stand-in engines", () => {
   /** An "engine" that knows two edits and returns the base for anything else. */
   const fakeEngine = (calls: string[]): MakerIO["generate"] => async (req) => {
     calls.push(req.prompt);
-    if (/tall oval/.test(req.prompt)) return ah;
+    if (/relaxed oval, the opening about half/.test(req.prompt)) return ah;
     if (/fully shut/.test(req.prompt)) return blink;
     return base;
   };
@@ -250,7 +250,7 @@ describe("arm poses replace the body (13 Oct 2026)", () => {
 
 describe("views: side-facing and sitting (13 Oct 2026)", () => {
   it("packs a second set of pictures into the same puppet, files prefixed", async () => {
-    const res = await makeParts({ base, framing: "head", only: ["lid_closed", "mouth_AH"] }, { generate: async (r) => (/tall oval/.test(r.prompt) ? ah : /fully shut/.test(r.prompt) ? blink : base) }, () => {});
+    const res = await makeParts({ base, framing: "head", only: ["lid_closed", "mouth_AH"] }, { generate: async (r) => (/relaxed oval, the opening about half/.test(r.prompt) ? ah : /fully shut/.test(r.prompt) ? blink : base) }, () => {});
     const front = buildRig({ name: "owl", framing: "head", base, parts: res.parts });
     const side = buildRig({ name: "owl", framing: "head", base, parts: res.parts });
     const both = embedView(front, "side", side);
