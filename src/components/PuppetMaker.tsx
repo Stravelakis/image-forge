@@ -418,7 +418,12 @@ export default function PuppetMaker({
   const buildRef = useRef(build);
   buildRef.current = build;
 
-  const stop = () => stopRef.current?.abort();
+  // Stop also ends a run of fixing rounds, not just the round under way.
+  const haltRef = useRef(false);
+  const stop = () => {
+    haltRef.current = true;
+    stopRef.current?.abort();
+  };
 
   // An order that says "nobody is here" starts by itself, once the engines are
   // known (and once only — the inspiration pictures need a moment to arrive).
@@ -610,6 +615,7 @@ export default function PuppetMaker({
       if (!inspect || !b) return;
       const ctrl = new AbortController();
       stopRef.current = ctrl;
+      haltRef.current = false;
       try {
         setFixing("checking every part with two checkers…");
         setBusy("Checking every part with two checkers…");
@@ -622,10 +628,14 @@ export default function PuppetMaker({
           bad.push(...reps.filter((r) => r.status !== "ok").map((r) => pre + r.id));
         }
         for (let i = 1; i <= rounds && bad.length; i++) {
-          if (ctrl.signal.aborted) break;
+          if (haltRef.current) break;
           setFixing(`round ${i} of ${rounds}: making ${bad.length} part${bad.length === 1 ? "" : "s"} again…`);
           await fixParts(bad, undefined, true);
           bad = (metaRef.current?.reports ?? []).filter((r) => r.status !== "ok").map((r) => r.id);
+        }
+        if (haltRef.current) {
+          setFixing("stopped — press Check and fix every part to carry on");
+          return;
         }
         setFixing(bad.length ? `${bad.length} still not green after ${rounds} rounds — see their cards` : "every part green by two checkers");
         writeMeta({ status: "review" });
