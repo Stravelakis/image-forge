@@ -8,7 +8,8 @@
  * Thumbnails come from lib/thumbStore, so the list is complete after a
  * restart; puppets come from the Forge shelf.
  */
-import { listWorkshop, workshopUrl, type WorkshopMeta } from "../lib/puppet/workshop";
+import { listWorkshop, type WorkshopMeta } from "../lib/puppet/workshop";
+import { WorkshopImg } from "./WorkshopImg";
 import { useEffect, useMemo, useState } from "react";
 import type { ManifestRow, Status } from "../types";
 import type { Batch } from "../lib/batches";
@@ -307,7 +308,7 @@ export default function MadeView({
                     className="block aspect-square w-full bg-[radial-gradient(circle_at_50%_35%,#1a2a52,#0a1122_70%)]"
                     onClick={() => onOpenPuppet?.(w)}
                   >
-                    <img src={workshopUrl(w.slug, "base.png")} alt="" className="h-full w-full object-contain" />
+                    <WorkshopImg slug={w.slug} file="base.png" className="h-full w-full object-contain" />
                   </button>
                   <div className="space-y-0.5 p-3">
                     <p className="truncate text-[13px] font-medium text-cream">{w.name}</p>

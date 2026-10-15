@@ -15,7 +15,7 @@ import { PUPPET_STYLES, VIEW_PARTS, keyColourFor, lipsFor, partsFor, type Puppet
 import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, PUPPET_SIZE, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, embedView, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
-import { loadImg, loadWorkshop, removeWorkshop, saveImg, saveMeta, savePart, workshopUrl, type PartReview, type WorkshopMeta } from "../lib/puppet/workshop";
+import { loadImg, loadWorkshop, removeWorkshop, saveImg, saveMeta, savePart, workshopPic, type PartReview, type WorkshopMeta } from "../lib/puppet/workshop";
 import { type PuppetEngine, sizeFor, blobToImg, describeInspiration, imgToPng, imgToUrl, judgeName, listLocalImageModels, pageGenerate, pageJudge, puppetEngines, unloadLocal } from "../lib/puppet/pageIO";
 import { finishOrder, orderPictures, removeFromShelf, shelfAvailable, shelvePuppet, type PuppetOrder } from "../lib/puppet/shelf";
 import type { PuppetTemplate } from "../lib/batches";
@@ -224,7 +224,7 @@ export default function PuppetMaker({
       const front = Object.fromEntries(Object.entries(p).filter(([k]) => !/^(side|sit)_/.test(k)));
       setParts(front);
       setReports(open.reports ?? []);
-      setPreviews(Object.fromEntries((open.reports ?? []).map((r) => [r.id, workshopUrl(open.slug, `${r.id}.pair.png`)])));
+      setPreviews(Object.fromEntries(await Promise.all((open.reports ?? []).map(async (r) => [r.id, await workshopPic(open.slug, `${r.id}.pair.png`)] as const))));
       setShelved(open.shelved ? open.slug : "");
       let made = buildRig({ name: open.slug, framing: open.framing, base: b, parts: front });
       for (const v of (open.views ?? []) as ("side" | "sit")[]) {

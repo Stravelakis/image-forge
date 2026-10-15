@@ -59,6 +59,7 @@ export async function listWorkshop(): Promise<WorkshopMeta[]> {
 }
 
 async function put(slug: string, file: string, body: Blob | string): Promise<void> {
+  forgetPic(slug, file);
   await fetch(`/app/workshop/${encodeURIComponent(slug)}/${encodeURIComponent(file)}`, { method: "PUT", headers: H, body });
 }
 
@@ -82,6 +83,27 @@ export async function loadImg(slug: string, file: string): Promise<Img | null> {
 }
 
 export const workshopUrl = (slug: string, file: string) => `/app/workshop/${encodeURIComponent(slug)}/${encodeURIComponent(file)}`;
+
+/**
+ * A picture from the workshop, ready for an <img>. A plain <img src> cannot send
+ * the app's X-Forge-App pass, so the server refused every picture and Made and
+ * the review showed none (Ak, 15 Oct 2026). Fetched with the pass instead.
+ */
+const pics = new Map<string, Promise<string>>();
+export function workshopPic(slug: string, file: string): Promise<string> {
+  const key = `${slug}/${file}`;
+  let p = pics.get(key);
+  if (!p) {
+    p = fetch(workshopUrl(slug, file), { headers: H }).then(async (r) => (r.ok ? URL.createObjectURL(await r.blob()) : ""), () => "");
+    pics.set(key, p);
+    void p.then((u) => { if (!u) pics.delete(key); });
+  }
+  return p;
+}
+/** Forget a cached picture after it was made again. */
+export function forgetPic(slug: string, file: string) {
+  pics.delete(`${slug}/${file}`);
+}
 
 /** Everything needed to carry on: the face and every part saved so far. */
 export async function loadWorkshop(meta: WorkshopMeta): Promise<{ base: Img | null; parts: Record<string, CutPart> }> {
