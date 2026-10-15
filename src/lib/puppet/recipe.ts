@@ -263,6 +263,8 @@ export interface PuppetPart {
   expect: string;
   /** waist-up puppets only */
   waistOnly?: boolean;
+  /** what this shape tends to go wrong with, said out loud (15 Oct 2026, from the double check) */
+  avoid?: string;
 }
 
 const EYES_STAY =
@@ -276,19 +278,19 @@ export const PUPPET_PARTS: PuppetPart[] = [
   // SHAPES, NEVER SOUNDS. "Saying fff" put letters on the teeth and "saying
   // L" stuck the tongue out (Ak, 13 Oct 2026): only what the lips, teeth and
   // tongue do is described. editPrompt adds the puppet's lips rule.
-  { id: "mouth_AH", kind: "mouth", label: "AH", change: "Change only the mouth so it is open wide in a relaxed tall oval, the jaw dropped. The inside of the mouth is a plain dark shape with NO tongue showing; at most a thin line of the upper teeth at the top edge.", expect: "mouth open wide in a tall oval, no tongue showing" },
-  { id: "mouth_EE", kind: "mouth", label: "EE", change: "Change only the mouth so it is stretched wide to the sides and only slightly open, both rows of teeth showing close together, like a wide grin.", expect: "mouth stretched wide, teeth showing close together" },
-  { id: "mouth_OH", kind: "mouth", label: "OH", change: "Change only the mouth so it forms a round open circle of medium size, the inside of the mouth dark.", expect: "mouth rounded into a medium open circle" },
-  { id: "mouth_OO", kind: "mouth", label: "OO", change: "Change only the mouth so it is pushed forward into a small, tight, round opening, much smaller than a circle.", expect: "small tight round mouth" },
-  { id: "mouth_FV", kind: "mouth", label: "F·V", change: "Change only the mouth so the upper front teeth rest lightly on the middle of the lower lip, the lower lip tucked slightly under them, and the mouth otherwise closed. The teeth are plain and white.", expect: "upper teeth resting on the lower lip, plain white teeth with nothing drawn on them" },
+  { id: "mouth_AH", kind: "mouth", label: "AH", avoid: "The mouth is clearly OPEN — never closed, never smiling.", change: "Change only the mouth so it is open wide in a relaxed tall oval, the jaw dropped. The inside of the mouth is a plain dark shape with NO tongue showing; at most a thin line of the upper teeth at the top edge.", expect: "mouth open wide in a tall oval, no tongue showing" },
+  { id: "mouth_EE", kind: "mouth", label: "EE", avoid: "No tongue.", change: "Change only the mouth so it is stretched wide to the sides and only slightly open, both rows of teeth showing close together, like a wide grin.", expect: "mouth stretched wide, teeth showing close together" },
+  { id: "mouth_OH", kind: "mouth", label: "OH", avoid: "Not smiling and not a pout: a real opening, dark inside.", change: "Change only the mouth so it forms a round open circle of medium size, the inside of the mouth dark.", expect: "mouth rounded into a medium open circle" },
+  { id: "mouth_OO", kind: "mouth", label: "OO", avoid: "It is a real OPENING, dark inside — not closed, not a kiss or a pout, not puckered, no lipstick.", change: "Change only the mouth so it is pushed forward into a small, tight, round opening, much smaller than a circle.", expect: "small tight round mouth" },
+  { id: "mouth_FV", kind: "mouth", label: "F·V", avoid: "The upper front teeth must be clearly visible — not a closed mouth, not a smile.", change: "Change only the mouth so the upper front teeth rest lightly on the middle of the lower lip, the lower lip tucked slightly under them, and the mouth otherwise closed. The teeth are plain and white.", expect: "upper teeth resting on the lower lip, plain white teeth with nothing drawn on them" },
   { id: "mouth_L", kind: "mouth", label: "L", change: "Change only the mouth so it is only a little open, the upper front teeth showing, and behind them, deep inside the mouth, the smallest hint of the tongue tip — a tiny sliver, mostly hidden by the teeth. The tongue never reaches past the teeth.", expect: "mouth a little open, at most a tiny sliver of tongue behind the upper teeth" },
-  { id: "mouth_CHSH", kind: "mouth", label: "SH", change: "Change only the mouth so the lips are pushed forward and squared off, slightly open, with the teeth close together and visible.", expect: "lips pushed forward and squared, teeth close together" },
+  { id: "mouth_CHSH", kind: "mouth", label: "SH", avoid: "Not smiling.", change: "Change only the mouth so the lips are pushed forward and squared off, slightly open, with the teeth close together and visible.", expect: "lips pushed forward and squared, teeth close together" },
   // HALF-OPEN (13 Oct 2026): the steps between shapes and the quiet syllables,
   // so the mouth flows rather than snapping (Video Forge timeline.ts).
-  { id: "mouth_halfAH", kind: "mouth", label: "½ AH", change: "Change only the mouth so it is a little open in a small relaxed oval, about half as open as a wide-open mouth, the teeth barely showing.", expect: "mouth a little open, a small oval" },
-  { id: "mouth_halfOH", kind: "mouth", label: "½ OH", change: "Change only the mouth so it forms a small round opening, about half the size of a wide round mouth.", expect: "small round opening" },
-  { id: "mouth_halfEE", kind: "mouth", label: "½ EE", change: "Change only the mouth so it is a little wider than at rest and just parted, a thin line of teeth showing.", expect: "mouth slightly widened and just parted" },
-  { id: "mouth_SMILE", kind: "mouth", label: "smile", change: "Change only the mouth into a warm, gentle CLOSED-mouth smile, corners turned up, no teeth showing. Nothing above the mouth changes.", expect: "closed-mouth smile" },
+  { id: "mouth_halfAH", kind: "mouth", label: "½ AH", avoid: "Not smiling: the corners stay level.", change: "Change only the mouth so it is a little open in a small relaxed oval, about half as open as a wide-open mouth, the teeth barely showing.", expect: "mouth a little open, a small oval" },
+  { id: "mouth_halfOH", kind: "mouth", label: "½ OH", avoid: "Not smiling: the corners stay level.", change: "Change only the mouth so it forms a small round opening, about half the size of a wide round mouth.", expect: "small round opening" },
+  { id: "mouth_halfEE", kind: "mouth", label: "½ EE", avoid: "Only a little wider — not a big smile.", change: "Change only the mouth so it is a little wider than at rest and just parted, a thin line of teeth showing.", expect: "mouth slightly widened and just parted" },
+  { id: "mouth_SMILE", kind: "mouth", label: "smile", avoid: "The mouth stays closed: no teeth, no opening.", change: "Change only the mouth into a warm, gentle CLOSED-mouth smile, corners turned up, no teeth showing. Nothing above the mouth changes.", expect: "closed-mouth smile" },
   {
     id: "lid_closed",
     kind: "lid",
@@ -333,8 +335,20 @@ export const keepFor = (look: PuppetLook = DEFAULT_LOOK) =>
   `Keep absolutely everything else in the picture identical: the same character at the same size, position and angle, the same face, eyes, hair or fur, the same facial hair, freckles, moles, scars and marks — no more and no fewer, in the same places — the same clothing, colours, lighting and the same flat ${look.key.name} background. Change ONLY what is described. Do not redraw the picture.`;
 export const KEEP = keepFor();
 
+/**
+ * What every edit of a kind keeps, from the double check of the ten sample
+ * puppets (15 Oct 2026): mouths grew lipstick, smiles and lost beards;
+ * eyebrow and eyelid edits changed the mouth too.
+ */
+const guardFor = (part: PuppetPart, look: PuppetLook): string =>
+  part.kind === "mouth"
+    ? `${part.id === "mouth_SMILE" || part.id.endsWith("EE") ? "" : "The corners of the mouth stay level, not smiling. "}${look.lips ? "The lips keep exactly their original colour and size — never add lipstick, never redden or enlarge them." : "No colour and no rim is added around the mouth."} The beard, moustache, stubble, freckles, wrinkles and every mark on the face stay exactly as they are.`
+    : part.kind === "arms"
+      ? "Both hands are fully visible with five fingers each. The face, mouth and expression stay exactly as they are."
+      : "The mouth stays exactly as it is — closed and unchanged, no smile, no opening.";
+
 export const editPrompt = (part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): string =>
-  `Edit this picture. ${part.kind === "mouth" && !look.lips ? withoutLipWords(part.change) : part.change}${part.kind === "mouth" ? ` ${lipsClause(look)} ${look.lips ? "Keep the lips exactly as they are in the original picture — the same colour and thickness." : "The edge of the mouth stays exactly like the original: no rim and no colour around it."}` : ""}\n\n${keepFor(look)}`;
+  `Edit this picture. ${part.kind === "mouth" && !look.lips ? withoutLipWords(part.change) : part.change}${part.avoid ? ` ${part.kind === "mouth" && !look.lips ? withoutLipWords(part.avoid).replace(/, no lipstick/, "") : part.avoid}` : ""} ${guardFor(part, look)}${part.kind === "mouth" ? ` ${lipsClause(look)} ${look.lips ? "Keep the lips exactly as they are in the original picture — the same colour and thickness." : "The edge of the mouth stays exactly like the original: no rim and no colour around it."}` : ""}\n\n${keepFor(look)}`;
 
 /**
  * Where on the picture each kind of part may sit, as fractions of the height.

@@ -17,7 +17,7 @@ export type Facts = Record<string, unknown>;
 
 const COMMON =
   `"beard_or_facial_hair_same_as_left": bool (true if neither has any), "skin_marks_same_as_left": bool (freckles, moles, scars, wrinkles; true if none), ` +
-  `"eyes_look_same_direction_as_left": bool, "something_else_changed": "short description or none"`;
+  `"eyes_look_same_direction_as_left": bool, "right_looks_broken": bool (doubled or extra features, smears, a seam or box edge, letters or text drawn on it), "something_else_changed": "short description or none"`;
 
 /** The question for one part. Facts only — the checker is told not to judge. */
 export function factsQuestion(part: PuppetPart): string {
@@ -47,6 +47,7 @@ export function brokenRules(part: PuppetPart, look: PuppetLook, f: Facts): strin
   if (f.beard_or_facial_hair_same_as_left === false) b.push("facial hair changed");
   if (f.skin_marks_same_as_left === false) b.push("marks changed");
   if (f.eyes_look_same_direction_as_left === false && !EYES_SHUT.has(part.id)) b.push("eyes changed direction");
+  if (f.right_looks_broken === true) b.push("picture broken");
   if (part.kind === "mouth") {
     if (f.right_mouth_is_the_wanted_shape === false) b.push("wrong mouth shape");
     if (f.tongue_reaches_past_the_teeth_or_lips === true) b.push("tongue sticking out");
@@ -81,6 +82,7 @@ const FIX: [RegExp, string][] = [
   [/arms|hand missing/, "exactly two arms, each drawn once, both hands fully visible"],
   [/hand over the face/, "the hands stay clear of the face"],
   [/face changed/, "the face stays exactly as in the original"],
+  [/picture broken/, "one clean drawing: no doubled features, smears, seams or text"],
 ];
 export function fixNote(reasons: string[], part: PuppetPart): string {
   const out = new Set<string>();
