@@ -33,7 +33,7 @@ describe("the picture panel (15 Oct 2026)", () => {
   });
 
   it("what was wrong becomes the note for the next try", () => {
-    expect(fixNote(["tongue sticking out", "facial hair changed"], part("mouth_L"))).toMatch(/tongue stays inside.*beard/);
+    expect(fixNote(["tongue sticking out", "facial hair changed"], part("mouth_L"))).toMatch(/smallest tip.*nothing added/);
   });
 
   it("green needs two clean checkers; a split asks the third", async () => {

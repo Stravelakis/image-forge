@@ -69,20 +69,20 @@ export function brokenRules(part: PuppetPart, look: PuppetLook, f: Facts): strin
 }
 
 /** What to tell the picture engine next time, for each thing found wrong. */
+// Said as what we WANT — an engine draws whatever it is told about.
 const FIX: [RegExp, string][] = [
-  [/tongue sticking out/, "the tongue stays inside the mouth, behind the teeth"],
-  [/tongue showing/, "no tongue visible at all"],
-  [/lips on a lipless/, "no lips: the mouth is a plain opening with no rim and no colour around it"],
-  [/lips differ/, "the lips exactly as on the original face, same colour and shape"],
-  [/facial hair/, "the beard, moustache and stubble exactly as in the original"],
-  [/marks changed/, "every freckle, mole, scar and wrinkle exactly as in the original"],
-  [/smile where none/, "not smiling — the corners of the mouth level"],
-  [/mouth changed too/, "the mouth stays exactly as in the original"],
-  [/eyes changed/, "the eyes and where they look stay exactly as in the original"],
-  [/arms|hand missing/, "exactly two arms, each drawn once, both hands fully visible"],
-  [/hand over the face/, "the hands stay clear of the face"],
-  [/face changed/, "the face stays exactly as in the original"],
-  [/picture broken/, "one clean drawing: no doubled features, smears, seams or text"],
+  [/tongue sticking out/, "only the smallest tip inside the mouth, behind the teeth"],
+  [/tongue showing/, "the inside of the mouth plain, empty and dark"],
+  [/lips on a lipless/, "the edge of the mouth the same colour as the skin around it"],
+  [/lips differ/, "the lips exactly as on the original face"],
+  [/facial hair|marks changed/, "the face exactly as in the original, nothing added and nothing taken away"],
+  [/smile where none/, "the corners of the mouth level"],
+  [/mouth changed too/, "the mouth exactly as in the original"],
+  [/eyes changed/, "the eyes and where they look exactly as in the original"],
+  [/arms|hand missing/, "two arms, both hands fully visible"],
+  [/hand over the face/, "the hands beside the body, the face fully visible"],
+  [/face changed/, "the face exactly as in the original"],
+  [/picture broken/, "one clean, simple drawing"],
 ];
 export function fixNote(reasons: string[], part: PuppetPart): string {
   const out = new Set<string>();

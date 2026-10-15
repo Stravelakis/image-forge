@@ -940,7 +940,8 @@ async function local(row, apiModel, s, signal, refImages, size) {
   const route = localRoute(s.localBase);
   const base = route.base;
   const { w, h } = size ?? dimsFor(row.aspect_ratio);
-  const prompt = row.negative_prompt ? `${row.prompt}\n\nAvoid: ${row.negative_prompt}` : row.prompt;
+  // FLUX and Z-Image take no negative: added as words, "Avoid: a tongue" drew a tongue.
+  const prompt = row.negative_prompt && !/flux|klein|kontext|z-?image/i.test(apiModel) ? `${row.prompt}\n\nAvoid: ${row.negative_prompt}` : row.prompt;
   let res;
   try {
     res = await fetchWithTimeout(
