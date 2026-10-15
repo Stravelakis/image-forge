@@ -524,7 +524,7 @@ export default function PuppetMaker({
 
   /** One part's news, front or a view ("side_" before the id): saved, and on its card. */
   const onPartEvent = useCallback(
-    async (e: MakerEvent, pre: string, notes?: Record<string, string>) => {
+    async (e: MakerEvent, pre: string, notes?: Record<string, string>, recheck = false) => {
       if (e.type === "picture") setPictures((n) => n + 1);
       if (e.type === "kept") {
         const { id, part } = e;
@@ -535,7 +535,8 @@ export default function PuppetMaker({
       const id = pre + e.report.id;
       const label = pre ? `${pre === "side_" ? "side" : "sitting"} · ${e.report.label}` : e.report.label;
       const old = metaRef.current?.reports.find((r) => r.id === id);
-      const rev: PartReview = { ...e.report, id, label, approved: false, note: notes?.[id] ?? old?.note };
+      // A new picture needs a new look from you; a re-check of the same picture does not.
+      const rev: PartReview = { ...e.report, id, label, approved: recheck ? !!old?.approved : false, note: notes?.[id] ?? old?.note };
       const list = metaRef.current?.reports ?? [];
       writeMeta({ reports: list.some((r) => r.id === id) ? list.map((r) => (r.id === id ? rev : r)) : [...list, rev] });
       setReports((prev) => (prev.some((r) => r.id === id) ? prev.map((r) => (r.id === id ? rev : r)) : [...prev, rev]));
@@ -619,19 +620,24 @@ export default function PuppetMaker({
       try {
         setFixing("checking every part with two checkers…");
         setBusy("Checking every part with two checkers…");
-        const groups: [string, Img, Record<string, CutPart>, PuppetFraming, string[] | undefined][] = [["", b.img, partsRef.current, framing, undefined]];
+        // What YOU said looks good is yours: never checked over, never redrawn.
+        const yours = new Set((metaRef.current?.reports ?? []).filter((r) => r.approved).map((r) => r.id));
+        const notYours = (pre: string, ids: string[]) => ids.filter((id) => !yours.has(pre + id));
+        const groups: [string, Img, Record<string, CutPart>, PuppetFraming, string[]][] = [["", b.img, partsRef.current, framing, notYours("", partsFor(framing).map((p) => p.id))]];
         for (const [v, x] of Object.entries(viewsRef.current) as [PuppetViewId, { base: Img; parts: Record<string, CutPart> }][])
-          groups.push([`${v}_`, x.base, x.parts, v === "sit" ? "full" : framing, VIEW_PARTS[v]]);
+          groups.push([`${v}_`, x.base, x.parts, v === "sit" ? "full" : framing, notYours(`${v}_`, VIEW_PARTS[v])]);
         let bad: string[] = [];
         for (const [pre, vb, have, vf, only] of groups) {
-          const reps = await recheckParts({ base: vb, framing: vf, parts: have, look, only }, { inspect }, (r, pic) => void onPartEvent({ type: "part", report: r, preview: pic }, pre), ctrl.signal);
+          const reps = await recheckParts({ base: vb, framing: vf, parts: have, look, only }, { inspect }, (r, pic) => void onPartEvent({ type: "part", report: r, preview: pic }, pre, undefined, true), ctrl.signal);
           bad.push(...reps.filter((r) => r.status !== "ok").map((r) => pre + r.id));
         }
         for (let i = 1; i <= rounds && bad.length; i++) {
           if (haltRef.current) break;
           setFixing(`round ${i} of ${rounds}: making ${bad.length} part${bad.length === 1 ? "" : "s"} again…`);
-          await fixParts(bad, undefined, true);
-          bad = (metaRef.current?.reports ?? []).filter((r) => r.status !== "ok").map((r) => r.id);
+          // Your own notes on those parts go along too.
+          const yourNotes = Object.fromEntries((metaRef.current?.reports ?? []).filter((r) => bad.includes(r.id) && r.note?.trim()).map((r) => [r.id, r.note!.trim()]));
+          await fixParts(bad, Object.keys(yourNotes).length ? yourNotes : undefined, true);
+          bad = (metaRef.current?.reports ?? []).filter((r) => r.status !== "ok" && !yours.has(r.id)).map((r) => r.id);
         }
         if (haltRef.current) {
           setFixing("stopped — press Check and fix every part to carry on");
