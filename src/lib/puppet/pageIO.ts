@@ -223,7 +223,13 @@ export function pageInspect(settings: ForgeSettings): MakerIO["inspect"] | undef
   const engine = (base: string, key: string, model: string, name: string) => (b64: Promise<string>): PanelChecker => ({
     name,
     async facts(question) {
-      const r = await askVision({ base, key, model }, await b64, question);
+      // Free tiers say "too busy" (429) or wobble (5xx): wait and ask again,
+      // so a busy checker is not mistaken for one with nothing to say.
+      let r = await askVision({ base, key, model }, await b64, question);
+      for (let t = 1; !r.ok && t <= 4 && (r.status === 429 || (r.status ?? 0) >= 500 || r.status === undefined); t++) {
+        await new Promise((ok) => setTimeout(ok, 8000 * t));
+        r = await askVision({ base, key, model }, await b64, question);
+      }
       if (!r.ok) return null;
       try {
         return jsonFromReply(r.text) as Facts;
