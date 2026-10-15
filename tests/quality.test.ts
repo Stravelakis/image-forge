@@ -9,7 +9,7 @@ const says = (name: string, facts: Record<string, unknown> | null): PanelChecker
 
 describe("the picture panel (15 Oct 2026)", () => {
   it("the rules decide, not the checker: a tongue past the teeth fails even if nothing else is wrong", () => {
-    expect(brokenRules(part("mouth_L"), lips, { tongue_reaches_past_the_teeth_or_lips: true, mouth_matches_wanted_shape: true })).toContain("tongue sticking out");
+    expect(brokenRules(part("mouth_L"), lips, { tongue_reaches_past_the_teeth_or_lips: true, right_mouth_is_the_wanted_shape: true })).toContain("tongue sticking out");
     expect(brokenRules(part("mouth_AH"), lips, { tongue_visible: true })).toContain("tongue showing");
     expect(brokenRules(part("mouth_OH"), lips, { tongue_visible: true })).toEqual([]);
   });
@@ -37,7 +37,7 @@ describe("the picture panel (15 Oct 2026)", () => {
   });
 
   it("green needs two clean checkers; a split asks the third", async () => {
-    const clean = { mouth_matches_wanted_shape: true };
+    const clean = { right_mouth_is_the_wanted_shape: true };
     const bad = { tongue_reaches_past_the_teeth_or_lips: true };
     expect((await panelVerdict(part("mouth_L"), lips, [says("A", clean), says("B", clean)]))!.ok).toBe(true);
     expect((await panelVerdict(part("mouth_L"), lips, [says("A", bad), says("B", bad)], says("C", clean)))!.ok).toBe(false);

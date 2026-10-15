@@ -24,7 +24,7 @@ export function factsQuestion(part: PuppetPart): string {
   if (part.kind === "mouth")
     return (
       `Left: a cartoon character. Right: the same character after an edit meant to change ONLY the mouth to: ${part.expect}. ` +
-      `Look closely and report facts, do not judge. Answer only JSON: {"mouth_matches_wanted_shape": bool, "tongue_visible": bool, ` +
+      `Look closely and report facts, do not judge. Answer only JSON: {"right_mouth_is_the_wanted_shape": bool, "tongue_visible": bool, ` +
       `"tongue_reaches_past_the_teeth_or_lips": bool, "smiling_right": bool, "lips_drawn_left": bool (a distinct lip shape or lip colour around the mouth), "lips_drawn_right": bool, ${COMMON}}`
     );
   if (part.kind === "lid" || part.kind === "brow")
@@ -34,7 +34,7 @@ export function factsQuestion(part: PuppetPart): string {
     );
   return (
     `Left: a cartoon character at rest. Right: the same character after an edit meant to change ONLY the arms: ${part.expect}. ` +
-    `Report facts, do not judge. Answer only JSON: {"pose_matches": bool, "arms_count_right": number, "hands_visible_right": number, "hand_covers_face_right": bool, "face_changed": bool, ${COMMON}}`
+    `Report facts, do not judge. Answer only JSON: {"right_picture_shows_the_wanted_arm_pose": bool, "arms_count_right": number, "hands_visible_right": number, "hand_covers_face_right": bool, "face_changed": bool, ${COMMON}}`
   );
 }
 
@@ -48,7 +48,7 @@ export function brokenRules(part: PuppetPart, look: PuppetLook, f: Facts): strin
   if (f.skin_marks_same_as_left === false) b.push("marks changed");
   if (f.eyes_look_same_direction_as_left === false && !EYES_SHUT.has(part.id)) b.push("eyes changed direction");
   if (part.kind === "mouth") {
-    if (f.mouth_matches_wanted_shape === false) b.push("wrong mouth shape");
+    if (f.right_mouth_is_the_wanted_shape === false) b.push("wrong mouth shape");
     if (f.tongue_reaches_past_the_teeth_or_lips === true) b.push("tongue sticking out");
     else if (part.id.endsWith("_AH") && f.tongue_visible === true) b.push("tongue showing");
     if (!look.lips && f.lips_drawn_right === true) b.push("lips on a lipless puppet");
@@ -58,7 +58,7 @@ export function brokenRules(part: PuppetPart, look: PuppetLook, f: Facts): strin
     if (f.wanted_change_visible === false) b.push("change not visible");
     if (f.mouth_changed === true) b.push("mouth changed too");
   } else {
-    if (f.pose_matches === false) b.push("pose wrong");
+    if (f.right_picture_shows_the_wanted_arm_pose === false) b.push("pose wrong");
     if (typeof f.arms_count_right === "number" && f.arms_count_right !== 2) b.push(`${f.arms_count_right} arms`);
     if (typeof f.hands_visible_right === "number" && f.hands_visible_right < 2) b.push("a hand missing");
     if (f.hand_covers_face_right === true) b.push("hand over the face");
