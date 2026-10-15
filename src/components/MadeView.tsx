@@ -8,7 +8,7 @@
  * Thumbnails come from lib/thumbStore, so the list is complete after a
  * restart; puppets come from the Forge shelf.
  */
-import { listWorkshop, type WorkshopMeta } from "../lib/puppet/workshop";
+import { listWorkshop, markedParts, type WorkshopMeta } from "../lib/puppet/workshop";
 import { WorkshopImg } from "./WorkshopImg";
 import { useEffect, useMemo, useState } from "react";
 import type { ManifestRow, Status } from "../types";
@@ -64,6 +64,8 @@ export default function MadeView({
   onMakeGif,
   onSendToCanva,
   onOpenPuppet,
+  onRemakeMarked,
+  puppetsSeen,
 }: {
   rows: ManifestRow[];
   batches: Batch[];
@@ -81,6 +83,10 @@ export default function MadeView({
   onSendToCanva?: (ids: number[]) => void;
   /** open a workshop puppet in the puppet maker, to review and tweak */
   onOpenPuppet?: (m: WorkshopMeta) => void;
+  /** remake every marked part on every puppet, one puppet after another */
+  onRemakeMarked?: () => void;
+  /** changes whenever the puppet maker closes, so the list is read again */
+  puppetsSeen?: number;
 }) {
   const [kind, setKind] = useState<Kind>("all");
   const [status, setStatus] = useState<Status | "all">("all");
@@ -92,7 +98,9 @@ export default function MadeView({
   const [filling, setFilling] = useState("");
   // Every puppet made, sent or not (lib/puppet/workshop.ts) — 14 Oct 2026.
   const [workshop, setWorkshop] = useState<WorkshopMeta[]>([]);
-  useEffect(() => void listWorkshop().then(setWorkshop), []);
+  useEffect(() => void listWorkshop().then(setWorkshop), [puppetsSeen]);
+  const markedCount = workshop.reduce((n, w) => n + markedParts(w).length, 0);
+  const markedPuppets = workshop.filter((w) => markedParts(w).length).length;
 
   // Puppets from the Forge shelf (desktop app only), with their faces.
   useEffect(() => {
@@ -288,6 +296,17 @@ export default function MadeView({
         </p>
       )}
 
+      {showPuppets && markedCount > 0 && (
+        <div className="mb-3 flex flex-wrap items-center gap-3 rounded-[16px] border border-[var(--color-ember)]/40 bg-[var(--color-ember)]/10 px-4 py-3">
+          <p className="text-[13px] text-cream">
+            {markedCount} part{markedCount === 1 ? "" : "s"} marked to remake, on {markedPuppets} puppet{markedPuppets === 1 ? "" : "s"}.
+          </p>
+          <button className="forge-btn primary ml-auto" onClick={onRemakeMarked} data-tip="Opens each puppet with marked parts in turn and makes those parts again, each with your note, checked by two checkers. You can leave it running.">
+            Remake all marked
+          </button>
+        </div>
+      )}
+
       {/* the list */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {showPuppets &&
@@ -317,6 +336,7 @@ export default function MadeView({
                       {w.views?.includes("side") ? " · side view" : ""} · {when(w.updatedAt)}
                     </p>
                     <p className={`text-[11px] ${state.tone}`}>{state.word}</p>
+                    {markedParts(w).length > 0 && <p className="text-[11px] text-[var(--color-ember)]">{markedParts(w).length} marked to remake</p>}
                   </div>
                 </div>
               );

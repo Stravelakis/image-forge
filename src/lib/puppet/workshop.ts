@@ -17,7 +17,12 @@ export interface PartReview extends PartReport {
   approved?: boolean;
   /** your note for the next try ("less tongue", "no smile") */
   note?: string;
+  /** marked for remaking — done later, with every other mark, in one go */
+  redo?: boolean;
 }
+
+/** The parts marked for remaking, with your notes. */
+export const markedParts = (m: WorkshopMeta) => m.reports.filter((r) => r.redo && !r.approved);
 
 export interface WorkshopMeta {
   v: 1;

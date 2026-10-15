@@ -53,7 +53,13 @@ export default function PuppetMaker({
   pushLog,
   onExhaust,
   open,
+  autoRemake,
+  onRemade,
 }: {
+  /** opened to remake the marked parts and close again (Made → Remake all marked) */
+  autoRemake?: boolean;
+  /** the marked parts are remade (or could not be) */
+  onRemade?: (ok: boolean) => void;
   /** a puppet from the workshop to open again (Made → a puppet) */
   open?: WorkshopMeta | null;
   settings: ForgeSettings;
@@ -249,6 +255,15 @@ export default function PuppetMaker({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open?.slug]);
+
+  // Opened by "Remake all marked": remake, then hand back to Made for the next.
+  const remakeMarkedRef = useRef<() => Promise<boolean>>(async () => true);
+  const autoDone = useRef(false);
+  useEffect(() => {
+    if (!autoRemake || autoDone.current || step !== "done" || !rig || busy) return;
+    autoDone.current = true;
+    void remakeMarkedRef.current().then((ok) => onRemade?.(ok));
+  }, [autoRemake, step, rig, busy, onRemade]);
 
   /* ---------- step 1 → 2: four faces ---------- */
   const makeFaces = useCallback(async () => {
@@ -492,18 +507,28 @@ export default function PuppetMaker({
     });
   };
   /** "Redo with my note": that one part again, with your words added. */
-  const redoWithNote = (id: string) => {
+  /**
+   * MARK FOR REMAKE (Ak, 15 Oct 2026): a remake never makes you wait. Write a
+   * note, mark the part, go on to the next — on this puppet or any other —
+   * and remake everything marked in one go at the end.
+   */
+  const patchReview = (id: string, patch: Partial<PartReview>) => {
+    setReports((prev) => {
+      const next = prev.map((r) => (r.id === id ? { ...r, ...patch } : r));
+      writeMeta({ reports: next });
+      return next;
+    });
+  };
+  const saveNote = (id: string) => {
     const note = (drafts[id] ?? "").trim();
-    setDrafts((d) => ({ ...d, [id]: "" }));
-    void fixParts([id], note ? { [id]: note } : undefined);
+    if (note !== (reports.find((r) => r.id === id)?.note ?? "")) patchReview(id, { note: note || undefined });
   };
-  /** Every card with a note, in one go (Ak, 15 Oct 2026: notes first, then one wait). */
-  const noted = Object.entries(drafts).filter(([, n]) => n.trim()).map(([id]) => id);
-  const redoAllNoted = () => {
-    const notes = Object.fromEntries(noted.map((id) => [id, drafts[id].trim()]));
-    setDrafts({});
-    void fixParts(noted, notes);
+  const toggleMark = (id: string) => {
+    const r = reports.find((x) => x.id === id);
+    const note = (drafts[id] ?? r?.note ?? "").trim();
+    patchReview(id, { redo: !r?.redo, approved: false, note: note || undefined });
   };
+  const marked = reports.filter((r) => r.redo && !r.approved);
 
   /** The whole puppet, every view on it, from the parts as they are now. */
   const rigFrom = useCallback(
@@ -536,7 +561,7 @@ export default function PuppetMaker({
       const label = pre ? `${pre === "side_" ? "side" : "sitting"} · ${e.report.label}` : e.report.label;
       const old = metaRef.current?.reports.find((r) => r.id === id);
       // A new picture needs a new look from you; a re-check of the same picture does not.
-      const rev: PartReview = { ...e.report, id, label, approved: recheck ? !!old?.approved : false, note: notes?.[id] ?? old?.note };
+      const rev: PartReview = { ...e.report, id, label, approved: recheck ? !!old?.approved : false, redo: recheck ? old?.redo : undefined, note: notes?.[id] ?? old?.note };
       const list = metaRef.current?.reports ?? [];
       writeMeta({ reports: list.some((r) => r.id === id) ? list.map((r) => (r.id === id ? rev : r)) : [...list, rev] });
       setReports((prev) => (prev.some((r) => r.id === id) ? prev.map((r) => (r.id === id ? rev : r)) : [...prev, rev]));
@@ -655,6 +680,18 @@ export default function PuppetMaker({
     },
     [io.inspect, framing, look, onPartEvent, fixParts, pushLog, name, slug, writeMeta]
   );
+  const remakeMarked = useCallback(async () => {
+    const list = (metaRef.current?.reports ?? []).filter((r) => r.redo && !r.approved);
+    if (!list.length) return true;
+    const notes = Object.fromEntries(list.filter((r) => r.note?.trim()).map((r) => [r.id, r.note!.trim()]));
+    await fixParts(
+      list.map((r) => r.id),
+      Object.keys(notes).length ? notes : undefined,
+      true
+    );
+    return !(metaRef.current?.reports ?? []).some((r) => r.redo && !r.approved);
+  }, [fixParts]);
+  remakeMarkedRef.current = remakeMarked;
 
   /** A side-facing view for a puppet that does not have one yet. */
   const addSideView = async () => {
@@ -952,7 +989,7 @@ export default function PuppetMaker({
               )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {(reports.length ? reports : partsFor(framing).map((p) => ({ id: p.id, label: p.label, status: "waiting" as const, tries: 0, why: "" }) as PartReview)).map((r) => (
-                  <div key={r.id} className={`forge-tile !p-3 ${r.approved ? "ring-1 ring-emerald-400/60" : ""}`}>
+                  <div key={r.id} className={`forge-tile !p-3 ${r.approved ? "ring-1 ring-emerald-400/60" : r.redo ? "ring-1 ring-[var(--color-ember)]" : ""}`}>
                     {previews[r.id] ? (
                       <img
                         src={previews[r.id]}
@@ -982,8 +1019,9 @@ export default function PuppetMaker({
                       <>
                         <textarea
                           rows={2}
-                          value={drafts[r.id] ?? ""}
+                          value={drafts[r.id] ?? r.note ?? ""}
                           onChange={(e) => setDrafts((d) => ({ ...d, [r.id]: e.target.value }))}
+                          onBlur={() => saveNote(r.id)}
                           placeholder="Your note, e.g. less tongue, mouth smaller"
                           className="mt-2 w-full rounded-[10px] border border-white/10 bg-black/40 px-2 py-1.5 text-[12px] text-[#eef1f8]"
                           data-tip="What should change in this part. It is added to the request when you press Redo."
@@ -998,10 +1036,10 @@ export default function PuppetMaker({
                           </button>
                           <button
                             className="forge-btn flex-1 !px-2 !py-1.5 !text-[12px]"
-                            onClick={() => redoWithNote(r.id)}
-                            data-tip="Make this one part again, with your note added. Everything else stays."
+                            onClick={() => toggleMark(r.id)}
+                            data-tip={r.redo ? "Take the mark off." : "Marks this part to be made again, with your note — later, together with every other part you mark. Nothing waits now."}
                           >
-                            Redo{(drafts[r.id] ?? "").trim() ? " with my note" : ""}
+                            {r.redo ? "✓ Marked to remake" : "Mark to remake"}
                           </button>
                         </div>
                       </>
@@ -1038,9 +1076,9 @@ export default function PuppetMaker({
                       </button>
                     )}
                     <button className="forge-btn" onClick={() => void saveZip()} data-tip="Saves every picture of the puppet and its rig file in one zip.">Save the puppet (zip)</button>
-                    {noted.length > 0 && (
-                      <button className="forge-btn primary" onClick={redoAllNoted} data-tip="Makes every part you wrote a note on again, in one go, each with its own note.">
-                        Redo all {noted.length} with my notes
+                    {marked.length > 0 && (
+                      <button className="forge-btn primary" onClick={() => void remakeMarked()} data-tip="Makes every part you marked on this puppet again, each with your note, checked by the two checkers. To do all puppets at once, use Remake all marked in Made.">
+                        Remake the {marked.length} marked now
                       </button>
                     )}
                     {io.inspect && (

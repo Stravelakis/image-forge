@@ -89,7 +89,7 @@ import MadeView from "./components/MadeView";
 import { TipLayer } from "./components/TipLayer";
 import CanvaFill from "./components/CanvaFill";
 import { canvaUpload } from "./lib/canva";
-import type { WorkshopMeta } from "./lib/puppet/workshop";
+import { listWorkshop, markedParts, type WorkshopMeta } from "./lib/puppet/workshop";
 import type { PuppetTemplate } from "./lib/batches";
 import { DEFAULT_SETUP } from "./lib/batches";
 import { CATEGORY_FOLDER } from "./lib/output";
@@ -268,7 +268,20 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [canvaFillOpen, setCanvaFillOpen] = useState(false);
   // The puppet maker, opened from a menu (no order) or by Video Forge's order.
-  const [puppet, setPuppet] = useState<{ order: PuppetOrder | null; template?: PuppetTemplate | null; open?: WorkshopMeta | null } | null>(null);
+  const [puppet, setPuppet] = useState<{ order: PuppetOrder | null; template?: PuppetTemplate | null; open?: WorkshopMeta | null; autoRemake?: boolean } | null>(null);
+  // Made reads the puppets again each time the maker closes.
+  const [puppetsSeen, setPuppetsSeen] = useState(0);
+  // "Remake all marked": the puppets still to do, one after another.
+  const remakeQueue = useRef<WorkshopMeta[]>([]);
+  const nextRemake = useCallback(() => {
+    const next = remakeQueue.current.shift();
+    setPuppetsSeen((n) => n + 1);
+    setPuppet(next ? { order: null, open: next, autoRemake: true } : null);
+  }, []);
+  const remakeAllMarked = useCallback(async () => {
+    remakeQueue.current = (await listWorkshop()).filter((w) => markedParts(w).length);
+    nextRemake();
+  }, [nextRemake]);
   const [vectorOpen, setVectorOpen] = useState(false);
   const [animateOpen, setAnimateOpen] = useState(false);
   const [paidAsk, setPaidAsk] = useState<null | { check: PaidRunCheck; targets: number[] }>(null);
@@ -2198,6 +2211,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               onMakeGif={openGifMaker}
               onSendToCanva={(ids) => void sendToCanva(ids)}
               onOpenPuppet={(m) => setPuppet({ order: null, open: m })}
+              onRemakeMarked={() => void remakeAllMarked()}
+              puppetsSeen={puppetsSeen}
             />
           </main>
         ) : view === "workbench" ? (
@@ -2520,10 +2535,20 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
           order={puppet.order}
           template={puppet.template}
           open={puppet.open}
+          key={puppet.open?.slug ?? "new"}
+          autoRemake={puppet.autoRemake}
+          onRemade={(ok) => {
+            pushLog(`${ok ? "✓" : "·"} remade the marked parts of ${puppet.open?.name ?? "a puppet"}`, ok ? "ok" : "info");
+            nextRemake();
+          }}
           onSaveTemplate={(name, t) =>
             setSetups((s) => [{ id: uid(), name, createdAt: new Date().toISOString(), data: { ...DEFAULT_SETUP, name }, type: "puppet", puppet: t }, ...s])
           }
-          onClose={() => setPuppet(null)}
+          onClose={() => {
+            remakeQueue.current = [];
+            setPuppet(null);
+            setPuppetsSeen((n) => n + 1);
+          }}
           pushToast={pushToast}
           pushLog={pushLog}
           onExhaust={(pool, id, until) =>
