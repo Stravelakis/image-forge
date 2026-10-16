@@ -216,6 +216,20 @@ export function judgeName(settings: ForgeSettings): string {
  * tie-breaker. The same models through OpenRouter's free tier when there is
  * no NVIDIA key. Undefined when fewer than two can be reached.
  */
+/**
+ * THE PER-MINUTE LIMIT (Ak, 16 Oct 2026: "we have a hard limit of 40 rpm"). Every
+ * checker request to one provider waits its turn: at most 35 a minute per address,
+ * so a free key never hits its hard limit, however many checks run at once.
+ */
+const PER_MINUTE = 35;
+const nextTurn = new Map<string, number>();
+async function turnFor(base: string): Promise<void> {
+  const now = Date.now();
+  const at = Math.max(now, nextTurn.get(base) ?? 0);
+  nextTurn.set(base, at + Math.ceil(60000 / PER_MINUTE));
+  if (at > now) await new Promise((ok) => setTimeout(ok, at - now));
+}
+
 export function pageInspect(settings: ForgeSettings): MakerIO["inspect"] | undefined {
   const keyFor = (host: string) => settings.textProviders.find((p) => p.key.trim() && p.base.includes(host))?.key.trim() ?? "";
   const nv = keyFor("integrate.api.nvidia.com");
@@ -225,9 +239,11 @@ export function pageInspect(settings: ForgeSettings): MakerIO["inspect"] | undef
     async facts(question) {
       // Free tiers say "too busy" (429) or wobble (5xx): wait and ask again,
       // so a busy checker is not mistaken for one with nothing to say.
+      await turnFor(base);
       let r = await askVision({ base, key, model }, await b64, question);
       for (let t = 1; !r.ok && t <= 4 && (r.status === 429 || (r.status ?? 0) >= 500 || r.status === undefined); t++) {
         await new Promise((ok) => setTimeout(ok, 8000 * t));
+        await turnFor(base);
         r = await askVision({ base, key, model }, await b64, question);
       }
       if (!r.ok) return null;
