@@ -108,6 +108,8 @@ export default function PuppetMaker({
   // The puppet's workshop record (lib/puppet/workshop.ts): saved as it is made.
   const metaRef = useRef<WorkshopMeta | null>(open ?? null);
   const [previews, setPreviews] = useState<Record<string, string>>({});
+  // The options of parts that did not get to green: their before/after pictures.
+  const [optionPics, setOptionPics] = useState<Record<string, string[]>>({});
   const [parts, setParts] = useState<Record<string, CutPart>>({});
   const partsRef = useRef(parts);
   partsRef.current = parts;
@@ -236,6 +238,7 @@ export default function PuppetMaker({
       setParts(front);
       setReports(open.reports ?? []);
       setPreviews(Object.fromEntries(await Promise.all((open.reports ?? []).map(async (r) => [r.id, await workshopPic(open.slug, `${r.id}.pair.png`)] as const))));
+      setOptionPics(Object.fromEntries(await Promise.all(Object.entries(open.options ?? {}).map(async ([id, os]) => [id, await Promise.all(os.map((_, n) => workshopPic(open.slug, `${id}.opt${n}.pair.png`)))] as const))));
       setShelved(open.shelved ? open.slug : "");
       let made = buildRig({ name: open.slug, framing: open.framing, base: b, parts: front });
       for (const v of (open.views ?? []) as ("side" | "sit")[]) {
@@ -530,6 +533,42 @@ export default function PuppetMaker({
   };
   const marked = reports.filter((r) => r.redo && !r.approved);
 
+  /** You picked one of a part's options: it becomes the part, approved by you. */
+  const pickOption = async (id: string, n: number) => {
+    const opt = metaRef.current?.options?.[id]?.[n];
+    if (!opt || !metaRef.current) return;
+    const s = metaRef.current.slug;
+    const layer = await loadImg(s, `${id}.opt${n}.layer.png`);
+    if (!layer) return setProblem("That option's picture could not be read back.");
+    const keyed = (await loadImg(s, `${id}.opt${n}.keyed.png`)) ?? undefined;
+    const full = (await loadImg(s, `${id}.opt${n}.full.png`)) ?? undefined;
+    const part: CutPart = { layer, keyed, box: opt.box, ...(full ? { full } : {}) };
+    const m = id.match(/^(side|sit)_(.+)$/);
+    if (m) {
+      const v = viewsRef.current[m[1] as PuppetViewId];
+      if (v) viewsRef.current[m[1] as PuppetViewId] = { ...v, parts: { ...v.parts, [m[2]]: part } };
+    } else {
+      partsRef.current = { ...partsRef.current, [id]: part };
+      setParts(partsRef.current);
+    }
+    void persist(() => savePart(s, id, part));
+    const pic = optionPics[id]?.[n];
+    const pv = await loadImg(s, `${id}.opt${n}.pair.png`);
+    if (pv) void persist(() => saveImg(s, `${id}.pair.png`, pv));
+    if (pic) setPreviews((p) => ({ ...p, [id]: pic }));
+    const rest = { ...(metaRef.current.options ?? {}) };
+    delete rest[id];
+    const reportsNext = (metaRef.current.reports ?? []).map((r) => (r.id === id ? { ...r, approved: true, redo: false, why: `you chose option ${n + 1}` } : r));
+    writeMeta({ options: rest, boxes: { ...metaRef.current.boxes, [id]: opt.box }, reports: reportsNext });
+    setReports(reportsNext);
+    setOptionPics((p) => {
+      const { [id]: _gone, ...others } = p;
+      return others;
+    });
+    if (baseRef.current) setRig(rigFrom(partsRef.current, baseRef.current.img));
+    setShelved("");
+  };
+
   /** The whole puppet, every view on it, from the parts as they are now. */
   const rigFrom = useCallback(
     (front: Record<string, CutPart>, b: Img) => {
@@ -555,6 +594,17 @@ export default function PuppetMaker({
         const { id, part } = e;
         void persist(() => savePart(slug, pre + id, part));
         writeMeta({ boxes: { ...(metaRef.current?.boxes ?? {}), [pre + id]: part.box } });
+      }
+      if (e.type === "options") {
+        const id = pre + e.id;
+        e.options.forEach((o, n) => {
+          void persist(() => savePart(slug, `${id}.opt${n}`, o.part));
+          void persist(() => saveImg(slug, `${id}.opt${n}.pair.png`, o.preview));
+        });
+        writeMeta({ options: { ...(metaRef.current?.options ?? {}), [id]: e.options.map((o) => ({ why: o.why, box: o.part.box })) } });
+        const urls = await Promise.all(e.options.map((o) => imgToUrl(o.preview)));
+        setOptionPics((p) => ({ ...p, [id]: urls }));
+        return;
       }
       if (e.type !== "part") return;
       const id = pre + e.report.id;
@@ -1021,6 +1071,24 @@ export default function PuppetMaker({
                       </p>
                     )}
                     {r.note && <p className="mt-1 text-[11.5px] leading-snug text-[var(--color-ember)]">Your last note: {r.note}</p>}
+                    {optionPics[r.id]?.length ? (
+                      <div className="mt-2" data-tip="None of the tries got to green. These are the best ones — click the one you like and it becomes this part.">
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-[#8f98ab]">options — pick one</p>
+                        <div className="mt-1 flex gap-1.5">
+                          {optionPics[r.id].map((u, n) => (
+                            <button
+                              key={n}
+                              className="flex-1 overflow-hidden rounded-[8px] border border-white/10 hover:border-[var(--color-ember)]"
+                              onClick={() => void pickOption(r.id, n)}
+                              data-tip={`Use option ${n + 1}. The checkers said: ${metaRef.current?.options?.[r.id]?.[n]?.why ?? ""}`}
+                            >
+                              <img src={u} alt="" className="block h-14 w-full object-contain bg-black/30" />
+                              <span className="block py-0.5 text-[10.5px] text-[#c4cbe0]">option {n + 1}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                     {step === "done" && !busy && (
                       <>
                         <textarea

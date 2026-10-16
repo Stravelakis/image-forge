@@ -54,6 +54,8 @@ export type MakerEvent =
   | { type: "part"; report: PartReport; preview?: Img }
   /** a part was kept (checked, or the best of three) — save it now */
   | { type: "kept"; id: string; part: CutPart }
+  /** a part that did not get to green: its best tries, for you to choose from */
+  | { type: "options"; id: string; options: { part: CutPart; preview: Img; why: string }[] }
   | { type: "picture" }; // one more picture generated — for the running count
 
 export const PUPPET_SIZE = 1024;
@@ -223,6 +225,8 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
     // so the card shows exactly the picture the puppet keeps (Ak, 15 Oct 2026).
     let fallbackPair: Img | null = null;
     let fallbackScore = Infinity;
+    // every clean-cut try with what the checkers said — the options if none is green
+    const tried: { part: CutPart; preview: Img; why: string; score: number }[] = [];
     // What the panel found wrong last try, told to the picture engine next try.
     let fix = "";
     report.status = "working";
@@ -267,6 +271,7 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
       // The checker said no, but the cut itself was clean. Keep the best
       // so far, so three "no"s still leave a usable — flagged — part.
       const score = panel ? panel.reasons.length : 1;
+      tried.push({ part: candidate, preview: pair, why: verdict?.why || "not checked", score });
       if (score < fallbackScore) {
         fallback = candidate;
         fallbackPair = pair;
@@ -280,6 +285,9 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
         parts[part.id] = fallback;
         onEvent({ type: "kept", id: part.id, part: fallback });
         report.status = "unsure";
+        // Up to three best tries, fewest problems first: yours to pick from.
+        const best = tried.sort((a, b) => a.score - b.score).slice(0, 3);
+        if (best.length > 1) onEvent({ type: "options", id: part.id, options: best.map(({ part: p, preview, why }) => ({ part: p, preview, why })) });
       } else {
         report.status = "missing";
       }

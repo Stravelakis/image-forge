@@ -173,6 +173,17 @@ describe("the whole run, with stand-in engines", () => {
     expect(res.parts.mouth_AH).toBeDefined();
   });
 
+  it("a part that never gets to green offers its best tries as options to choose from (16 Oct 2026)", async () => {
+    const events: { type: string; options?: unknown[] }[] = [];
+    await makeParts(
+      { base, framing: "head", only: ["mouth_AH"] },
+      { generate: fakeEngine([]), judge: async () => ({ ok: false, why: "looks smudged" }) },
+      (e) => events.push(e as never)
+    );
+    const opts = events.find((e) => e.type === "options");
+    expect(opts?.options).toHaveLength(3);
+  });
+
   it("makes base options with the inspiration pictures attached", async () => {
     const seen: number[] = [];
     const out = await makeBaseOptions(

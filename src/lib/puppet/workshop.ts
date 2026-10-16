@@ -42,6 +42,8 @@ export interface WorkshopMeta {
   reports: PartReview[];
   /** each part's place on the picture, so the cut layers can be put back */
   boxes: Record<string, { x: number; y: number; w: number; h: number }>;
+  /** parts that did not get to green: their best tries, saved as <id>.opt<n>.*, for you to choose */
+  options?: Record<string, { why: string; box: { x: number; y: number; w: number; h: number } }[]>;
   /** views made for this puppet ("side", "sit"): their parts, prefixed */
   views?: string[];
 }
