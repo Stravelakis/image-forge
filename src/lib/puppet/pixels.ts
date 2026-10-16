@@ -323,10 +323,48 @@ export type CutResult =
  *    ear cannot drag a mouth up over the eyes.
  * Plus one added here: once the eyes are known, a mouth must start below them.
  */
-export function cutPart(base: Img, edit: Img, o: CutOptions): CutResult {
-  if (edit.width !== base.width || edit.height !== base.height) {
-    return { ok: false, reason: "same-size", detail: `edit is ${edit.width}×${edit.height}, base is ${base.width}×${base.height}` };
+/**
+ * THE EDIT'S COLOURS, MATCHED TO THE FACE (Ak, 16 Oct 2026: the new mouth area
+ * came back lighter and brighter than the rest of Maria's face). The engine
+ * shifts the whole picture's tone a little each time. Over the pixels that
+ * should be the same — most of the picture — each colour channel of the edit
+ * is matched to the base (same average, same spread), and the edit is
+ * corrected by that. A real change (the opened mouth) is too small a share of
+ * the picture to pull the match.
+ */
+export function matchColours(base: Img, edit: Img): Img {
+  const n = base.width * base.height;
+  const s = [0, 0, 0], se = [0, 0, 0], ss = [0, 0, 0], sse = [0, 0, 0];
+  let k = 0;
+  for (let p = 0; p < n; p += 3) {
+    const i = p * 4;
+    const d = Math.max(Math.abs(edit.data[i] - base.data[i]), Math.abs(edit.data[i + 1] - base.data[i + 1]), Math.abs(edit.data[i + 2] - base.data[i + 2]));
+    if (d > 48) continue;
+    for (let c = 0; c < 3; c++) {
+      const b = base.data[i + c], e = edit.data[i + c];
+      s[c] += b; se[c] += e; ss[c] += b * b; sse[c] += e * e;
+    }
+    k++;
   }
+  if (k < n / 20) return edit;
+  const gain: number[] = [], off: number[] = [];
+  for (let c = 0; c < 3; c++) {
+    const mb = s[c] / k, me = se[c] / k;
+    const sb = Math.sqrt(Math.max(1, ss[c] / k - mb * mb)), sdE = Math.sqrt(Math.max(1, sse[c] / k - me * me));
+    const g = Math.min(1.25, Math.max(0.8, sb / sdE));
+    gain.push(g);
+    off.push(mb - me * g);
+  }
+  const out = new Uint8ClampedArray(edit.data);
+  for (let i = 0; i < out.length; i += 4) for (let c = 0; c < 3; c++) out[i + c] = edit.data[i + c] * gain[c] + off[c];
+  return { width: edit.width, height: edit.height, data: out } as Img;
+}
+
+export function cutPart(base: Img, editIn: Img, o: CutOptions): CutResult {
+  if (editIn.width !== base.width || editIn.height !== base.height) {
+    return { ok: false, reason: "same-size", detail: `edit is ${editIn.width}×${editIn.height}, base is ${base.width}×${base.height}` };
+  }
+  const edit = matchColours(base, editIn);
   const T = o.threshold ?? 26;
   // The grid and the soft edge scale with the picture: 16 px cells and an
   // 18 px edge at 1024, as on the course puppets.
@@ -409,10 +447,31 @@ export function cutPart(base: Img, edit: Img, o: CutOptions): CutResult {
   }
   const strongest = Math.max(...weights);
   const keep = new Set(weights.map((w, i) => (w >= strongest * 0.25 ? i : -1)).filter((i) => i >= 0));
+  // THE FAINT EDGES TOO (Ak, 16 Oct 2026: a stretched mouth was cut off at its
+  // corners). Grow the kept patches, up to three cells, into touching cells
+  // where at least a few pixels changed — the thin line of a mouth corner.
+  const inCut = new Uint8Array(gw * gh);
+  for (let c = 0; c < gw * gh; c++) if (keep.has(patchOf[c])) inCut[c] = 1;
+  for (let step = 0; step < 3; step++) {
+    const add: number[] = [];
+    for (let gy = gyMin; gy < gyMax; gy++) {
+      for (let gx = 0; gx < gw; gx++) {
+        const c = gy * gw + gx;
+        if (inCut[c] || count[c] < CELL * CELL * 0.03) continue;
+        let touches = false;
+        for (let dy = -1; dy <= 1 && !touches; dy++) for (let dx = -1; dx <= 1 && !touches; dx++) {
+          const nx = gx + dx, ny = gy + dy;
+          touches = nx >= 0 && nx < gw && ny >= gyMin && ny < gyMax && inCut[ny * gw + nx] === 1;
+        }
+        if (touches) add.push(c);
+      }
+    }
+    for (const c of add) inCut[c] = 1;
+  }
   let x0 = W, y0 = H, x1 = -1, y1 = -1;
   for (let gy = gyMin; gy < gyMax; gy++) {
     for (let gx = 0; gx < gw; gx++) {
-      if (!keep.has(patchOf[gy * gw + gx])) continue;
+      if (!inCut[gy * gw + gx]) continue;
       const px = gx * CELL;
       const py = gy * CELL;
       x0 = Math.min(x0, px);

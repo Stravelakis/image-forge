@@ -172,7 +172,37 @@ export interface PuppetLook {
   lips: boolean;
   /** an animal: its own teeth, never human ones (Ak, 15 Oct 2026) */
   animal?: boolean;
+  /** the TOOTH PROTOCOL's words for this character's teeth (teethFor) */
+  teeth?: string;
 }
+
+/**
+ * THE TOOTH PROTOCOL (Ak, 16 Oct 2026). Which teeth a character has, said
+ * once per kind of creature — "all dogs have 4 teeth between their canines,
+ * just as pointy as the canines, but smaller, shorter" — and which teeth show
+ * in which mouth shape (TEETH_SHOWN). Shapes that show none never mention teeth.
+ */
+const TEETH: [RegExp, string][] = [
+  [/\b(dog|puppy|wolf|fox|coyote|jackal)\b/i, "the teeth are a dog's: two long pointed canines and, between them, four small pointed teeth, shorter than the canines, all white"],
+  [/\b(cat|kitten|lion|tiger|leopard|cheetah|panther)\b/i, "the teeth are a cat's: two small sharp fangs and a row of tiny teeth between them, all white"],
+  [/\b(owl|bird|parrot|penguin|duck|chick|owlet|chicken|eagle)\b/i, "it has a beak and no teeth"],
+  [/\b(rabbit|bunny|mouse|rat|squirrel|hamster|beaver)\b/i, "the teeth are two long flat front teeth, side by side"],
+  [/\b(horse|cow|sheep|goat|deer|pig)\b/i, "the teeth are broad, flat and blunt"],
+  [/\b(frog|fish|blob|robot|alien|monster)\b/i, "teeth only if the original face already has them, drawn the same way"],
+];
+const HUMAN_TEETH = "the teeth are natural human teeth: even, small and white, in proportion to the face";
+export const teethFor = (description: string): string => (TEETH.find(([re]) => re.test(description)) ?? [null, HUMAN_TEETH])[1];
+
+/** Which teeth each mouth shape shows — none for the round and closed shapes. */
+export const TEETH_SHOWN: Record<string, string> = {
+  mouth_AH: "only a thin line of the upper teeth",
+  mouth_halfAH: "at most a thin line of the upper teeth",
+  mouth_EE: "both rows, close together",
+  mouth_halfEE: "a thin line of both rows",
+  mouth_FV: "only the edges of the upper front teeth",
+  mouth_L: "only the upper front teeth",
+  mouth_CHSH: "both rows, close together",
+};
 
 /** Animal words in a description — the same list that decides "no lips". */
 export const isAnimal = (description: string) => ANIMAL.test(description);
@@ -354,7 +384,7 @@ export const KEEP = keepFor();
  */
 const guardFor = (part: PuppetPart, look: PuppetLook): string =>
   part.kind === "mouth"
-    ? `${part.id === "mouth_SMILE" || part.id.endsWith("EE") ? "The corners of the mouth stay where the shape puts them. " : "The corners of the mouth stay level. "}${look.lips ? "The lips keep exactly their original colour, shape and size." : "The edge of the mouth keeps the same colour as the skin around it."} ${look.animal ? " Any teeth that show are this animal's own teeth — small, with pointed canines. Any tongue lies low and flat inside the mouth." : ""} Everything around the mouth stays exactly as in the original, with nothing added.`
+    ? `${part.id === "mouth_SMILE" || part.id.endsWith("EE") ? "The corners of the mouth stay where the shape puts them. " : "The corners of the mouth stay level. "}${look.lips ? "The lips keep exactly their original colour, shape and size." : "The edge of the mouth keeps the same colour as the skin around it."} ${TEETH_SHOWN[part.id] ? ` Teeth showing: ${TEETH_SHOWN[part.id]}; ${look.teeth ?? HUMAN_TEETH}.` : /OH|OO/.test(part.id) ? " The inside of the opening is plain and dark." : ""}${look.animal ? " Any tongue lies low and flat inside the mouth." : ""} Everything around the mouth stays exactly as in the original, with nothing added.`
     : part.kind === "arms"
       ? "Both hands are fully visible. The face stays exactly as it is."
       : "The mouth stays exactly as it is.";
