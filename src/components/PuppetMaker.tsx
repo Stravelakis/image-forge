@@ -706,6 +706,9 @@ export default function PuppetMaker({
           const reps = await recheckParts({ base: vb, framing: vf, parts: have, look, only }, { inspect }, (r, pic) => void onPartEvent({ type: "part", report: r, preview: pic }, pre, undefined, true), ctrl.signal);
           bad.push(...reps.filter((r) => r.status !== "ok").map((r) => pre + r.id));
         }
+        // What YOU marked to remake is remade, whatever the checkers think of it.
+        const markedNow = (metaRef.current?.reports ?? []).filter((r) => r.redo && !r.approved).map((r) => r.id);
+        bad = [...new Set([...bad, ...markedNow])];
         for (let i = 1; i <= rounds && bad.length; i++) {
           if (haltRef.current) break;
           setFixing(`round ${i} of ${rounds}: making ${bad.length} part${bad.length === 1 ? "" : "s"} again…`);
