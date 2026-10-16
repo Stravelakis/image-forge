@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { formatUsd } from "../lib/providers";
-import { PUPPET_STYLES, VIEW_PARTS, isAnimal, keyColourFor, teethFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
+import { PUPPET_STYLES, VIEW_PARTS, asksForFaceMarks, faceMarksNote, furNote, isAnimal, keyColourFor, teethFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
 import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, recheckParts, PUPPET_SIZE, type MakerEvent, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, embedView, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
@@ -765,6 +765,7 @@ export default function PuppetMaker({
                     placeholder="a friendly grey owl librarian with round glasses and a green knitted cardigan"
                     className={`${field} resize-y`}
                   />
+                  {asksForFaceMarks(description) && <p className="mt-1 text-[11.5px] text-[var(--color-ember)]">Experimental: {faceMarksNote}</p>}
                 </div>
               </div>
 
@@ -775,6 +776,11 @@ export default function PuppetMaker({
                     <button key={s.id} onClick={() => setStyle(s.id)} className={tile(style === s.id)} title={s.prompt}>
                       <span className="t block">{s.label}</span>
                       <span className="d mt-0.5 block">{s.blurb}</span>
+                      {(s.experimental || (s.smoothFur && isAnimal(description))) && (
+                        <span className="mt-1 block text-[10.5px] uppercase tracking-[0.12em] text-[var(--color-ember)]" title={s.experimental ?? furNote}>
+                          experimental{s.experimental ? "" : " · fur"}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

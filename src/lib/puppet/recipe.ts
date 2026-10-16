@@ -45,7 +45,25 @@ export interface PuppetStyle {
   prompt: string;
   /** shown on the tile */
   blurb: string;
+  /** why this style is still experimental — fine detail that moves between pictures */
+  experimental?: string;
+  /** fine fur in this style moves between pictures, so it is drawn smoother (FUR_SMOOTH) */
+  smoothFur?: boolean;
 }
+
+/**
+ * FACIAL HAIR AND MARKS (Ak, 16 Oct 2026): off unless the description asks for
+ * them — and then kept, with a note that they are experimental.
+ */
+export const asksForFaceMarks = (description: string) => /b(beard|bearded|moustache|mustache|stubble|goatee|sideburns|freckle|freckles|freckled|mole|beauty mark|scar|scars|scarred|tattoo|tattoos|wrinkle|wrinkles|wrinkled|birthmark)b/i.test(description);
+export const faceMarksNote = "Facial hair and skin marks are experimental: they can shift a little between pictures, so check them in the review.";
+
+/** Photoreal and lifelike faces: fine texture shifts from one picture to the next. */
+const REAL_SKIN = "Real-looking skin and hair change a little in every picture, so more mouths need a redo.";
+/** Furry characters in a detailed style (Ak, 16 Oct 2026): mid-detail fur instead of fine strands. */
+export const FUR_SMOOTH =
+  "The fur is smooth and mid-detailed: soft clumps with simple shapes and gentle shading, like a groomed plush toy, rather than thousands of fine strands.";
+export const furNote = "Fur is experimental in this style: fine strands change between pictures. It is drawn smoother, mid-detail.";
 
 /** Simple styles first on purpose: flat shapes cut more cleanly than fur. */
 export const PUPPET_STYLES: PuppetStyle[] = [
@@ -53,6 +71,7 @@ export const PUPPET_STYLES: PuppetStyle[] = [
     id: "pixar",
     label: "3D animated",
     blurb: "Soft, rounded, film-like",
+    smoothFur: true,
     prompt:
       "a STYLISED 3D ANIMATED CARTOON CHARACTER in the style of a Pixar or Illumination feature film — appealing exaggerated proportions, big expressive cartoon eyes, soft rounded forms, beautifully rendered but unmistakably a cartoon and NOT a photograph",
   },
@@ -67,6 +86,7 @@ export const PUPPET_STYLES: PuppetStyle[] = [
     id: "clay",
     label: "Claymation",
     blurb: "Plasticine, stop-motion",
+    smoothFur: true,
     prompt:
       "a CLAYMATION CHARACTER made of smooth plasticine, like an Aardman stop-motion film — visible soft thumbprint texture, rounded chunky shapes, studio lighting",
   },
@@ -91,6 +111,8 @@ export const PUPPET_STYLES: PuppetStyle[] = [
     id: "lifelike",
     label: "Lifelike 3D",
     blurb: "Cinematic, high detail, nearly real",
+    experimental: REAL_SKIN,
+    smoothFur: true,
     prompt:
       "a LIFELIKE, HIGH-DETAIL 3D CHARACTER like a modern video-game cinematic or a high-end animated film — realistic skin, hair and fabric texture, natural proportions, soft cinematic studio lighting; believable and detailed, but still a rendered character, not a photograph",
   },
@@ -101,10 +123,14 @@ export const PUPPET_STYLES: PuppetStyle[] = [
     // out on purpose — see PHOTO_EXCLUDED, said in the prompt and in the
     // things-to-avoid list.
     id: "photo",
-    label: "Touched-up photoreal",
-    blurb: "Like a retouched studio photo · fewer details",
+    label: "Retouched photo",
+    blurb: "High-fashion retouch · ironed-out detail",
+    experimental: REAL_SKIN,
+    smoothFur: true,
+    // IRONED OUT (Ak, 16 Oct 2026): "a lot of high fashion photography has
+    // ironed out details" — the smoother the skin and hair, the steadier the edits.
     prompt:
-      "a TOUCHED-UP PHOTOREALISTIC studio portrait, like a magazine photo retouched for a clean look — smooth even skin, neat short hair kept off the face, plain solid-colour matte clothing, soft even studio light, sharp focus. Clean-shaven, no glasses, no jewellery, no patterns, no logos",
+      "a HIGH-FASHION EDITORIAL PHOTOGRAPH retouched to perfection, like a beauty-magazine cover — flawless airbrushed skin with an even, porcelain-smooth finish, sleek simple hair styled away from the face, plain solid-colour matte clothing, soft diffused beauty lighting from the front, sharp focus. Clean-shaven, no glasses, no jewellery, no patterns, no logos",
   },
   {
     id: "stick",
@@ -249,6 +275,9 @@ export function basePrompt(o: { description: string; style: string; framing: Pup
   return [
     `A single character portrait: ${o.description.trim()}.`,
     `Drawn as ${style.prompt}.`,
+    ...(style.smoothFur && isAnimal(o.description) ? [FUR_SMOOTH] : []),
+    // Clean faces unless asked (Ak, 16 Oct 2026): facial hair and marks drift between pictures.
+    ...(!isAnimal(o.description) && !asksForFaceMarks(o.description) ? ["Clean-shaven, with smooth, clear, even skin."] : []),
     frame,
     "Mouth CLOSED and relaxed, calm friendly neutral expression.",
     lipsClause(look),
