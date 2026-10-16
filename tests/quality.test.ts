@@ -48,3 +48,21 @@ describe("the picture panel (15 Oct 2026)", () => {
     expect(await panelVerdict(part("mouth_L"), lips, [says("A", null), says("B", null)])).toBeNull();
   });
 });
+
+import { asksForFaceMarks, basePrompt, teethFor, editPrompt as editP } from "../src/lib/puppet/recipe";
+describe("clean faces and the tooth protocol (16 Oct 2026)", () => {
+  it("faces are clean unless the description asks for facial hair or marks", () => {
+    expect(asksForFaceMarks("a bearded sea captain")).toBe(true);
+    expect(asksForFaceMarks("a freckled girl")).toBe(true);
+    expect(asksForFaceMarks("a cheerful baker")).toBe(false);
+    expect(basePrompt({ description: "a cheerful baker", style: "pixar", framing: "head", inspirations: 0 })).toMatch(/Clean-shaven/);
+    expect(basePrompt({ description: "a bearded sea captain", style: "pixar", framing: "head", inspirations: 0 })).not.toMatch(/Clean-shaven/);
+  });
+  it("dogs get dog teeth, and only shapes that show teeth mention them", () => {
+    expect(teethFor("a scruffy dog")).toMatch(/four small pointed teeth/);
+    expect(teethFor("a baker")).toMatch(/human teeth/);
+    const look = { key: { name: "magenta", hex: "#FF00FF" }, lips: false, animal: true, teeth: teethFor("a dog") };
+    expect(editP(PUPPET_PARTS.find((p) => p.id === "mouth_EE")!, look)).toMatch(/canines/);
+    expect(editP(PUPPET_PARTS.find((p) => p.id === "mouth_OO")!, look)).not.toMatch(/teeth/i);
+  });
+});

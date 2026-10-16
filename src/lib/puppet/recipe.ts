@@ -55,7 +55,7 @@ export interface PuppetStyle {
  * FACIAL HAIR AND MARKS (Ak, 16 Oct 2026): off unless the description asks for
  * them — and then kept, with a note that they are experimental.
  */
-export const asksForFaceMarks = (description: string) => /b(beard|bearded|moustache|mustache|stubble|goatee|sideburns|freckle|freckles|freckled|mole|beauty mark|scar|scars|scarred|tattoo|tattoos|wrinkle|wrinkles|wrinkled|birthmark)b/i.test(description);
+export const asksForFaceMarks = (description: string) => /\b(beard|bearded|moustache|mustache|stubble|goatee|sideburns|freckle|freckles|freckled|mole|beauty mark|scar|scars|scarred|tattoo|tattoos|wrinkle|wrinkles|wrinkled|birthmark)\b/i.test(description);
 export const faceMarksNote = "Facial hair and skin marks are experimental: they can shift a little between pictures, so check them in the review.";
 
 /** Photoreal and lifelike faces: fine texture shifts from one picture to the next. */
