@@ -210,13 +210,6 @@ export function judgeName(settings: ForgeSettings): string {
 }
 
 /**
- * THE PICTURE PANEL's checkers (quality.ts), from the text engines you have
- * keys for (15 Oct 2026, tested on the sample puppets): Gemma 4 31B and
- * NVIDIA's Nemotron Omni through NVIDIA, dots-3 through OpenRouter as the
- * tie-breaker. The same models through OpenRouter's free tier when there is
- * no NVIDIA key. Undefined when fewer than two can be reached.
- */
-/**
  * THE PER-MINUTE LIMIT (Ak, 16 Oct 2026: "we have a hard limit of 40 rpm"). Every
  * checker request to one provider waits its turn: at most 35 a minute per address,
  * so a free key never hits its hard limit, however many checks run at once.
@@ -230,13 +223,23 @@ async function turnFor(base: string): Promise<void> {
   if (at > now) await new Promise((ok) => setTimeout(ok, at - now));
 }
 
+/**
+ * THE PICTURE PANEL's checkers (quality.ts), scored against Ak's own verdicts on
+ * Maria and Lucky (16 Oct 2026): Nemotron 3.5 Super VL 27 of 30, Step 5 26 of 30
+ * (every tongue right), Nemotron Omni 24, Gemma 4 13 (mostly no answer).
+ * Step 5 through NVIDIA; Super VL through OpenRouter's free tier when there is an
+ * OpenRouter key — its own allowance, so the two share no limit — otherwise NVIDIA
+ * too. Nemotron Omni breaks ties. Undefined when fewer than two can be reached.
+ */
 export function pageInspect(settings: ForgeSettings): MakerIO["inspect"] | undefined {
   const keyFor = (host: string) => settings.textProviders.find((p) => p.key.trim() && p.base.includes(host))?.key.trim() ?? "";
   const nv = keyFor("integrate.api.nvidia.com");
   const or = keyFor("openrouter.ai");
+  const NV = "https://integrate.api.nvidia.com/v1";
+  const OR = "https://openrouter.ai/api/v1";
   const engine = (base: string, key: string, model: string, name: string) => (b64: Promise<string>): PanelChecker => ({
     name,
-    async facts(question) {
+    async answer(question) {
       // Free tiers say "too busy" (429) or wobble (5xx): wait and ask again,
       // so a busy checker is not mistaken for one with nothing to say.
       await turnFor(base);
@@ -246,23 +249,15 @@ export function pageInspect(settings: ForgeSettings): MakerIO["inspect"] | undef
         await turnFor(base);
         r = await askVision({ base, key, model }, await b64, question);
       }
-      if (!r.ok) return null;
-      try {
-        return jsonFromReply(r.text) as Facts;
-      } catch {
-        return null;
-      }
+      return r.ok ? r.text : null;
     },
   });
-  const NV = "https://integrate.api.nvidia.com/v1";
-  const OR = "https://openrouter.ai/api/v1";
-  const pair = nv
-    ? [engine(NV, nv, "google/gemma-4-31b-it", "Gemma"), engine(NV, nv, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "Nemotron")]
-    : or
-      ? [engine(OR, or, "google/gemma-4-31b-it:free", "Gemma"), engine(OR, or, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free", "Nemotron")]
-      : [];
+  const pair = [
+    ...(nv ? [engine(NV, nv, "stepfun-ai/step-5-preview", "Step 5")] : []),
+    ...(or ? [engine(OR, or, "nvidia/nemotron-3.5-super-vl:free", "Nemotron VL")] : nv ? [engine(NV, nv, "nvidia/nemotron-3.5-super-vl-120b-a12b", "Nemotron VL")] : []),
+  ];
   if (pair.length < 2) return undefined;
-  const tie = or ? engine(OR, or, "dots-studio/dots-3-note-preview:free", "dots") : undefined;
+  const tie = nv ? engine(NV, nv, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "Nemotron Omni") : undefined;
   return async (part, look, picture) => {
     const b64 = imgToB64(picture);
     return panelVerdict(part, look, pair.map((c) => c(b64)), tie?.(b64));

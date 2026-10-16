@@ -15,27 +15,58 @@ import type { PuppetLook, PuppetPart } from "./recipe";
 
 export type Facts = Record<string, unknown>;
 
-const COMMON =
-  `"beard_or_facial_hair_same_as_left": bool (true if neither has any), "skin_marks_same_as_left": bool (freckles, moles, scars, wrinkles; true if none), ` +
-  `"eyes_look_same_direction_as_left": bool, "right_looks_broken": bool (doubled or extra features, smears, a seam or box edge, letters or text drawn on it), "something_else_changed": "short description or none"`;
+/** One fact, asked on its own. "number" questions want a count, the rest yes or no. */
+export interface FactQuestion {
+  key: string;
+  ask: string;
+  number?: boolean;
+}
+const YN = " Answer only yes or no.";
+const COMMON: FactQuestion[] = [
+  { key: "beard_or_facial_hair_same_as_left", ask: "Compare the LEFT and RIGHT pictures. Is the facial hair (beard, moustache, stubble) the same on both? If neither has any, answer yes." + YN },
+  { key: "skin_marks_same_as_left", ask: "Compare the LEFT and RIGHT pictures. Are the freckles, moles, scars and wrinkles the same on both? If neither has any, answer yes." + YN },
+  { key: "eyes_look_same_direction_as_left", ask: "Compare the LEFT and RIGHT pictures. Do the eyes look in the same direction on both?" + YN },
+  { key: "right_looks_broken", ask: "Does the RIGHT picture look broken — doubled or extra features, smears, a visible seam or box edge, or letters drawn on it?" + YN },
+];
 
-/** The question for one part. Facts only — the checker is told not to judge. */
-export function factsQuestion(part: PuppetPart): string {
+/** The questions for one part: facts only — the rules below decide. */
+export function factsQuestions(part: PuppetPart): FactQuestion[] {
   if (part.kind === "mouth")
-    return (
-      `Left: a cartoon character. Right: the same character after an edit meant to change ONLY the mouth to: ${part.expect}. ` +
-      `Look closely and report facts, do not judge. Answer only JSON: {"right_mouth_is_the_wanted_shape": bool, "tongue_visible": bool, ` +
-      `"tongue_reaches_past_the_teeth_or_lips": bool, "smiling_right": bool, "lips_drawn_left": bool (a distinct lip shape or lip colour around the mouth), "lips_drawn_right": bool, ${COMMON}}`
-    );
+    return [
+      { key: "right_mouth_is_the_wanted_shape", ask: `Look at the RIGHT picture only. Is the mouth this shape: ${part.expect}?` + YN },
+      { key: "tongue_visible", ask: "Look at the RIGHT picture only. Can you see the tongue?" + YN },
+      { key: "tongue_reaches_past_the_teeth_or_lips", ask: "Look at the RIGHT picture only. Does the tongue stick out of the mouth — past the teeth or past the lips, so part of it is outside the mouth?" + YN },
+      { key: "smiling_right", ask: "Look at the RIGHT picture only. Is the character smiling, with the corners of the mouth turned up?" + YN },
+      { key: "lips_drawn_left", ask: "Look at the LEFT picture only. Does the mouth have distinct drawn lips — a lip shape or a lip colour different from the skin?" + YN },
+      { key: "lips_drawn_right", ask: "Look at the RIGHT picture only. Does the mouth have distinct drawn lips — a lip shape or a lip colour different from the skin?" + YN },
+      ...COMMON,
+    ];
   if (part.kind === "lid" || part.kind === "brow")
-    return (
-      `Left: a cartoon character. Right: the same character after an edit meant to change ONLY the ${part.kind === "lid" ? "eyelids" : "eyebrows"}: ${part.expect}. ` +
-      `Report facts, do not judge. Answer only JSON: {"wanted_change_visible": bool, "mouth_changed": bool, ${COMMON}}`
-    );
-  return (
-    `Left: a cartoon character at rest. Right: the same character after an edit meant to change ONLY the arms: ${part.expect}. ` +
-    `Report facts, do not judge. Answer only JSON: {"right_picture_shows_the_wanted_arm_pose": bool, "arms_count_right": number, "hands_visible_right": number, "hand_covers_face_right": bool, "face_changed": bool, ${COMMON}}`
-  );
+    return [
+      { key: "wanted_change_visible", ask: `Compare the LEFT and RIGHT pictures. Does the RIGHT one show: ${part.expect}?` + YN },
+      { key: "mouth_changed", ask: "Compare the LEFT and RIGHT pictures. Is the mouth different between them?" + YN },
+      ...COMMON,
+    ];
+  return [
+    { key: "right_picture_shows_the_wanted_arm_pose", ask: `Look at the RIGHT picture only. Does it show: ${part.expect}?` + YN },
+    { key: "arms_count_right", ask: "Look at the RIGHT picture only. How many arms does the character have? Answer with a number only.", number: true },
+    { key: "hands_visible_right", ask: "Look at the RIGHT picture only. How many hands can you see? Answer with a number only.", number: true },
+    { key: "hand_covers_face_right", ask: "Look at the RIGHT picture only. Does a hand cover any part of the face?" + YN },
+    { key: "face_changed", ask: "Compare the LEFT and RIGHT pictures. Is the face different between them?" + YN },
+    ...COMMON,
+  ];
+}
+
+/** A checker's answer, read: yes / no / a number / not readable. */
+export function readAnswer(text: string | null, number?: boolean): boolean | number | undefined {
+  if (!text) return undefined;
+  const t = text.toLowerCase().replace(/<think>[\s\S]*?<\/think>/g, "");
+  if (number) {
+    const m = t.match(/\b(\d+)\b/g);
+    return m ? Number(m[m.length - 1]) : undefined;
+  }
+  const yes = /\byes\b/.test(t), no = /\bno\b/.test(t);
+  return yes && !no ? true : no && !yes ? false : undefined;
 }
 
 const SMILES_OK = new Set(["mouth_SMILE", "mouth_EE", "mouth_halfEE"]);
@@ -103,10 +134,24 @@ export interface PanelVerdict {
   votes: string;
 }
 
-/** A checker, as the panel needs it: a name, and a way to ask for facts (null = could not answer). */
+/** A checker, as the panel needs it: a name, and a way to ask one question (null = could not answer). */
 export interface PanelChecker {
   name: string;
-  facts(question: string): Promise<Facts | null>;
+  answer(question: string): Promise<string | null>;
+}
+
+/** One checker's facts about one picture: every question, one at a time. */
+async function factsFrom(c: PanelChecker, qs: FactQuestion[]): Promise<Facts | null> {
+  const f: Facts = {};
+  let answered = 0;
+  for (const q of qs) {
+    const v = readAnswer(await c.answer(q.ask).catch(() => null), q.number);
+    if (v !== undefined) {
+      f[q.key] = v;
+      answered++;
+    }
+  }
+  return answered >= qs.length / 2 ? f : null; // a checker that mostly could not answer has no vote
 }
 
 /**
@@ -114,10 +159,10 @@ export interface PanelChecker {
  * answer counts as no vote; green needs TWO clean votes.
  */
 export async function panelVerdict(part: PuppetPart, look: PuppetLook, checkers: PanelChecker[], tieBreak?: PanelChecker): Promise<PanelVerdict | null> {
-  const q = factsQuestion(part);
+  const qs = factsQuestions(part);
   const votes: { name: string; broken: string[] | null }[] = [];
   const ask = async (c: PanelChecker) => {
-    const f = await c.facts(q).catch(() => null);
+    const f = await factsFrom(c, qs);
     votes.push({ name: c.name, broken: f ? brokenRules(part, look, f) : null });
   };
   await Promise.all(checkers.map(ask));

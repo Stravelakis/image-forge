@@ -1,11 +1,22 @@
 import { describe, expect, it } from "vitest";
-import { brokenRules, fixNote, panelVerdict, type PanelChecker } from "../src/lib/puppet/quality";
+import { brokenRules, factsQuestions, fixNote, panelVerdict, readAnswer, type PanelChecker } from "../src/lib/puppet/quality";
 import { PUPPET_PARTS } from "../src/lib/puppet/recipe";
 
 const part = (id: string) => PUPPET_PARTS.find((p) => p.id === id)!;
 const lips = { key: { name: "magenta", hex: "#FF00FF" }, lips: true };
 const noLips = { ...lips, lips: false };
-const says = (name: string, facts: Record<string, unknown> | null): PanelChecker => ({ name, facts: async () => facts });
+// A stand-in checker: answers each single question from a table of facts.
+const says = (name: string, facts: Record<string, unknown> | null): PanelChecker => ({
+  name,
+  answer: async (q) => {
+    if (!facts) return null;
+    const fq = factsQuestions(PUPPET_PARTS.find((p) => p.id === "mouth_L")!).find((x) => x.ask === q)!;
+    const key = fq.key in facts ? fq.key : undefined;
+    // a fact the table does not mention gets the "nothing wrong" answer
+    if (key === undefined) return /same_|wanted_shape/.test(fq.key) ? "yes" : "no";
+    return typeof facts[key] === "number" ? String(facts[key]) : facts[key] ? "yes" : "no";
+  },
+});
 
 describe("the picture panel (15 Oct 2026)", () => {
   it("the rules decide, not the checker: a tongue past the teeth fails even if nothing else is wrong", () => {
@@ -64,5 +75,17 @@ describe("clean faces and the tooth protocol (16 Oct 2026)", () => {
     const look = { key: { name: "magenta", hex: "#FF00FF" }, lips: false, animal: true, teeth: teethFor("a dog") };
     expect(editP(PUPPET_PARTS.find((p) => p.id === "mouth_EE")!, look)).toMatch(/canines/);
     expect(editP(PUPPET_PARTS.find((p) => p.id === "mouth_OO")!, look)).not.toMatch(/teeth/i);
+  });
+});
+
+describe("one plain question at a time (16 Oct 2026)", () => {
+  it("every part asks single questions, each answerable with yes, no or a number", () => {
+    for (const p of PUPPET_PARTS) for (const q of factsQuestions(p)) expect(q.ask).toMatch(q.number ? /number only/ : /only yes or no/);
+  });
+  it("reads yes, no and numbers, and ignores a model's thinking", () => {
+    expect(readAnswer("Yes.")).toBe(true);
+    expect(readAnswer("<think>maybe yes</think> No")).toBe(false);
+    expect(readAnswer("I count 2 hands.", true)).toBe(2);
+    expect(readAnswer("hard to say")).toBeUndefined();
   });
 });
