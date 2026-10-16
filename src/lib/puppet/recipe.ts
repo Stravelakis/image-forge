@@ -418,7 +418,20 @@ const guardFor = (part: PuppetPart, look: PuppetLook): string =>
       ? "Both hands are fully visible. The face stays exactly as it is."
       : "The mouth stays exactly as it is.";
 
-export const editPrompt = (part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): string =>
+/** "Hand" words, said as "paw" words for an animal. */
+export const pawWords = (text: string): string =>
+  text
+    .replace(/open-palm /g, "")
+    .replace(/the index finger/g, "a raised paw")
+    .replace(/palms slightly open/g, "paws slightly open")
+    .replace(/the palms turned up and open/g, "the paws turned up")
+    .replace(/palms/g, "paws")
+    .replace(/hands/g, "paws")
+    .replace(/hand/g, "paw")
+    .replace(/Both paws are fully visible\./g, "Both front paws are fully visible.");
+
+export const editPrompt = (part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): string => (part.kind === "arms" && look.animal ? pawWords(editPromptRaw(part, look)) : editPromptRaw(part, look));
+const editPromptRaw = (part: PuppetPart, look: PuppetLook): string =>
   `Edit this picture. ${part.kind === "mouth" && !look.lips ? withoutLipWords(part.change) : part.change}${part.avoid ? ` ${part.kind === "mouth" && !look.lips ? withoutLipWords(part.avoid) : part.avoid}` : ""} ${guardFor(part, look)}${part.kind === "mouth" ? ` ${lipsClause(look)} ${look.lips ? "Keep the lips exactly as they are in the original picture — the same colour and thickness." : "The edge of the mouth stays exactly like the original: no rim and no colour around it."}` : ""}\n\n${keepFor(look)}`;
 
 /**

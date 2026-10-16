@@ -11,7 +11,7 @@
  *
  * Pure: no network here. pageIO.ts passes the function that asks a checker.
  */
-import type { PuppetLook, PuppetPart } from "./recipe";
+import { pawWords, type PuppetLook, type PuppetPart } from "./recipe";
 
 export type Facts = Record<string, unknown>;
 
@@ -30,7 +30,12 @@ const COMMON: FactQuestion[] = [
 ];
 
 /** The questions for one part: facts only — the rules below decide. */
-export function factsQuestions(part: PuppetPart): FactQuestion[] {
+export function factsQuestions(part: PuppetPart, look?: PuppetLook): FactQuestion[] {
+  const qs = factsQuestionsRaw(part);
+  // an animal has paws: ask about paws (Ak, 16 Oct 2026)
+  return part.kind === "arms" && look?.animal ? qs.map((q) => ({ ...q, ask: pawWords(q.ask).replace(/arms/g, "front legs") })) : qs;
+}
+function factsQuestionsRaw(part: PuppetPart): FactQuestion[] {
   if (part.kind === "mouth")
     return [
       { key: "right_mouth_is_the_wanted_shape", ask: `Look at the RIGHT picture only. Is the mouth this shape: ${part.expect}?` + YN },
@@ -159,7 +164,7 @@ async function factsFrom(c: PanelChecker, qs: FactQuestion[]): Promise<Facts | n
  * answer counts as no vote; green needs TWO clean votes.
  */
 export async function panelVerdict(part: PuppetPart, look: PuppetLook, checkers: PanelChecker[], tieBreak?: PanelChecker): Promise<PanelVerdict | null> {
-  const qs = factsQuestions(part);
+  const qs = factsQuestions(part, look);
   const votes: { name: string; broken: string[] | null }[] = [];
   const ask = async (c: PanelChecker) => {
     const f = await factsFrom(c, qs);

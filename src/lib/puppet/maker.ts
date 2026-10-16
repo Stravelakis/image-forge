@@ -17,7 +17,7 @@
  * test passes stand-ins; a headless overnight run could pass anything.
  */
 import { composite, crop, cutPart, resize, sideBySide, type Box, type Img } from "./pixels";
-import { BASE_NEGATIVE, DEFAULT_LOOK, baseNegative, EDIT_NEGATIVE, editNegative, VIEW_EDITS, basePrompt, editPrompt, partsFor, type PuppetFraming, type PuppetLook, type PuppetPart, type PuppetViewId } from "./recipe";
+import { BASE_NEGATIVE, DEFAULT_LOOK, baseNegative, EDIT_NEGATIVE, editNegative, pawWords, VIEW_EDITS, basePrompt, editPrompt, partsFor, type PuppetFraming, type PuppetLook, type PuppetPart, type PuppetViewId } from "./recipe";
 import type { CutPart } from "./rig";
 import { fixNote, type PanelVerdict } from "./quality";
 
@@ -235,7 +235,7 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
       if (signal?.aborted) throw new DOMException("stopped", "AbortError");
       report.tries = t;
       const edit = resize(
-        await io.generate({ prompt: editPrompt(part, req.look) + (req.notes?.[part.id] ? ` Also, and this matters most: ${req.notes[part.id]}.` : "") + (fix ? ` Make sure: ${fix}.` : ""), negative: editNegative(req.look), refs: [req.base], seed: seedFor(n * 31 + t + (req.notes?.[part.id] || req.reseed ? Date.now() % 9973 : 0)), width: req.base.width, height: req.base.height }, signal),
+        await io.generate({ prompt: editPrompt(part, req.look) + (req.notes?.[part.id] ? ` Also, and this matters most: ${req.notes[part.id]}.` : "") + (fix ? ` Make sure: ${part.kind === "arms" && req.look?.animal ? pawWords(fix) : fix}.` : ""), negative: editNegative(req.look), refs: [req.base], seed: seedFor(n * 31 + t + (req.notes?.[part.id] || req.reseed ? Date.now() % 9973 : 0)), width: req.base.width, height: req.base.height }, signal),
         req.base.width,
         req.base.height
       );

@@ -89,3 +89,13 @@ describe("one plain question at a time (16 Oct 2026)", () => {
     expect(readAnswer("hard to say")).toBeUndefined();
   });
 });
+
+describe("animals have paws (16 Oct 2026)", () => {
+  it("arm poses and their questions say paws for an animal", () => {
+    const dog = { key: { name: "magenta", hex: "#FF00FF" }, lips: false, animal: true };
+    for (const p of PUPPET_PARTS.filter((x) => x.kind === "arms")) {
+      expect(editP(p, dog)).not.toMatch(/\bhands?\b|\bpalms?\b|finger/i);
+      expect(factsQuestions(p, dog).map((q) => q.ask).join(" ")).not.toMatch(/\bhands?\b/i);
+    }
+  });
+});
