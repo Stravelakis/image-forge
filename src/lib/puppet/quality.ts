@@ -149,13 +149,16 @@ export interface PanelChecker {
 async function factsFrom(c: PanelChecker, qs: FactQuestion[]): Promise<Facts | null> {
   const f: Facts = {};
   let answered = 0;
-  for (const q of qs) {
-    const v = readAnswer(await c.answer(q.ask).catch(() => null), q.number);
+  // All questions at once (16 Oct 2026: one after another took 5–10 minutes a part);
+  // the per-minute limit in pageIO.ts still spaces them out for each provider.
+  const answers = await Promise.all(qs.map((q) => c.answer(q.ask).catch(() => null)));
+  qs.forEach((q, i) => {
+    const v = readAnswer(answers[i], q.number);
     if (v !== undefined) {
       f[q.key] = v;
       answered++;
     }
-  }
+  });
   return answered >= qs.length / 2 ? f : null; // a checker that mostly could not answer has no vote
 }
 
