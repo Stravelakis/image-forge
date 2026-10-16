@@ -109,7 +109,7 @@ describe("the recipe", () => {
     }
     expect(editPrompt(PUPPET_PARTS.find((p) => p.id === "mouth_L")!)).toMatch(/stays inside the mouth, behind the teeth/);
     // AH never mentions the tongue (it drew one sticking out, 14 Oct 2026)
-    expect(editPrompt(PUPPET_PARTS.find((p) => p.id === "mouth_AH")!)).toMatch(/plain, empty dark shape/);
+    expect(editPrompt(PUPPET_PARTS.find((p) => p.id === "mouth_AH")!)).toMatch(/plain, empty, softly shaded dark shape/);
   });
 
   it("one lips rule per puppet, in the base and every mouth", () => {

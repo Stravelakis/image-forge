@@ -253,13 +253,15 @@ export function pageInspect(settings: ForgeSettings): MakerIO["inspect"] | undef
     },
   });
   const pair = [
-    ...(nv ? [engine(NV, nv, "stepfun-ai/step-5-preview", "Step 5")] : []),
-    ...(or ? [engine(OR, or, "nvidia/nemotron-3.5-super-vl:free", "Nemotron VL")] : nv ? [engine(NV, nv, "nvidia/nemotron-3.5-super-vl-120b-a12b", "Nemotron VL")] : []),
+    ...(nv ? [engine(NV, nv, "stepfun-ai/step-5-preview", "C1 Step 5")] : []),
+    ...(or ? [engine(OR, or, "nvidia/nemotron-3.5-super-vl:free", "C2 Nemotron VL")] : nv ? [engine(NV, nv, "nvidia/nemotron-3.5-super-vl-120b-a12b", "C2 Nemotron VL")] : []),
   ];
   if (pair.length < 2) return undefined;
-  const tie = nv ? engine(NV, nv, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "Nemotron Omni") : undefined;
+  // ALL THREE LOOK AT EVERY PART (Ak, 16 Oct 2026): C1, C2 and TB. Green = at
+  // least two of them found nothing wrong. C1 and TB share NVIDIA's limit (turnFor).
+  const tb = nv ? [engine(NV, nv, "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning", "TB Nemotron Omni")] : [];
   return async (part, look, picture) => {
     const b64 = imgToB64(picture);
-    return panelVerdict(part, look, pair.map((c) => c(b64)), tie?.(b64));
+    return panelVerdict(part, look, [...pair, ...tb].map((c) => c(b64)));
   };
 }
