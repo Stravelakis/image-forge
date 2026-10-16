@@ -215,6 +215,8 @@ export function judgeName(settings: ForgeSettings): string {
  * so a free key never hits its hard limit, however many checks run at once.
  */
 const PER_MINUTE = 35;
+/** Checkers whose free allowance is used up, and until when they sit out. */
+const spentUntil = new Map<string, number>();
 const nextTurn = new Map<string, number>();
 async function turnFor(base: string): Promise<void> {
   const now = Date.now();
@@ -240,10 +242,18 @@ export function pageInspect(settings: ForgeSettings): MakerIO["inspect"] | undef
   const engine = (base: string, key: string, model: string, name: string) => (b64: Promise<string>): PanelChecker => ({
     name,
     async answer(question) {
+      // A free allowance used up for the day: this checker sits out until tomorrow
+      // instead of retrying every question (OpenRouter's free models, ~1000 a day).
+      if ((spentUntil.get(model) ?? 0) > Date.now()) return null;
       // Free tiers say "too busy" (429) or wobble (5xx): wait and ask again,
       // so a busy checker is not mistaken for one with nothing to say.
       await turnFor(base);
       let r = await askVision({ base, key, model }, await b64, question);
+      const spent = (x: typeof r) => !x.ok && (x.status === 402 || (x.status === 429 && /per[- ]day|daily|credits/i.test(x.body ?? "")));
+      if (spent(r)) {
+        spentUntil.set(model, Date.now() + 6 * 3600_000);
+        return null;
+      }
       for (let t = 1; !r.ok && t <= 4 && (r.status === 429 || (r.status ?? 0) >= 500 || r.status === undefined); t++) {
         await new Promise((ok) => setTimeout(ok, 8000 * t));
         await turnFor(base);
