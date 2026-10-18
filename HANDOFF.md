@@ -562,3 +562,30 @@ The full review and work list for both forges lives in Video Forge's `docs/FORGE
   (`lib/recipeHelp.ts`, links checked).
 - The 10 sample puppets are being made by the installed app; status and how
   to resume: Video Forge `docs/HANDOFF.md` → "Running now".
+
+## 16–18 Oct 2026 — puppet quality, and the long run
+
+**Running now (started 18 Oct 16:29 UTC, up to 36 h, ends by 20 Oct ~04:30 UTC):**
+`%TEMP%\samples\fix2.mjs`, its own hidden process (not tied to a Claude session).
+It drives the installed Image Forge (debug port 9555) through the 10 sample puppets:
+side 3/4 view → "Check and fix every part" (up to 2 passes × 3 rounds). Looks after
+itself: heat (83 °C pause → 72 °C), Image Forge restart, Docker/LocalAI restart,
+45-minute stall watchdog, keeps Windows awake only while it runs.
+- Progress: `%TEMP%\samples\fix2.log` · finished puppets: `done.json` · at the end: `RESULTS.md`
+- Stop: end the `node.exe fix2.mjs` process. Resume: `node fix2.mjs` in `%TEMP%\samples` (skips done puppets).
+- LocalAI's container listens on loopback + the Tailscale address: **Tailscale must be on** or it will not start.
+- Backup of Maria and Lucky before Ak's picks went in: `%APPDATA%\image-forge\workshop-backup-16oct`.
+
+**What changed in the puppet maker (all tested, 727 tests):**
+| Change | Where |
+|---|---|
+| Picture panel: C1 Step 5 (NVIDIA), C2 Nemotron 3.5 Super VL (OpenRouter free), TB Nemotron Omni (NVIDIA) all look at every part; one yes/no question at a time, sent together; green = 2 clean | `src/lib/puppet/quality.ts`, `pageIO.ts pageInspect` |
+| Chosen by scoring against Ak's verdicts on Maria/Lucky: Super VL 27/30, Step 5 26/30, Omni 24, Gemma 4 13, DeepSeek 4.1 Flash 0 (no pictures) | — |
+| NVIDIA capped at 35 requests/minute (hard limit 40); a checker whose free daily allowance is spent sits out | `pageIO.ts turnFor / spentUntil` |
+| Check and fix every part; Mark to remake + Remake all marked (Made); approved parts never touched; marked always remade | `PuppetMaker.tsx`, `MadeView.tsx`, `App.tsx` |
+| Options to pick: a part that never gets green keeps its 3 best tries on its card | `maker.ts` "options" event, `PuppetMaker.tsx pickOption` |
+| Wording says only what is wanted (naming a beard/tongue/lipstick drew it); per-shape targets from Ak's verdicts; tooth protocol per species; paws for animals; soft-shadow mouth inside | `recipe.ts` |
+| Edits colour-matched to the face before cutting; the cut grows into faint mouth corners | `pixels.ts matchColours / cutPart` |
+| Clean faces unless asked (then "experimental"); photo style = high-fashion retouch; lifelike/photo/furry marked experimental; smoother mid-detail fur | `recipe.ts`, style picker |
+
+**Open:** the mouth ruler (face-part model + pixel measurements, `%TEMP%\qc\measure\ruler.py`) works for openings/teeth/lip colour but not yet tongue-vs-lips on humans or small dog mouths — not in the app yet. Dog L still shows the tongue. FLUX.1 Kontext tested (ComfyUI) — not better than FLUX.2 klein, 9× slower; ComfyUI needs `SSLKEYLOGFILE` unset to start.
