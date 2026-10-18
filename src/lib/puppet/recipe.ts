@@ -52,6 +52,50 @@ export interface PuppetStyle {
 }
 
 /**
+ * HARD ANIMALS (Ak, 18 Oct 2026). Which breeds and animals the puppet maker
+ * cannot do easily — and why — so they come with an "experimental" warning
+ * instead of a disappointment. Learnt from the sample run: a mouth is cut out and
+ * redrawn many times, and anything that hides it, or changes a lot from picture
+ * to picture, fails more often.
+ */
+export const HARD_ANIMALS: { words: RegExp; why: string }[] = [
+  {
+    words: /\b(poodle|bichon|komondor|puli|shih ?tzu|lhasa apso|maltese|yorkie|yorkshire terrier|old english sheepdog|bearded collie|afghan hound|havanese|cockapoo|labradoodle|goldendoodle|doodle dog|briard|bergamasco)\b/i,
+    why: "long, curly or corded fur over the face hides the mouth and changes in every picture",
+  },
+  {
+    words: /\b(schnauzer|scottish terrier|scottie|westie|west highland|wire[- ]?haired|airedale|irish wolfhound|wolfhound|brussels griffon|affenpinscher)\b/i,
+    why: "a beard or moustache of fur over the mouth — mouth shapes are hard to see and to keep the same",
+  },
+  {
+    words: /\b(pug|bulldog|french bulldog|frenchie|boxer|shar[- ]?pei|bullmastiff|mastiff|boston terrier|pekingese|bloodhound|basset hound|dogue de bordeaux|neapolitan mastiff)\b/i,
+    why: "a flat face, heavy jowls or deep wrinkles — the mouth hides in folds that move between pictures",
+  },
+  {
+    words: /\b(pomeranian|chow ?chow|samoyed|keeshond|persian cat|maine coon|ragdoll|norwegian forest cat|alpaca|llama|sheep|lamb|angora)\b/i,
+    why: "very fluffy fur — fine fur detail changes in every picture, so cut-outs show",
+  },
+  {
+    words: /\b(bird|owl|owlet|parrot|penguin|duck|duckling|chick|chicken|eagle|hawk|pelican|toucan|flamingo|crow|raven|swan|goose)\b/i,
+    why: "a beak has no lips or teeth, so most mouth shapes look the same — the talking shows less",
+  },
+  {
+    words: /\b(horse|pony|donkey|zebra|giraffe|camel|crocodile|alligator|anteater|dolphin|shark)\b/i,
+    why: "a long snout or jaw — the mouth is far from the eyes and side-on, and shapes are hard to read",
+  },
+  {
+    words: /\b(fish|snake|lizard|turtle|tortoise|frog|toad|octopus|squid|jellyfish|insect|bug|bee|spider|ant|butterfly|snail|worm)\b/i,
+    why: "no real lips or face to animate — mouth shapes and blinks are mostly guesswork",
+  },
+  {
+    words: /\b(elephant|walrus|hedgehog|porcupine|bat)\b/i,
+    why: "a trunk, tusks, spines or wings around the face get in the way of the mouth and the arms",
+  },
+];
+/** The first hard-animal reason for a description, or "" when nothing on the list is mentioned. */
+export const hardAnimalWhy = (description: string): string => HARD_ANIMALS.find((h) => h.words.test(description))?.why ?? "";
+
+/**
  * FACIAL HAIR AND MARKS (Ak, 16 Oct 2026): off unless the description asks for
  * them — and then kept, with a note that they are experimental.
  */

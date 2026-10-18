@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { formatUsd } from "../lib/providers";
-import { PUPPET_STYLES, VIEW_PARTS, asksForFaceMarks, faceMarksNote, furNote, isAnimal, keyColourFor, teethFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
+import { PUPPET_STYLES, VIEW_PARTS, asksForFaceMarks, hardAnimalWhy, faceMarksNote, furNote, isAnimal, keyColourFor, teethFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
 import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, recheckParts, PUPPET_SIZE, type MakerEvent, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, embedView, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
@@ -819,6 +819,11 @@ export default function PuppetMaker({
                     className={`${field} resize-y`}
                   />
                   {asksForFaceMarks(description) && <p className="mt-1 text-[11.5px] text-[var(--color-ember)]">Experimental: {faceMarksNote}</p>}
+                  {hardAnimalWhy(description) && (
+                    <p className="mt-1 text-[11.5px] text-[var(--color-ember)]" data-tip="These characters can still be made — expect more parts to need a redo or your pick from the options.">
+                      Experimental: {hardAnimalWhy(description)}.
+                    </p>
+                  )}
                 </div>
               </div>
 

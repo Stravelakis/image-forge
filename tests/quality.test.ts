@@ -99,3 +99,14 @@ describe("animals have paws (16 Oct 2026)", () => {
     }
   });
 });
+
+import { hardAnimalWhy } from "../src/lib/puppet/recipe";
+describe("hard animals are experimental (18 Oct 2026)", () => {
+  it("names the reason for a hard breed or animal, and nothing for an easy one", () => {
+    expect(hardAnimalWhy("a white standard poodle")).toMatch(/curly/);
+    expect(hardAnimalWhy("a grumpy pug")).toMatch(/flat face/);
+    expect(hardAnimalWhy("a wise old owl")).toMatch(/beak/);
+    expect(hardAnimalWhy("a scruffy beagle")).toBe("");
+    expect(hardAnimalWhy("a cheerful baker")).toBe("");
+  });
+});
