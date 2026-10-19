@@ -44,6 +44,8 @@ export interface WorkshopMeta {
   boxes: Record<string, { x: number; y: number; w: number; h: number }>;
   /** parts that did not get to green: their best tries, saved as <id>.opt<n>.*, for you to choose */
   options?: Record<string, { why: string; box: { x: number; y: number; w: number; h: number } }[]>;
+  /** every earlier picture of a part, oldest first, saved as <id>.v<n>.* — never thrown away */
+  versions?: Record<string, { why: string; box: { x: number; y: number; w: number; h: number }; at: string }[]>;
   /** views made for this puppet ("side", "sit"): their parts, prefixed */
   views?: string[];
 }

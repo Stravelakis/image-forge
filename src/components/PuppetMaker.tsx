@@ -110,6 +110,8 @@ export default function PuppetMaker({
   const [previews, setPreviews] = useState<Record<string, string>>({});
   // The options of parts that did not get to green: their before/after pictures.
   const [optionPics, setOptionPics] = useState<Record<string, string[]>>({});
+  // Earlier pictures of each part: their before/after pictures, oldest first.
+  const [versionPics, setVersionPics] = useState<Record<string, string[]>>({});
   const [parts, setParts] = useState<Record<string, CutPart>>({});
   const partsRef = useRef(parts);
   partsRef.current = parts;
@@ -239,6 +241,7 @@ export default function PuppetMaker({
       setReports(open.reports ?? []);
       setPreviews(Object.fromEntries(await Promise.all((open.reports ?? []).map(async (r) => [r.id, await workshopPic(open.slug, `${r.id}.pair.png`)] as const))));
       setOptionPics(Object.fromEntries(await Promise.all(Object.entries(open.options ?? {}).map(async ([id, os]) => [id, await Promise.all(os.map((_, n) => workshopPic(open.slug, `${id}.opt${n}.pair.png`)))] as const))));
+      setVersionPics(Object.fromEntries(await Promise.all(Object.entries(open.versions ?? {}).map(async ([id, vs]) => [id, await Promise.all(vs.map((_, n) => workshopPic(open.slug, `${id}.v${n}.pair.png`)))] as const))));
       setShelved(open.shelved ? open.slug : "");
       let made = buildRig({ name: open.slug, framing: open.framing, base: b, parts: front });
       for (const v of (open.views ?? []) as ("side" | "sit")[]) {
@@ -533,15 +536,41 @@ export default function PuppetMaker({
   };
   const marked = reports.filter((r) => r.redo && !r.approved);
 
-  /** You picked one of a part's options: it becomes the part, approved by you. */
-  const pickOption = async (id: string, n: number) => {
-    const opt = metaRef.current?.options?.[id]?.[n];
+  /** The part as it is now, kept as its next earlier version before it is replaced. */
+  const currentPart = (id: string): CutPart | undefined => {
+    const m = id.match(/^(side|sit)_(.+)$/);
+    return m ? viewsRef.current[m[1] as PuppetViewId]?.parts[m[2]] : partsRef.current[id];
+  };
+  const archiveCurrent = (id: string) => {
+    const old = currentPart(id);
+    const meta = metaRef.current;
+    if (!old || !meta) return;
+    const s = meta.slug;
+    const n = meta.versions?.[id]?.length ?? 0;
+    const why = meta.reports.find((r) => r.id === id)?.why ?? "";
+    void persist(() => savePart(s, `${id}.v${n}`, old));
+    void persist(async () => {
+      const pv = await loadImg(s, `${id}.pair.png`);
+      if (!pv) return;
+      await saveImg(s, `${id}.v${n}.pair.png`, pv);
+      const url = await imgToUrl(pv);
+      setVersionPics((p) => ({ ...p, [id]: [...(p[id] ?? []), url] }));
+    });
+    writeMeta({ versions: { ...(meta.versions ?? {}), [id]: [...(meta.versions?.[id] ?? []), { why, box: old.box, at: new Date().toISOString() }] } });
+  };
+
+  /** You picked one of a part's options, or an earlier version: it becomes the part, approved by you. */
+  const pickOption = async (id: string, n: number, kind: "opt" | "v" = "opt") => {
+    const opt = kind === "opt" ? metaRef.current?.options?.[id]?.[n] : metaRef.current?.versions?.[id]?.[n];
     if (!opt || !metaRef.current) return;
     const s = metaRef.current.slug;
-    const layer = await loadImg(s, `${id}.opt${n}.layer.png`);
+    // the part as it is now is not lost either: it becomes an earlier version
+    if (kind === "v") archiveCurrent(id);
+    await saveChain.current;
+    const layer = await loadImg(s, `${id}.${kind}${n}.layer.png`);
     if (!layer) return setProblem("That option's picture could not be read back.");
-    const keyed = (await loadImg(s, `${id}.opt${n}.keyed.png`)) ?? undefined;
-    const full = (await loadImg(s, `${id}.opt${n}.full.png`)) ?? undefined;
+    const keyed = (await loadImg(s, `${id}.${kind}${n}.keyed.png`)) ?? undefined;
+    const full = (await loadImg(s, `${id}.${kind}${n}.full.png`)) ?? undefined;
     const part: CutPart = { layer, keyed, box: opt.box, ...(full ? { full } : {}) };
     const m = id.match(/^(side|sit)_(.+)$/);
     if (m) {
@@ -552,13 +581,13 @@ export default function PuppetMaker({
       setParts(partsRef.current);
     }
     void persist(() => savePart(s, id, part));
-    const pic = optionPics[id]?.[n];
-    const pv = await loadImg(s, `${id}.opt${n}.pair.png`);
+    const pic = (kind === "opt" ? optionPics : versionPics)[id]?.[n];
+    const pv = await loadImg(s, `${id}.${kind}${n}.pair.png`);
     if (pv) void persist(() => saveImg(s, `${id}.pair.png`, pv));
     if (pic) setPreviews((p) => ({ ...p, [id]: pic }));
     const rest = { ...(metaRef.current.options ?? {}) };
     delete rest[id];
-    const reportsNext = (metaRef.current.reports ?? []).map((r) => (r.id === id ? { ...r, approved: true, redo: false, why: `you chose option ${n + 1}` } : r));
+    const reportsNext = (metaRef.current.reports ?? []).map((r) => (r.id === id ? { ...r, approved: true, redo: false, status: "ok" as const, why: kind === "opt" ? `you chose option ${n + 1}` : `you chose earlier version ${n + 1}` } : r));
     writeMeta({ options: rest, boxes: { ...metaRef.current.boxes, [id]: opt.box }, reports: reportsNext });
     setReports(reportsNext);
     setOptionPics((p) => {
@@ -592,6 +621,7 @@ export default function PuppetMaker({
       if (e.type === "picture") setPictures((n) => n + 1);
       if (e.type === "kept") {
         const { id, part } = e;
+        archiveCurrent(pre + id);
         void persist(() => savePart(slug, pre + id, part));
         writeMeta({ boxes: { ...(metaRef.current?.boxes ?? {}), [pre + id]: part.box } });
       }
@@ -685,7 +715,7 @@ export default function PuppetMaker({
    */
   const [fixing, setFixing] = useState("");
   const checkAndFix = useCallback(
-    async (rounds = 3) => {
+    async (rounds = 2) => {
       const inspect = io.inspect;
       const b = baseRef.current;
       if (!inspect || !b) return;
@@ -1092,6 +1122,24 @@ export default function PuppetMaker({
                             >
                               <img src={u} alt="" className="block h-14 w-full object-contain bg-black/30" />
                               <span className="block py-0.5 text-[10.5px] text-[#c4cbe0]">option {n + 1}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                    {versionPics[r.id]?.length ? (
+                      <div className="mt-2" data-tip="Earlier pictures of this part, oldest first. Click one to use it instead — the current one is kept as an earlier version too.">
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-[#8f98ab]">earlier versions — {versionPics[r.id].length}</p>
+                        <div className="mt-1 flex gap-1.5 overflow-x-auto">
+                          {versionPics[r.id].map((u, n) => (
+                            <button
+                              key={n}
+                              className="w-16 shrink-0 overflow-hidden rounded-[8px] border border-white/10 hover:border-[var(--color-ember)]"
+                              onClick={() => void pickOption(r.id, n, "v")}
+                              data-tip={`Use earlier version ${n + 1}. The checkers had said: ${metaRef.current?.versions?.[r.id]?.[n]?.why ?? ""}`}
+                            >
+                              <img src={u} alt="" className="block h-12 w-full object-contain bg-black/30" />
+                              <span className="block py-0.5 text-[10px] text-[#c4cbe0]">v{n + 1}</span>
                             </button>
                           ))}
                         </div>
