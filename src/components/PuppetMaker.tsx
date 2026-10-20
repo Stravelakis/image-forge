@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { formatUsd } from "../lib/providers";
-import { PUPPET_STYLES, VIEW_PARTS, asksForFaceMarks, hardAnimalWhy, faceMarksNote, furNote, isAnimal, keyColourFor, teethFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
+import { PUPPET_STYLES, VIEW_PARTS, asksForFaceMarks, basePrompt, hardAnimalWhy, faceMarksNote, furNote, isAnimal, keyColourFor, teethFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
 import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, recheckParts, PUPPET_SIZE, type MakerEvent, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, embedView, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
@@ -1015,6 +1015,29 @@ export default function PuppetMaker({
                   }}
                 />
               </label>
+              {/* PERCHANCE, BY HAND (Ak, 20 Oct 2026). Perchance's free image
+                  generator is paid for by the ads its visitors see, and its terms
+                  forbid use through a bot or a script, so Image Forge never calls
+                  it. It opens the page in your browser with the face description
+                  copied; you make the picture there and bring it back with
+                  start-from-my-own-picture. */}
+              {description.trim() && (
+                <a
+                  href="https://perchance.org/ai-text-to-image-generator"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="block text-center text-[12px] text-[#8f98ab] underline"
+                  onClick={() => {
+                    void navigator.clipboard
+                      .writeText(basePrompt({ description, style, framing, inspirations: 0, look }))
+                      .then(() => pushToast("info", "Face description copied — paste it on Perchance, save the picture you like, then use “start from my own picture”."))
+                      .catch(() => {});
+                  }}
+                  data-tip="Opens the free Perchance image generator in your browser, with the description of this face copied to paste there. Save the picture you like and bring it back with “start from my own picture”. Image Forge never runs Perchance itself: its terms allow people, not scripts."
+                >
+                  …or draw the face yourself on Perchance (free, in your browser) ↗
+                </a>
+              )}
             </div>
           </div>
         )}
@@ -1026,7 +1049,7 @@ export default function PuppetMaker({
             </p>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
               {bases.map((b, i) => (
-                <button key={b.url} onClick={() => setBase(b)} className={`${tile(base?.url === b.url)} p-2`}>
+                <button key={b.url} onClick={() => setBase(b)} className={`${tile(base?.url === b.url)} p-2`} data-tip="Choose this face. Every part of the puppet is made from it.">
                   <img src={b.url} alt={`option ${i + 1}`} className="aspect-square w-full rounded-[14px] object-cover" />
                   <span
                     role="button"
@@ -1049,13 +1072,13 @@ export default function PuppetMaker({
             </div>
             {problem && <p className="forge-note border border-red-400/40 bg-red-400/10 text-red-300">{problem}</p>}
             <div className="flex flex-wrap gap-2">
-              <button className="forge-btn primary" disabled={!base || !!busy} onClick={() => void build()}>
+              <button className="forge-btn primary" disabled={!base || !!busy} onClick={() => void build()} data-tip="Makes every mouth, blink, eyebrow and pose from the chosen face. Each part is checked as it is made.">
                 Make the puppet from this face
               </button>
-              <button className="forge-btn" disabled={!!busy} onClick={() => void makeFaces()}>
+              <button className="forge-btn" disabled={!!busy} onClick={() => void makeFaces()} data-tip="Draws four new faces from the same description.">
                 Draw 4 others
               </button>
-              <button className="forge-btn" disabled={!!busy} onClick={() => setStep("describe")}>
+              <button className="forge-btn" disabled={!!busy} onClick={() => setStep("describe")} data-tip="Back to the description, to change who the character is.">
                 Change the description
               </button>
               {busy && <button className="forge-btn" onClick={stop} data-tip="Stops after the picture being made now. Everything made so far is kept.">Stop</button>}
