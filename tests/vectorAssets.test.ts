@@ -1,4 +1,6 @@
 /**
+ * @vitest-environment jsdom
+ *
  * Model-written SVG ends up inside the page, so the sanitiser is the most
  * safety-critical code in this project. These tests try to get past it.
  */
