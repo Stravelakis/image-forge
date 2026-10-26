@@ -31,7 +31,7 @@ const card = "rounded-xl border border-line bg-panel/50 px-4 py-3.5";
 const field = "w-full rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5 text-[13px] text-cream placeholder:text-dust/60";
 
 function Explain({ children }: { children: ReactNode }) {
-  return <p className="mt-3 rounded-lg border border-line/70 bg-[var(--color-field)] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-parch">{children}</p>;
+  return <p data-tip="A note in plain words to help you with this step." className="mt-3 rounded-lg border border-line/70 bg-[var(--color-field)] px-3.5 py-2.5 text-[12.5px] leading-relaxed text-parch">{children}</p>;
 }
 
 function AccordionItem({
@@ -72,9 +72,9 @@ function AccordionItem({
       </button>
       {open && (
         <div className="rise-in border-t border-line/70 px-4 py-3.5">
-          <label className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">prompt — the full instructions</label>
+          <label data-tip="The full words that tell the painter what to draw." className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">description (prompt) — the full words</label>
           <textarea data-tip="The full words that tell the painter what to draw for this picture." value={item.prompt} onChange={(e) => onPatch({ prompt: e.target.value })} rows={3} className={field + " resize-y text-[12.5px]"} />
-          <label className="mb-1 mt-3 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">negative prompt — things to avoid</label>
+          <label data-tip="Things you do NOT want in this picture." className="mb-1 mt-3 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">things to avoid (negative prompt)</label>
           <textarea data-tip="Things you do not want in this picture, like words or a watermark." value={item.negative_prompt ?? ""} onChange={(e) => onPatch({ negative_prompt: e.target.value || undefined })} rows={2} className={field + " resize-y text-[12px] text-blood/80"} />
         </div>
       )}
@@ -188,7 +188,7 @@ export default function WizardView({
     <div className="mx-auto flex h-full w-full max-w-6xl gap-8 px-6 py-8">
       {/* step rail */}
       <aside className="hidden w-[230px] shrink-0 md:block">
-        <p className="mb-4 font-mono text-[10px] tracking-[0.25em] text-ember uppercase">new batch · {step + 1}/{STEPS.length}</p>
+        <p data-tip="Which step of the wizard you are on." className="mb-4 font-mono text-[10px] tracking-[0.25em] text-ember uppercase">new batch · {step + 1}/{STEPS.length}</p>
         <ol className="space-y-1">
           {STEPS.map((s, i) => {
             const done = i < step;
@@ -219,7 +219,7 @@ export default function WizardView({
         </ol>
         {setups.length > 0 && step === 0 && !preset && (
           <div className="mt-5 rounded-xl border border-potion/30 bg-potion/6 p-3">
-            <p className="font-mono text-[9.5px] tracking-[0.2em] text-potion uppercase">start from a recipe</p>
+            <p data-tip="Start from a recipe you saved before, so you do not choose everything again." className="font-mono text-[9.5px] tracking-[0.2em] text-potion uppercase">start from a recipe</p>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {setups.slice(0, 4).map((t) => (
                 <button data-tip={`${`Fills in the wizard with the choices saved in the recipe ${t.name}.`}`} key={t.id} onClick={() => setSetup({ ...t.data })} className="btn-press rounded-md border border-line bg-panel/60 px-2 py-1 font-mono text-[10px] text-parch hover:border-potion/50 hover:text-potion">
@@ -235,10 +235,10 @@ export default function WizardView({
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <p className="font-mono text-[10.5px] tracking-[0.25em] text-dust uppercase">
+            <p data-tip="Which step of the wizard you are on." className="font-mono text-[10.5px] tracking-[0.25em] text-dust uppercase">
               step {step + 1} of {STEPS.length}
             </p>
-            <h2 className="mt-1 font-display text-3xl text-cream">{STEPS[step].name}</h2>
+            <h2 data-tip="What this step is about." className="mt-1 font-display text-3xl text-cream">{STEPS[step].name}</h2>
           </div>
           <button data-tip="Leaves the wizard without making a batch." onClick={onExit} className="btn-press rounded-lg border border-line px-3 py-1.5 font-mono text-[11px] text-dust hover:border-line2 hover:text-cream">
             exit wizard
@@ -375,8 +375,8 @@ export default function WizardView({
                 <BorderGlow radius={13} glow={setup.model === "flux" || setup.model === "turbo" ? "rgba(86,184,165,0.55)" : "rgba(86,184,165,0.3)"} idle="var(--color-line)" innerClassName="bg-[var(--color-panel)]">
                   <div className="p-4">
                     <span className="flex items-center justify-between">
-                      <span className="font-display text-[15px] text-cream">Free art (FLUX)</span>
-                      <span className="rounded-md border border-moss/40 bg-moss/10 px-2 py-0.5 font-mono text-[9.5px] tracking-widest text-moss uppercase">free · no key</span>
+                      <span data-tip="A free painter that works over the internet. It needs no key and costs nothing." className="font-display text-[15px] text-cream">Free art (FLUX)</span>
+                      <span data-tip="This painter is free and needs no key." className="rounded-md border border-moss/40 bg-moss/10 px-2 py-0.5 font-mono text-[9.5px] tracking-widest text-moss uppercase">free · no key</span>
                     </span>
                     <span className="mt-1.5 block text-[12px] text-parch">Real AI pictures over the internet, free, unlimited-ish. A bit slow (5–40 seconds each) but costs nothing.</span>
                     <span className="mt-3 flex gap-1.5">
@@ -392,12 +392,12 @@ export default function WizardView({
                 <BorderGlow radius={13} glow={chosenModel?.engine === "gemini" ? "color-mix(in srgb, var(--color-ember) 60%, transparent)" : "rgba(242,163,60,0.3)"} idle="var(--color-line)" innerClassName="bg-[var(--color-panel)]">
                   <div className="p-4">
                     <span className="flex items-center justify-between gap-2">
-                      <span className="font-display text-[15px] text-cream">Google Imagen</span>
-                      <span className="rounded-md border border-ember/40 bg-ember/10 px-2 py-0.5 font-mono text-[9.5px] tracking-widest text-ember uppercase">free key · ~25/day</span>
+                      <span data-tip="Google's painter. A free key from Google gives you about 25 pictures a day." className="font-display text-[15px] text-cream">Google Imagen</span>
+                      <span data-tip="A free key from Google gives you about 25 pictures a day." className="rounded-md border border-ember/40 bg-ember/10 px-2 py-0.5 font-mono text-[9.5px] tracking-widest text-ember uppercase">free key · ~25/day</span>
                     </span>
                     {geminiReady ? (
                       <>
-                        <span className="mt-1.5 block text-[12px] text-moss">✓ a key is already saved in Settings</span>
+                        <span data-tip="A Google key is already saved, so you are ready." className="mt-1.5 block text-[12px] text-moss">✓ a key is already saved in Settings</span>
                         <span className="mt-3 flex flex-wrap gap-1.5">
                           {MODELS.filter((m) => m.engine === "gemini").map((m) => (
                             <button data-tip={`${`Draws with ${m.id}, using the Google key you already saved.`}`} key={m.id} onClick={() => patch({ model: m.id })} className={`btn-press rounded-lg border px-2.5 py-1.5 font-mono text-[11px] ${setup.model === m.id ? "border-ember/60 bg-ember/12 text-ember" : "border-line text-parch hover:border-line2"}`}>
@@ -408,7 +408,7 @@ export default function WizardView({
                       </>
                     ) : (
                       <div className="mt-2.5 space-y-2">
-                        <input data-tip="The web address of the Google picture service. The usual one is already filled in." value={geminiUrl} onChange={(e) => setGeminiUrl(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"} placeholder="endpoint url" />
+                        <input data-tip="The web address of the Google picture service. The usual one is already filled in." value={geminiUrl} onChange={(e) => setGeminiUrl(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"} placeholder="web address of the service" />
                         <input data-tip="Your Google key. It lets the forge ask Google to paint your pictures." value={geminiKey} onChange={(e) => setGeminiKey(e.target.value)} type="password" className={field + " !py-2 font-mono !text-[11px]"} placeholder="API key (free at aistudio.google.com)" />
                         <select data-tip="The Google model to paint with." value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} className={field + " !py-2 font-mono !text-[11px]"}>
                           {MODELS.filter((m) => m.engine === "gemini").map((m) => (
@@ -426,12 +426,12 @@ export default function WizardView({
                 <BorderGlow radius={13} glow={chosenModel?.engine === "openai" ? "rgba(177,140,224,0.6)" : "rgba(177,140,224,0.3)"} idle="var(--color-line)" innerClassName="bg-[var(--color-panel)]">
                   <div className="p-4">
                     <span className="flex items-center justify-between gap-2">
-                      <span className="font-display text-[15px] text-cream">Any OpenAI-style service</span>
-                      <span className="rounded-md border border-potion/40 bg-potion/10 px-2 py-0.5 font-mono text-[9.5px] tracking-widest text-potion uppercase">your key</span>
+                      <span data-tip="Any painting service that works like OpenAI's. You bring your own key from them." className="font-display text-[15px] text-cream">Any OpenAI-style service</span>
+                      <span data-tip="You need your own key. Using it may cost money on your account with them." className="rounded-md border border-potion/40 bg-potion/10 px-2 py-0.5 font-mono text-[9.5px] tracking-widest text-potion uppercase">your key</span>
                     </span>
                     {openaiReady ? (
                       <>
-                        <span className="mt-1.5 block text-[12px] text-moss">✓ endpoint + key already saved in Settings</span>
+                        <span data-tip="The address and key are already saved in Settings, so you are ready." className="mt-1.5 block text-[12px] text-moss">✓ address + key already saved in Settings</span>
                         <input data-tip="The model to paint with. Leave it as it is to use the one saved in Settings." value={setup.model} onChange={(e) => patch({ model: e.target.value })} list="wiz-models" placeholder={`model — currently “${settings.openaiModel}”`} className={field + " mt-3 !py-2 font-mono !text-[11px]"} />
                         <datalist id="wiz-models">
                           {modelOptions.map((m) => (
@@ -506,7 +506,7 @@ export default function WizardView({
             <div className="rise-in max-w-xl">
               <p className="text-[15px] leading-relaxed text-parch">
                 Where should the finished picture files go? The forge sorts them into folders by what they are:{" "}
-                <span className="font-mono text-cream">shops/ items/ events/ npcs/</span>.
+                <span data-tip="The folders your finished pictures are sorted into." className="font-mono text-cream">shops/ items/ events/ npcs/</span>.
               </p>
               <div className="mt-5">
                 <BorderGlow radius={13} glow={setup.linkFolder ? "rgba(140,181,111,0.55)" : "rgba(140,181,111,0.3)"} idle={setup.linkFolder ? "rgba(140,181,111,0.45)" : "#3e2f21"} innerClassName={setup.linkFolder ? "bg-[#1f241b]" : "bg-[var(--color-panel)]"}>
@@ -591,8 +591,8 @@ export default function WizardView({
                   { k: "shape", v: setup.aspect === "per-category" ? "match the picture" : setup.aspect, tone: "text-cream" },
                 ].map((s) => (
                   <div key={s.k} className={card}>
-                    <p className="font-mono text-[9.5px] tracking-[0.22em] text-dust uppercase">{s.k}</p>
-                    <p className={`mt-1 truncate font-display text-[15px] ${s.tone}`}>{s.v}</p>
+                    <p data-tip={`Your choice for ${s.k}.`} className="font-mono text-[9.5px] tracking-[0.22em] text-dust uppercase">{s.k}</p>
+                    <p data-tip={`${s.k}: ${s.v}`} className={`mt-1 truncate font-display text-[15px] ${s.tone}`}>{s.v}</p>
                   </div>
                 ))}
               </div>
@@ -660,7 +660,7 @@ export default function WizardView({
               <IPlay size={13} /> Arrange {items.filter((i) => i.filename && i.prompt).length} pictures
             </Btn>
           )}
-          <span className="ml-auto hidden font-mono text-[10.5px] text-dust sm:block">{STEPS[step].short}</span>
+          <span data-tip="A short reminder of what this step does." className="ml-auto hidden font-mono text-[10.5px] text-dust sm:block">{STEPS[step].short}</span>
         </footer>
       </div>
     </div>

@@ -63,7 +63,7 @@ function Dropdown({
         <IChevron size={12} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="pop-in absolute left-0 top-full z-40 mt-1.5 w-60 overflow-hidden rounded-xl border border-line2 bg-panel shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
+        <div data-tip="The choices in this menu. Click one to use it, or click outside to close." className="pop-in absolute left-0 top-full z-40 mt-1.5 w-60 overflow-hidden rounded-xl border border-line2 bg-panel shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
           {children(() => setOpen(false))}
         </div>
       )}
@@ -180,7 +180,7 @@ function ModelSelector({
       </button>
       {open && (
         <div className="pop-in absolute right-0 top-full z-40 mt-1.5 w-72 overflow-hidden rounded-xl border border-line2 bg-panel shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
-          <p className="border-b border-line bg-[var(--color-field)] px-3.5 py-2 font-mono text-[9px] tracking-[0.2em] text-dust uppercase">
+          <p data-tip="Only painters that are ready to use are listed. Pick one to switch." className="border-b border-line bg-[var(--color-field)] px-3.5 py-2 font-mono text-[9px] tracking-[0.2em] text-dust uppercase">
             active engine — unavailable ones are hidden
           </p>
           {options.map((o) => {
@@ -205,7 +205,7 @@ function ModelSelector({
               </button>
             );
           })}
-          <p className="px-3.5 py-2 text-[10px] leading-relaxed text-dust">
+          <p data-tip="A row that names its own painter uses that one instead of the choice above." className="px-3.5 py-2 text-[10px] leading-relaxed text-dust">
             Row-level <span className="font-mono text-parch">model</span> column overrides this for any single row.
           </p>
         </div>
@@ -348,7 +348,7 @@ export default function TopMenu({
         <div className="relative hidden sm:block">
           <button
             onClick={() => setPanel((p) => (p === "download" ? null : "download"))}
-            title="Save your pictures or your manifest"
+            title="Save your pictures or your list"
             className={`btn-press flex items-center gap-1.5 rounded-lg border px-2.5 py-2 ${
               panel === "download" ? "border-ember/60 bg-ember/15 text-cream" : "border-line bg-panel/70 text-parch hover:border-line2"
             }`}
@@ -376,14 +376,14 @@ export default function TopMenu({
                 },
                 {
                   id: "csv",
-                  title: "The manifest, as CSV",
+                  title: "Your list, as a spreadsheet (CSV)",
                   hint: "the same format Import reads back",
                   icon: <IDownload size={15} />,
                   onPick: onExportCsv,
                 },
                 {
                   id: "xlsx",
-                  title: "The manifest, for Excel",
+                  title: "Your list, for Excel",
                   hint: "a CSV file Excel opens straight away",
                   icon: <IDownload size={15} />,
                   onPick: onExportXlsx,

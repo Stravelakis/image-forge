@@ -15,6 +15,10 @@ import fs from "node:fs";
 import path from "node:path";
 
 const NATIVE = new Set(["button", "input", "select", "textarea", "a"]);
+// Things that SHOW words or numbers (labels, statuses, badges, readouts). The
+// second check (opts.texts) wants each of these to be explained too: by its
+// own tip or by a tip on something around it.
+const TEXTY = new Set(["span", "p", "h1", "h2", "h3", "h4", "h5", "h6", "label", "dt", "dd", "li", "td", "th", "strong", "em", "small", "b", "i", "legend", "figcaption", "summary", "code", "output", "div"]);
 const TAG_START = /<(\/?)([A-Za-z][A-Za-z0-9_.-]*)/g;
 
 function stripComments(src) {
@@ -26,9 +30,11 @@ function stripComments(src) {
 }
 
 /** Every interactive tag in one file's source, and whether it is explained. */
-export function scanSource(src, { custom = [], tipAttrs = ["title", "data-tip", "tip", "hint"] } = {}) {
+export function scanSource(src, { custom = [], tipTags = [], texts = false, tipAttrs = ["title", "data-tip", "tip", "hint"] } = {}) {
   src = stripComments(src);
   const CUSTOM = new Set(custom);
+  // Components whose own definition carries a hover help for everything inside them.
+  const TIPTAGS = new Set(tipTags);
   const TIP = new RegExp(`(?<![\\w-])(${tipAttrs.map((a) => a.replace(/[-]/g, "\\-")).join("|")})\\s*=`);
   const lineStarts = [0];
   for (let i = 0; i < src.length; i++) if (src[i] === "\n") lineStarts.push(i + 1);
@@ -122,7 +128,31 @@ export function scanSource(src, { custom = [], tipAttrs = ["title", "data-tip", 
       const after = src.slice(j, j + 90).split("<")[0].replace(/\s+/g, " ").trim().slice(0, 60);
       out.push({ line: lineOf(s), tag: name, covered: ownTip || ancestorTip, text: after });
     }
-    if (!selfClose) stack.push({ name, tip: ownTip });
+    // Words only a screen reader hears (sr-only) are not on screen.
+    if (texts && !selfClose && TEXTY.has(name) && !interactive && !/sr-only/.test(attrs)) {
+      // Direct text: words, or a {value}, between this tag and the next tag.
+      const inner = src.slice(j, j + 400).split("<")[0].replace(/\{\s*\}/g, " ");
+      const bare = inner.trim();
+      // Words written straight in the tag, outside any {braces}.
+      let lit = "";
+      let d2 = 0;
+      for (const ch of bare) {
+        if (ch === "{") d2++;
+        else if (ch === "}") d2 = Math.max(0, d2 - 1);
+        else if (d2 === 0) lit += ch;
+      }
+      const hasWords = /[A-Za-z0-9Ͱ-Ͽ]/.test(lit);
+      // A balanced {value} is a readout (a number, a name). An unbalanced one
+      // is a list or a condition that holds more tags: not text.
+      const balanced = d2 === 0 && (bare.match(/\{/g) || []).length === (bare.match(/\}/g) || []).length;
+      const readout = balanced && /^\{[^{}]*\}$/.test(bare) && !/\.map\(/.test(bare) && !/^\{\s*children\s*\}$/.test(bare) && !/\.hint\s*\}$/.test(bare);
+      // A sentence of seven words or more explains itself: it IS the help.
+      const prose = lit.trim().split(/\s+/).filter((w) => /[A-Za-zͰ-Ͽ]{2,}/.test(w)).length >= 7;
+      if (bare && !prose && (hasWords || readout)) {
+        out.push({ line: lineOf(s), tag: name, covered: ownTip || ancestorTip, text: bare.replace(/\s+/g, " ").slice(0, 60), kind: "text" });
+      }
+    }
+    if (!selfClose) stack.push({ name, tip: ownTip || TIPTAGS.has(name) });
     i = j;
   }
   return out;
@@ -131,18 +161,52 @@ export function scanSource(src, { custom = [], tipAttrs = ["title", "data-tip", 
 /** Every control without help under `root` (a folder of .tsx files). */
 export function nakedControls(root, opts = {}) {
   const found = [];
+  const allow = new Set(opts.allow ?? []);
   const walk = (dir) => {
     for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
       const p = path.join(dir, e.name);
       if (e.isDirectory()) {
         if (!(opts.skipDirs ?? []).includes(e.name)) walk(p);
+      } else if (e.name.endsWith(".tsx") && (opts.skipFiles ?? []).includes(e.name)) {
+        continue;
       } else if (e.name.endsWith(".tsx")) {
         for (const c of scanSource(fs.readFileSync(p, "utf8"), opts)) {
-          if (!c.covered) found.push({ file: path.relative(root, p).split(path.sep).join("/"), ...c });
+          if (!c.covered && !allow.has(`${path.relative(root, p).split(path.sep).join("/")}:${c.text}`)) found.push({ file: path.relative(root, p).split(path.sep).join("/"), ...c });
         }
       }
     }
   };
   walk(root);
   return found;
+}
+
+/** Words a person reads on screen: help texts, labels, placeholders, and lines of plain words in the markup. */
+export function visibleStrings(root) {
+  const out = [];
+  const attr = /(?:data-tip|title|label|placeholder|aria-label|tip|hint)\s*=\s*(?:"([^"]*)"|\{`([^`]*)`\})/g;
+  const walk = (dir) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const p = path.join(dir, e.name);
+      if (e.isDirectory()) walk(p);
+      else if (e.name.endsWith(".tsx")) {
+        const src = fs.readFileSync(p, "utf8");
+        const file = path.relative(root, p).split(path.sep).join("/");
+        let m;
+        attr.lastIndex = 0;
+        while ((m = attr.exec(src))) out.push({ file, kind: "tip", text: (m[1] ?? m[2]).replace(/\$\{[^}]*\}/g, "X") });
+        for (const line of stripComments(src).split("\n")) {
+          const t = line.trim();
+          // a line of plain words inside the markup: no code characters
+          if (t && /^[A-Za-zͰ-Ͽ][^<>{}=;()[\]|&]*$/.test(t) && / /.test(t)) out.push({ file, kind: "text", text: t });
+        }
+      }
+    }
+  };
+  walk(root);
+  return out;
+}
+
+/** Sentences in a help text. */
+export function sentenceCount(text) {
+  return text.split(/(?<=[.!?])\s+(?=[A-Z“"Ͱ-Ͽ])/).filter(Boolean).length;
 }

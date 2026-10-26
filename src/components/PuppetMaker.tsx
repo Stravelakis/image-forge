@@ -26,6 +26,7 @@ import type { PuppetTemplate } from "../lib/batches";
 import { downloadBlob } from "../lib/output";
 import PuppetWorkbench, { workshopIO } from "./PuppetWorkbench";
 import { IX } from "./ui";
+import { ErrorLine } from "./ErrorLine";
 
 // The Forge look (index.css, .forge-*): glass, Sora, round, two button kinds.
 const field = "forge-field";
@@ -894,7 +895,7 @@ export default function PuppetMaker({
       <div className="forge-pop my-6 w-full max-w-5xl">
         <div className="forge-head flex items-center justify-between px-6 py-4">
           <div>
-            <h2>Make a puppet</h2>
+            <h2 data-tip="Make a puppet: a character that blinks, talks and moves, ready to use in Video Forge.">Make a puppet</h2>
             <p className="forge-sub">a character that talks, blinks and moves — for Video Forge</p>
           </div>
           <div className="flex items-center gap-3">
@@ -928,7 +929,7 @@ export default function PuppetMaker({
                     placeholder="a friendly grey owl librarian with round glasses and a green knitted cardigan"
                     className={`${field} resize-y`}
                   />
-                  {asksForFaceMarks(description) && <p className="mt-1 text-[11.5px] text-[var(--color-ember)]">Experimental: {faceMarksNote}</p>}
+                  {asksForFaceMarks(description) && <p data-tip="This kind of character is a bit harder to make. Some parts may need a redo." className="mt-1 text-[11.5px] text-[var(--color-ember)]">Experimental: {faceMarksNote}</p>}
                   {hardAnimalWhy(description) && (
                     <p className="mt-1 text-[11.5px] text-[var(--color-ember)]" data-tip="These characters can still be made — expect more parts to need a redo or your pick from the options.">
                       Experimental: {hardAnimalWhy(description)}.
@@ -938,7 +939,7 @@ export default function PuppetMaker({
               </div>
 
               <div>
-                <label className={label}>style</label>
+                <label data-tip="The look of the puppet, like clay or paper." className={label}>style</label>
                 <div className="grid gap-2 sm:grid-cols-3">
                   {PUPPET_STYLES.map((s) => (
                     <button key={s.id} onClick={() => setStyle(s.id)} className={tile(style === s.id)} title={s.prompt}>
@@ -955,7 +956,7 @@ export default function PuppetMaker({
               </div>
 
               <div>
-                <label className={label}>how much of them</label>
+                <label data-tip="How much of the character is drawn: the head, down to the waist, or the whole body." className={label}>how much of them</label>
                 <div className="grid gap-2 sm:grid-cols-3">
                   <button onClick={() => setFraming("head")} className={tile(framing === "head")} title="Face and shoulders fill the frame. Talks, blinks, raises its brows.">
                     <span className="t block">Head and shoulders</span>
@@ -1023,8 +1024,8 @@ export default function PuppetMaker({
                     </div>
                   ))}
                   {inspo.length < 3 && (
-                    <label className="cursor-pointer text-[12px] text-[#8f98ab]">
-                      Drop pictures here, or <span className="text-[var(--color-ember)] underline">choose</span>
+                    <label data-tip="Add up to three pictures to copy the look from. Drop them here or click to choose." className="cursor-pointer text-[12px] text-[#8f98ab]">
+                      Drop pictures here, or <span data-tip="Click to pick pictures from your computer." className="text-[var(--color-ember)] underline">choose</span>
                       <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && void addInspo(e.target.files)} />
                     </label>
                   )}
@@ -1127,7 +1128,7 @@ export default function PuppetMaker({
               ))}
               {busy && Array.from({ length: Math.max(0, 4 - bases.length) }).map((_, i) => <div key={i} className="aspect-square animate-pulse rounded-xl border border-line bg-[var(--color-field)]" />)}
             </div>
-            {problem && <p className="forge-note border border-red-400/40 bg-red-400/10 text-red-300">{problem}</p>}
+            {problem && <div className="forge-note border border-red-400/40 bg-red-400/10"><ErrorLine text={problem} next="Press the button again to retry. Parts that already worked are kept." tip="What went wrong while making the puppet, and what to do next." className="text-red-300" /></div>}
             <div className="flex flex-wrap gap-2">
               <button className="forge-btn primary" disabled={!base || !!busy} onClick={() => void build()} data-tip="Makes every mouth, blink, eyebrow and pose from the chosen face. Each part is checked as it is made.">
                 Make the puppet from this face
@@ -1164,9 +1165,9 @@ export default function PuppetMaker({
                 </div>
               )}
               {step === "done" && (
-                <p className="mb-2 text-[12.5px] text-[#c4cbe0]">
-                  Look at each part. <b>Looks good</b> when you agree; otherwise write what is wrong (“less tongue”, “no smile”) and press{" "}
-                  <b>Redo with my note</b>. {reports.filter((r) => r.approved).length} of {reports.length} looked at.
+                <p data-tip="After the parts are made, look at each one. Approve it, or write a note and ask for a redo." className="mb-2 text-[12.5px] text-[#c4cbe0]">
+                  Look at each part. <b data-tip="Press this when the part looks right.">Looks good</b> when you agree; otherwise write what is wrong (“less tongue”, “no smile”) and press{" "}
+                  <b data-tip="Press this after you wrote what is wrong. The part is made again with your note.">Redo with my note</b>. {reports.filter((r) => r.approved).length} of {reports.length} looked at.
                 </p>
               )}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
@@ -1193,10 +1194,10 @@ export default function PuppetMaker({
                     </div>
                     {r.why && r.why !== "checked" && (
                       <p className="mt-1 text-[11.5px] leading-snug text-[#c4cbe0]">
-                        <span className="text-[#8f98ab]">Checker:</span> {r.why}
+                        <span data-tip="A computer check of this part. It is not always right, so use your own eyes too." className="text-[#8f98ab]">Checker:</span> {r.why}
                       </p>
                     )}
-                    {r.note && <p className="mt-1 text-[11.5px] leading-snug text-[var(--color-ember)]">Your last note: {r.note}</p>}
+                    {r.note && <p data-tip="The note you wrote the last time you asked for a redo." className="mt-1 text-[11.5px] leading-snug text-[var(--color-ember)]">Your last note: {r.note}</p>}
                     {optionPics[r.id]?.length ? (
                       <div className="mt-2" data-tip="None of the tries got to green. These are the best ones — click the one you like and it becomes this part.">
                         <p className="text-[11px] uppercase tracking-[0.12em] text-[#8f98ab]">options — pick one</p>
@@ -1265,7 +1266,7 @@ export default function PuppetMaker({
                   </div>
                 ))}
               </div>
-              {problem && <p className="mt-3 forge-note border border-red-400/40 bg-red-400/10 text-red-300">{problem}</p>}
+              {problem && <div className="mt-3 forge-note border border-red-400/40 bg-red-400/10"><ErrorLine text={problem} next="Press the button again to retry. Parts that already worked are kept." tip="What went wrong while making the puppet, and what to do next." className="text-red-300" /></div>}
             </div>
 
             <div className="space-y-3">
@@ -1304,7 +1305,7 @@ export default function PuppetMaker({
                         Check and fix every part
                       </button>
                     )}
-                    {fixing && <p className="text-[12px] text-[#c4cbe0]">{fixing}</p>}
+                    {fixing && <p data-tip="What the forge is doing to fix the parts right now." className="text-[12px] text-[#c4cbe0]">{fixing}</p>}
                     {redo.length > 0 && <button className="forge-btn" onClick={() => void fixParts(redo, undefined, true)} data-tip="Makes every unsure or missing part again.">Try the {redo.length} unsure/missing again</button>}
                     {confirmDelete ? (
                       <div className="flex gap-2">
@@ -1497,7 +1498,7 @@ function EnginePick({ title, tip, engines, value, onChange }: { title: string; t
           </option>
         ))}
       </select>
-      {e && <p className="mt-1 text-[11.5px] leading-snug text-[#8f98ab]">{e.note}</p>}
+      {e && <p data-tip="A short note about the choice you picked." className="mt-1 text-[11.5px] leading-snug text-[#8f98ab]">{e.note}</p>}
     </div>
   );
 }

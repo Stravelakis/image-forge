@@ -36,7 +36,7 @@ export default function DesktopModeCard({ pushToast }: { pushToast: (kind: Toast
 
   return (
     <div className="rounded-xl border border-line bg-[var(--color-field)] p-4">
-      <p className="font-display text-[15px] tracking-wide text-cream">Where Image Forge opens</p>
+      <p data-tip="Choose whether Image Forge opens in its own window or in your web browser." className="font-display text-[15px] tracking-wide text-cream">Where Image Forge opens</p>
       <p className="mt-1 text-[12.5px] leading-relaxed text-dust">
         {mode === "window"
           ? "Right now it opens in its own window."

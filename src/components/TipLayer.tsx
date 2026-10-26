@@ -17,6 +17,10 @@
 // The nearest element up the tree that has one wins, so a wrapper can explain
 // everything inside it.
 //
+// It appears on hover AND on keyboard focus (Tab), is announced to screen
+// readers (the control gets aria-describedby while it is showing), and Escape
+// closes it. It is always kept inside the window, above or below the control.
+//
 // The bubble is fixed to the window and drawn last in <body>, so no scrolling
 // panel can clip it and no dialog can cover it. It waits a moment before
 // showing, and stays while the pointer moves into it — so its link can be
@@ -37,6 +41,7 @@ interface Tip {
 const SHOW_AFTER_MS = 280;
 const HIDE_AFTER_MS = 160;
 const WIDTH = 300;
+const TIP_ID = "forge-tip-bubble";
 
 /** The explanation an element carries, moving a title= into data-tip once. */
 function tipOf(el: Element): string | null {
@@ -60,16 +65,21 @@ export function TipLayer() {
     let current: Element | null = null;
     let showTimer = 0;
     let hideTimer = 0;
+    let described: Element | null = null;
+    const undescribe = () => {
+      described?.removeAttribute("aria-describedby");
+      described = null;
+    };
     const hideSoon = () => {
       window.clearTimeout(hideTimer);
       hideTimer = window.setTimeout(() => {
         if (overBubble.current) return;
         current = null;
+        undescribe();
         setTip(null);
       }, HIDE_AFTER_MS);
     };
-    const over = (e: MouseEvent) => {
-      const target = e.target as Element | null;
+    const point = (target: Element | null) => {
       if (target?.closest?.(".forge-tip")) return; // inside the bubble itself
       const el = target?.closest?.("[data-tip],[title]") ?? null;
       if (el === current) return;
@@ -81,23 +91,38 @@ export function TipLayer() {
       showTimer = window.setTimeout(() => {
         if (current !== el) return;
         const r = el.getBoundingClientRect();
-        const above = window.innerHeight - r.bottom < 160;
+        const room = window.innerHeight - r.bottom;
+        // Below by default; above when there is no room below and more above.
+        const above = room < 160 && r.top > room;
+        undescribe();
+        el.setAttribute("aria-describedby", TIP_ID);
+        described = el;
         setTip({
           text,
           more: el.getAttribute("data-tip-more") ?? el.closest("[data-tip-more]")?.getAttribute("data-tip-more") ?? null,
           left: Math.min(Math.max(8, r.left), window.innerWidth - WIDTH - 8),
-          top: above ? r.top - 6 : r.bottom + 6,
+          top: above ? Math.max(8, r.top - 6) : Math.min(r.bottom + 6, window.innerHeight - 40),
           above,
         });
       }, showing.current ? 60 : SHOW_AFTER_MS);
     };
+    const over = (e: MouseEvent) => point(e.target as Element | null);
+    const focused = (e: FocusEvent) => point(e.target as Element | null);
+    const blurred = () => hideSoon();
+    const key = (e: KeyboardEvent) => {
+      if (e.key === "Escape") hideNow();
+    };
     const hideNow = () => {
+      undescribe();
       window.clearTimeout(showTimer);
       current = null;
       overBubble.current = false;
       setTip(null);
     };
     document.addEventListener("mouseover", over);
+    document.addEventListener("focusin", focused);
+    document.addEventListener("focusout", blurred);
+    document.addEventListener("keydown", key);
     document.addEventListener("mousedown", (e) => {
       if (!(e.target as Element | null)?.closest?.(".forge-tip")) hideNow();
     });
@@ -105,6 +130,10 @@ export function TipLayer() {
     window.addEventListener("blur", hideNow);
     return () => {
       document.removeEventListener("mouseover", over);
+      document.removeEventListener("focusin", focused);
+      document.removeEventListener("focusout", blurred);
+      document.removeEventListener("keydown", key);
+      undescribe();
       window.removeEventListener("scroll", hideNow, true);
       window.removeEventListener("blur", hideNow);
       window.clearTimeout(showTimer);
@@ -115,6 +144,7 @@ export function TipLayer() {
   if (!tip) return null;
   return createPortal(
     <div
+      id={TIP_ID}
       className="forge-tip"
       role="tooltip"
       onMouseEnter={() => (overBubble.current = true)}

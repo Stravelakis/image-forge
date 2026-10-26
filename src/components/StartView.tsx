@@ -125,7 +125,7 @@ export default function StartView({
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-12">
-      <h1 className="font-display text-[34px] leading-tight text-cream">What do you need?</h1>
+      <h1 data-tip="The Start page: say what you need in your own words and Image Forge makes it." className="font-display text-[34px] leading-tight text-cream">What do you need?</h1>
       <p className="mt-2 text-[14px] text-parch">Describe it once. Say how many. Press the button.</p>
 
       <div className="mt-6 rounded-2xl border border-line bg-panel/60 p-5">
@@ -148,7 +148,7 @@ export default function StartView({
         />
 
         <div className="mt-4 flex flex-wrap items-end gap-4">
-          <label className="flex flex-col gap-1 text-[12px] text-dust">
+          <label data-tip="How many pictures to make." className="flex flex-col gap-1 text-[12px] text-dust">
             How many
             <input data-tip="How many pictures to make. Typing a number in your sentence fills this in."
               type="number"
@@ -197,7 +197,7 @@ export default function StartView({
             </select>
           </label>
 
-          <div className="flex flex-col gap-1 text-[12px] text-dust">
+          <div data-tip="The shape of the pictures: square, wide or tall." className="flex flex-col gap-1 text-[12px] text-dust">
             Shape
             <div className="flex gap-1">
               {SHAPES.map((s) => (
@@ -243,7 +243,7 @@ export default function StartView({
             <span>{free ? "free" : "costs money — you will be asked first"}</span>
           </label>
         </div>
-        {note && <p className="mt-3 text-[12.5px] text-parch">{note}</p>}
+        {note && <p data-tip="A message from the forge about what it understood or what to fix." className="mt-3 text-[12.5px] text-parch">{note}</p>}
       </div>
 
       {shown.map(({ run, rows: mine }, i) => {
@@ -259,7 +259,7 @@ export default function StartView({
             <p className="mt-1 truncate text-[14px] text-cream" title={run.text}>
               {run.text}
             </p>
-            <p className="mt-0.5 text-[13px] text-parch">
+            <p data-tip="How many of the pictures from this request are ready, and how many did not work." className="mt-0.5 text-[13px] text-parch">
               {doneCount} of {mine.length} ready
               {failedCount > 0 ? ` · ${failedCount} did not work` : ""}
               {working && isRunning ? " · working…" : working ? " · waiting for the queue" : ""}

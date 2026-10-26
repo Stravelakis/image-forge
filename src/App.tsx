@@ -78,6 +78,8 @@ import DocsView from "./components/DocsView";
 import AgentsView from "./components/AgentsView";
 import SettingsView, { type SettingsSection } from "./components/SettingsView";
 import WizardView from "./components/WizardView";
+import { openSettings } from "./components/ErrorLine";
+import { needsSettings, plainError } from "./lib/plainError";
 import PromptFactory from "./components/PromptFactory";
 import { BatchLibrary, ImageLibrary, StyleLibrary, TemplateLibrary } from "./components/LibraryViews";
 import WpImportModal from "./components/WpImportModal";
@@ -432,8 +434,13 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   /* ---------- helpers ---------- */
   const pushToast = useCallback((kind: Toast["kind"], msg: string, action?: Toast["action"]) => {
     const id = toastId.current++;
-    setToasts((t) => [...t.slice(-3), { id, kind, msg, action }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), action ? 7000 : 4600);
+    // Every error says what to do next, and offers a button to Settings when
+    // the trouble is a key or a setting (lib/plainError).
+    const shown = kind === "err" ? plainError(msg, "Try again. If it keeps happening, check Settings.") : msg;
+    const act =
+      action ?? (kind === "err" && needsSettings(shown) ? { label: "Open Settings", run: () => openSettings(shown) } : undefined);
+    setToasts((t) => [...t.slice(-3), { id, kind, msg: shown, action: act }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), act ? 7000 : 4600);
   }, []);
 
   const pushLog = useCallback((msg: string, kind: LogEntry["kind"]) => {
@@ -508,7 +515,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
        data and we could not read it. Nothing has been overwritten — saving is
        held back until this is answered — but it has to be answered. */
     if (rowsRescued || settingsRescued) {
-      const what = [rowsRescued && "your manifest", settingsRescued && "your settings and keys"]
+      const what = [rowsRescued && "your list", settingsRescued && "your settings and keys"]
         .filter(Boolean)
         .join(" and ");
       const msg = `Could not read ${what}. The original is kept safe and nothing has been overwritten.`;
@@ -994,7 +1001,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     setRows((prev) => [...prev, row]);
     setSelectedId(row.id);
     setView("workbench");
-    pushLog(`+ row #${row.id} added to the manifest`, "info");
+    pushLog(`+ row #${row.id} added to the list`, "info");
   }, [styleLock, pushLog]);
 
   const deleteRow = useCallback(
@@ -1004,7 +1011,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       const r = rowsRef.current[idx];
       setRows((prev) => prev.filter((x) => x.id !== id));
       setSelectedId((s) => (s === id ? null : s));
-      pushToast("info", `${r.filename} removed from the manifest.`, {
+      pushToast("info", `${r.filename} removed from the list.`, {
         label: "undo",
         run: () =>
           setRows((prev) => {
@@ -1930,6 +1937,16 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     if (v === "wizard") setWizardPreset(null);
   }, []);
 
+  // "Open Settings" buttons next to error messages ask for this (ErrorLine, toasts).
+  useEffect(() => {
+    const open = (e: Event) => {
+      const section = (e as CustomEvent<{ section?: SettingsSection }>).detail?.section ?? "engines";
+      nav("settings", section);
+    };
+    window.addEventListener("forge:open-settings", open);
+    return () => window.removeEventListener("forge:open-settings", open);
+  }, [nav]);
+
   /* ---------- derived ---------- */
   const batchRows = useMemo(
     () => (batchFilter ? rows.filter((r) => batches.find((b) => b.id === batchFilter)?.rowIds.includes(r.id)) : rows),
@@ -2004,8 +2021,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg,#17120e)] p-6 text-center">
         <div className="max-w-md">
-          <h1 className="font-display text-2xl text-cream">Image Forge moved</h1>
-          <p className="mt-2 text-[14px] leading-relaxed text-dust">
+          <h1 data-tip="This copy of Image Forge has stopped, because it now runs somewhere else." className="font-display text-2xl text-cream">Image Forge moved</h1>
+          <p data-tip="Tells you where Image Forge went. Your settings came with it." className="mt-2 text-[14px] leading-relaxed text-dust">
             {movedTo === "window"
               ? "It is now open in its own window, with all your settings. You can close this browser tab."
               : "It is now open in your browser, with all your settings."}
@@ -2228,7 +2245,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               onClick={() => void sendBatch()}
               disabled={isRunning}
               className="btn-press hidden items-center gap-1.5 rounded-lg border border-line bg-panel/70 px-3 py-2 text-[12px] font-semibold text-parch hover:text-cream disabled:opacity-35 xl:flex"
-              title={`PAID. Sends the ${batchable} waiting row${batchable > 1 ? "s" : ""} that use a Google model to Google as a background job at HALF PRICE. It asks you first, with the price. You collect them later — usually within the hour. Rows on free engines are left alone.`}
+              title={`PAID, at half price: sends the ${batchable} waiting row${batchable > 1 ? "s" : ""} that use a Google model to Google as a background job, and asks you first with the price. You collect them later, usually within the hour; rows on free engines are left alone.`}
             >
               Send to Google at half price (paid)
             </button>
@@ -2320,9 +2337,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               </div>
               {activeBatch && (
                 <div className="flex shrink-0 items-center gap-2.5 border-b border-line bg-panel/60 px-5 py-2">
-                  <span className="font-mono text-[10px] tracking-[0.2em] text-dust uppercase">showing batch</span>
-                  <span className="rounded-md border border-ember/40 bg-ember/10 px-2 py-0.5 font-mono text-[11px] text-ember">{activeBatch.name}</span>
-                  <span className="font-mono text-[10px] text-dust">{activeBatch.rowIds.length} pictures</span>
+                  <span data-tip="You are looking at only one group of pictures." className="font-mono text-[10px] tracking-[0.2em] text-dust uppercase">showing batch</span>
+                  <span data-tip="The name of the group you are looking at." className="rounded-md border border-ember/40 bg-ember/10 px-2 py-0.5 font-mono text-[11px] text-ember">{activeBatch.name}</span>
+                  <span data-tip="How many pictures are in this group." className="font-mono text-[10px] text-dust">{activeBatch.rowIds.length} pictures</span>
                   <button data-tip="Stops showing only this batch and shows all your pictures again." onClick={() => setBatchFilter(null)} className="btn-press ml-auto flex items-center gap-1 font-mono text-[10px] text-dust hover:text-cream">
                     <IX size={10} /> show everything
                   </button>
@@ -2400,7 +2417,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
             {factoryItems.filter((i) => i.filename.trim() && i.prompt.trim()).length > 0 && (
               <div className="sticky bottom-0 border-t border-line bg-coal/90 px-6 py-3 backdrop-blur">
                 <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-                  <p className="font-mono text-[11px] text-dust">
+                  <p data-tip="How many pictures in your list are ready to be added. The style shown is added to every one so they match." className="font-mono text-[11px] text-dust">
                     {factoryItems.filter((i) => i.filename.trim() && i.prompt.trim()).length} pictures ready · style “{styleLock}” will be appended
                   </p>
                   <Btn data-tip="Puts all these prompts on the workbench as rows, ready to make. Nothing is made until you press Run queue."

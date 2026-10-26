@@ -99,9 +99,9 @@ function SignHeading({ kicker, title, note }: { kicker: string; title: string; n
     <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
       <div>
         <p className="font-mono text-[10.5px] tracking-[0.3em] text-ember uppercase">⚜ {kicker}</p>
-        <h2 className="mt-1.5 font-display text-3xl tracking-wide text-cream sm:text-4xl">{title}</h2>
+        <h2 data-tip="The title of this part of the make-believe market." className="mt-1.5 font-display text-3xl tracking-wide text-cream sm:text-4xl">{title}</h2>
       </div>
-      {note && <p className="max-w-xs text-right font-mono text-[11px] leading-relaxed text-dust">{note}</p>}
+      {note && <p data-tip="A short note about this part of the market." className="max-w-xs text-right font-mono text-[11px] leading-relaxed text-dust">{note}</p>}
     </div>
   );
 }
@@ -213,8 +213,8 @@ function NightSquare({ onEnter, onEvents }: { onEnter: (id: string) => void; onE
       {/* signage */}
       <div className="relative z-10 mx-auto flex max-w-6xl flex-col items-start px-6 pb-64 pt-24 sm:pb-60 sm:pt-28">
         <div className="sway-slow rounded-lg border-2 border-[#57432c] bg-coal/90 px-6 py-4 shadow-[0_24px_60px_rgba(0,0,0,0.6)]" style={{ transformOrigin: "50% -60px" }}>
-          <p className="font-mono text-[10px] tracking-[0.42em] text-ember uppercase">the night market of lanternrow</p>
-          <h1 className="mt-1 font-display text-4xl tracking-wide text-cream sm:text-6xl">
+          <p data-tip="The market is made up. It shows how pictures from Image Forge look in a real shop page." className="font-mono text-[10px] tracking-[0.42em] text-ember uppercase">the night market of lanternrow</p>
+          <h1 data-tip="The name of the make-believe night market." className="mt-1 font-display text-4xl tracking-wide text-cream sm:text-6xl">
             EMBER<span className="text-ember">FAIR</span>
           </h1>
         </div>
@@ -258,13 +258,13 @@ function StallCard({ shop, onEnter }: { shop: Shop; onEnter: () => void }) {
         <Plate o={{ filename: `shop_${shop.id}.png`, category: "image", aspect: "16:9", seed: shop.seed }} rounded={false} className="aspect-[16/9] border-b border-line" />
         <div className="flex flex-1 flex-col p-4">
           <div className="flex items-start justify-between gap-2">
-            <h3 className="font-display text-lg tracking-wide text-cream">{shop.sign}</h3>
-            <span className="rounded-md border border-moss/35 bg-moss/8 px-2 py-0.5 font-mono text-[9px] tracking-wider text-moss uppercase">open</span>
+            <h3 data-tip="The name on this shop's sign." className="font-display text-lg tracking-wide text-cream">{shop.sign}</h3>
+            <span data-tip="This shop is open." className="rounded-md border border-moss/35 bg-moss/8 px-2 py-0.5 font-mono text-[9px] tracking-wider text-moss uppercase">open</span>
           </div>
-          <p className="mt-0.5 font-mono text-[10.5px] text-dust">kept by {shop.keeper} · {shop.hours}</p>
-          <p className="mt-2.5 flex-1 text-[12.5px] leading-relaxed text-parch">{shop.blurb}</p>
+          <p data-tip="Who runs this shop and when it is open." className="mt-0.5 font-mono text-[10.5px] text-dust">kept by {shop.keeper} · {shop.hours}</p>
+          <p data-tip="A short story about this shop." className="mt-2.5 flex-1 text-[12.5px] leading-relaxed text-parch">{shop.blurb}</p>
           <div className="mt-3.5 flex items-center justify-between gap-2">
-            {shop.forgeId && <span className="truncate font-mono text-[9.5px] text-dust/70" title="manifest row in the Image Forge">⚒ {shop.forgeId}</span>}
+            {shop.forgeId && <span className="truncate font-mono text-[9.5px] text-dust/70" title="a row in the Image Forge list">⚒ {shop.forgeId}</span>}
             <Btn data-tip="Walks into this shop so you can meet the keeper and see what it sells." variant="primary" className="shrink-0" onClick={onEnter}>Step inside →</Btn>
           </div>
         </div>
@@ -324,17 +324,17 @@ function WareCard({ ware, discount, compact = false }: { ware: Ware; discount: n
         />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <h4 className="truncate text-[13.5px] font-semibold text-cream">{ware.name}</h4>
-            <span className={`shrink-0 rounded-md border px-1.5 py-0.5 font-mono text-[9px] tracking-wider uppercase ${RARITY[ware.rarity].chip}`}>{RARITY[ware.rarity].label}</span>
+            <h4 data-tip="The name of this item for sale." className="truncate text-[13.5px] font-semibold text-cream">{ware.name}</h4>
+            <span data-tip="How rare this item is in the make-believe market." className={`shrink-0 rounded-md border px-1.5 py-0.5 font-mono text-[9px] tracking-wider uppercase ${RARITY[ware.rarity].chip}`}>{RARITY[ware.rarity].label}</span>
           </div>
-          {!compact && <p className="mt-1.5 text-[12px] leading-relaxed text-parch">{ware.blurb}</p>}
+          {!compact && <p data-tip="A short story about this item." className="mt-1.5 text-[12px] leading-relaxed text-parch">{ware.blurb}</p>}
           <div className="mt-2 flex items-center justify-between gap-2">
             <span className="flex items-center gap-1.5 font-display text-[15px] text-ember">
               <Coin /> {price} gp
-              {discount > 0 && <span className="font-mono text-[9.5px] text-moss line-through decoration-moss/60">{ware.price}</span>}
+              {discount > 0 && <span data-tip="The normal price, crossed out because there is a discount." className="font-mono text-[9.5px] text-moss line-through decoration-moss/60">{ware.price}</span>}
             </span>
             {soldOut ? (
-              <span className="font-mono text-[10px] tracking-wider text-dust uppercase">sold out</span>
+              <span data-tip="None left to buy." className="font-mono text-[10px] tracking-wider text-dust uppercase">sold out</span>
             ) : (
               <button data-tip={`Buys ${ware.name} for ${price} gp from your purse. The coins are pretend, not real money.`}
                 onClick={(e) => buy(ware, price, e.clientX, e.clientY)}
@@ -344,7 +344,7 @@ function WareCard({ ware, discount, compact = false }: { ware: Ware; discount: n
               </button>
             )}
           </div>
-          {!compact && <p className="mt-1.5 font-mono text-[9.5px] text-dust">{stock} in stock · {ware.forgeId ? `⚒ ${ware.forgeId}` : `⚒ item_${ware.id}.png`}</p>}
+          {!compact && <p data-tip="How many are left, and the picture file name that Image Forge gives it." className="mt-1.5 font-mono text-[9.5px] text-dust">{stock} in stock · {ware.forgeId ? `⚒ ${ware.forgeId}` : `⚒ item_${ware.id}.png`}</p>}
         </div>
       </div>
     </BorderGlow>
@@ -365,8 +365,8 @@ function HappeningCard({ h }: { h: Happening }) {
           </span>
         </div>
         <div className="flex flex-1 flex-col p-4">
-          <h4 className="font-display text-lg tracking-wide text-cream">{h.title}</h4>
-          <p className="mt-1.5 flex-1 text-[12.5px] leading-relaxed text-parch">{h.blurb}</p>
+          <h4 data-tip="The name of this event." className="font-display text-lg tracking-wide text-cream">{h.title}</h4>
+          <p data-tip="A short story about this event." className="mt-1.5 flex-1 text-[12.5px] leading-relaxed text-parch">{h.blurb}</p>
           <div className="mt-3.5 flex items-center justify-between">
             <span className="font-mono text-[10px] text-dust">{count > 0 ? `${count} gathering${count > 1 ? "s" : ""} · incl. you` : "be the first there"}</span>
             <Btn data-tip="Joins the crowd at this gathering." variant="ghost" onClick={(e: React.MouseEvent) => watch(h, e.clientX, e.clientY)}>
@@ -389,9 +389,9 @@ function FolkCard({ f }: { f: Folk }) {
         <div className="flex gap-3.5">
           <Plate o={{ filename: `npc_${f.id}.png`, category: "sheet", aspect: "1:1", seed: f.seed }} className="h-20 w-20 shrink-0 rounded-xl" />
           <div className="min-w-0">
-            <h4 className="font-display text-[16px] tracking-wide text-cream">{f.name}</h4>
-            <p className="font-mono text-[10px] text-dust">{f.role}</p>
-            <p className="mt-1 font-mono text-[9.5px] text-potion">standing · {r}</p>
+            <h4 data-tip="The name of this character." className="font-display text-[16px] tracking-wide text-cream">{f.name}</h4>
+            <p data-tip="What this character does in the market." className="font-mono text-[10px] text-dust">{f.role}</p>
+            <p data-tip="Your standing with this character. Chatting with them raises it by 1." className="mt-1 font-mono text-[9.5px] text-potion">standing · {r}</p>
           </div>
         </div>
         <p key={idx} className="pop-in mt-3 flex-1 rounded-xl border border-line bg-[#191310] px-3.5 py-2.5 text-[12px] italic leading-relaxed text-parch">
@@ -528,8 +528,8 @@ export default function MarketApp({ onOpenForge }: { onOpenForge: () => void }) 
               <LanternGlyph size={19} />
             </span>
             <span>
-              <span className="block font-display text-[16px] leading-none tracking-wide">EMBER<span className="text-ember">FAIR</span></span>
-              <span className="mt-0.5 block font-mono text-[8.5px] tracking-[0.22em] text-dust uppercase">night market · lanternrow</span>
+              <span data-tip="The name of the make-believe market." className="block font-display text-[16px] leading-none tracking-wide">EMBER<span className="text-ember">FAIR</span></span>
+              <span data-tip="A small line under the name: where the market is." className="mt-0.5 block font-mono text-[8.5px] tracking-[0.22em] text-dust uppercase">night market · lanternrow</span>
             </span>
           </span>
           <span className="hidden font-mono text-[10.5px] text-dust md:block">day VII of the Reed Moon · dusk</span>
@@ -572,7 +572,7 @@ export default function MarketApp({ onOpenForge }: { onOpenForge: () => void }) 
             ))}
             <BorderGlow radius={14} glow="rgba(151,135,109,0.35)" idle="#3e2f21" innerClassName="bg-[#241b14]" className="flex h-full items-center justify-center">
               <div className="p-6 text-center">
-                <p className="font-display text-lg tracking-wide text-dust">An empty stall…</p>
+                <p data-tip="An empty stall, saved for something you make next." className="font-display text-lg tracking-wide text-dust">An empty stall…</p>
                 <p className="mt-2 text-[12.5px] leading-relaxed text-dust/80">
                   …reserved for whoever the fair needs next. The wizard in the backstage can conjure its shopfront.
                 </p>
@@ -694,7 +694,7 @@ export default function MarketApp({ onOpenForge }: { onOpenForge: () => void }) 
         </span>
       ))}
       {floats.map((f) => (
-        <span key={f.id} className="float-up pointer-events-none fixed z-[70] font-mono text-[11px] font-semibold text-potion" style={{ left: f.x - 30, top: f.y }}>
+        <span data-tip="A little message that floats up and fades away." key={f.id} className="float-up pointer-events-none fixed z-[70] font-mono text-[11px] font-semibold text-potion" style={{ left: f.x - 30, top: f.y }}>
           {f.text}
         </span>
       ))}
@@ -702,7 +702,7 @@ export default function MarketApp({ onOpenForge }: { onOpenForge: () => void }) 
       {/* toasts */}
       <div className="pointer-events-none fixed bottom-5 left-1/2 z-[80] flex w-full max-w-md -translate-x-1/2 flex-col gap-2 px-4">
         {toasts.map((t) => (
-          <div
+          <div data-tip="A short message. It goes away by itself."
             key={t.id}
             className={`rise-in pointer-events-auto rounded-xl border px-4 py-3 text-[12.5px] shadow-xl backdrop-blur ${
               t.kind === "ok" ? "border-moss/50 bg-[#1c2417]/95 text-moss" : t.kind === "err" ? "border-blood/50 bg-[#2a1713]/95 text-[#ffb3a3]" : "border-lagoon/50 bg-[#15201d]/95 text-lagoon"

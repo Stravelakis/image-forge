@@ -73,7 +73,7 @@ export default function WpImportModal({
     }
     setProgress({ done: targets.length, ok, failed, current: "" });
     setRunning(false);
-    pushToast(failed > 0 ? "err" : "ok", `WordPress import: ${ok} uploaded${failed ? `, ${failed} failed` : ""}. Imagify picks the new media up automatically.`);
+    pushToast(failed > 0 ? "err" : "ok", `WordPress import: ${ok} uploaded${failed ? `, ${failed} failed. Check your site address and app password in Settings, then run it again for the failed ones` : ""}. Imagify picks the new media up automatically.`);
   };
 
   return (
@@ -82,7 +82,7 @@ export default function WpImportModal({
         <p className="text-[13px] leading-relaxed text-parch">
           Uploads finished plates to <span className="font-mono text-cream">/wp-json/wp/v2/media</span> with a WordPress{" "}
           <span className="font-mono text-cream">application password</span>. Imagify optimizes whatever lands in the
-          Media Library, and each attachment id is written back into the manifest.
+          Media Library, and each attachment id is written back into the list.
         </p>
 
         {!configured && (

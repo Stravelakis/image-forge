@@ -117,7 +117,7 @@ function CropCanvas({ src, box, baseW, className, outline = true, pad = 0.3, lab
     return () => { live = false; };
   }, [src, box, baseW, outline, pad]);
   return empty || !src ? (
-    <div className={`grid place-items-center bg-white/[.03] text-[11px] text-[#6b7385] ${className ?? ""}`}>{src ? "no picture" : "…"}</div>
+    <div data-tip="This picture is missing or still loading." className={`grid place-items-center bg-white/[.03] text-[11px] text-[#6b7385] ${className ?? ""}`}>{src ? "no picture" : "…"}</div>
   ) : (
     <canvas ref={ref} role="img" aria-label={label ?? "zoomed crop"} className={className} />
   );

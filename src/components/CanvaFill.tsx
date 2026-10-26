@@ -12,6 +12,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { ManifestRow } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { canvaDataset, canvaFill, canvaTemplates, canvaUpload } from "../lib/canva";
+import { plainError } from "../lib/plainError";
 
 type Field = { name: string; type: "text" | "image" | "chart" };
 
@@ -125,7 +126,7 @@ export default function CanvaFill({
 
         {problem && (
           <div className="rounded-lg border border-ember/40 bg-ember/10 p-3 text-[13px] text-cream">
-            {problem}{" "}
+            {plainError(problem, "Check your Canva connection, then try again.")}{" "}
             <button className="underline" onClick={onOpenSettings} data-tip="Settings → Canva: connect your Canva account.">
               Settings → Canva
             </button>

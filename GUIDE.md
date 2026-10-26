@@ -190,8 +190,10 @@ change before it is applied), or ask how the app works.
   four corners so it sits on a sign or a wall.
 - **Vectors** — SVG and Lottie written by the code engine, cleaned of
   anything unsafe before they are shown or saved.
-- **Hover help** — hold the mouse over any button, field or link and a small
-  bubble says what it does. Some end with a *More about this* link.
+- **Hover help** — hold the mouse over anything (a button, a label, a status, a
+  number) and a small bubble says what it is, in plain words. It also shows when
+  you press Tab to a control, and Esc closes it. Some end with a *More about
+  this* link.
 - **Cursor chasers** — *Animate a character → Cursor chaser* makes a little
   creature that runs after the mouse on a website, sits and naps. *Try it here*,
   then *Download for a website*.
