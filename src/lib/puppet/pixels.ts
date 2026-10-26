@@ -502,3 +502,78 @@ export function cutPart(base: Img, editIn: Img, o: CutOptions): CutResult {
   const keyed = featherEdges(crop(keyOut(edit, borderColour(base)), box), FEATHER);
   return { ok: true, layer, keyed, box, areaPct, boxPct };
 }
+
+/* ---------------- free checks on a clean cut (#12, 26 Oct 2026) ---------------- */
+
+const near = (d: Uint8ClampedArray, i: number, c: [number, number, number], tol: number) =>
+  Math.abs(d[i] - c[0]) <= tol && Math.abs(d[i + 1] - c[1]) <= tol && Math.abs(d[i + 2] - c[2]) <= tol;
+
+/** Where the character is, outside one box: the centre of everything that isn't background. */
+function bodyCentre(img: Img, bg: [number, number, number], skip: Box): { x: number; y: number; n: number } {
+  let sx = 0, sy = 0, n = 0;
+  for (let y = 0; y < img.height; y += 2) {
+    for (let x = 0; x < img.width; x += 2) {
+      if (x >= skip.x && x < skip.x + skip.w && y >= skip.y && y < skip.y + skip.h) continue;
+      if (near(img.data, (y * img.width + x) * 4, bg, 60)) continue;
+      sx += x; sy += y; n++;
+    }
+  }
+  return n ? { x: sx / n, y: sy / n, n } : { x: 0, y: 0, n: 0 };
+}
+
+/**
+ * Three things a clean cut can still hide, checked on the pixels for free —
+ * no model, no money (the audit's 4.2, points 6–8):
+ *  · the head or body MOVED: the part is pasted onto a base that no longer lines up;
+ *  · something ELSE changed: a real change outside the part's own box;
+ *  · background colour left on the cut part's edge (a magenta fringe).
+ * Each finding comes back in plain words. They mark a part "maybe" for Ak —
+ * they never pay for a redo until Ak's marks have tuned them (Phase 2).
+ */
+export function pixelChecks(base: Img, editIn: Img, cut: { box: Box; keyed: Img }, kind: PartKind): string[] {
+  if (editIn.width !== base.width || editIn.height !== base.height) return [];
+  const out: string[] = [];
+  const edit = matchColours(base, editIn);
+  const bg = borderColour(base);
+  const scale = base.width / 1024;
+  if (kind !== "arms") {
+    // MOVED: the character's centre, leaving the part's own box out.
+    const grow = Math.round(24 * scale);
+    const skip = { x: cut.box.x - grow, y: cut.box.y - grow, w: cut.box.w + grow * 2, h: cut.box.h + grow * 2 };
+    const a = bodyCentre(base, bg, skip), b = bodyCentre(edit, bg, skip);
+    const moved = Math.hypot(a.x - b.x, a.y - b.y) / scale;
+    if (a.n && b.n && moved > 3) out.push(`the character moved about ${moved.toFixed(0)} px`);
+    // SOMETHING ELSE CHANGED: 16 px cells outside the box where many pixels changed a lot.
+    const CELL = Math.max(8, Math.round(base.width / 64));
+    let busy = 0;
+    for (let cy = 0; cy + CELL <= base.height; cy += CELL) {
+      for (let cx = 0; cx + CELL <= base.width; cx += CELL) {
+        if (cx + CELL > skip.x && cx < skip.x + skip.w && cy + CELL > skip.y && cy < skip.y + skip.h) continue;
+        let hit = 0;
+        for (let y = cy; y < cy + CELL; y += 2) {
+          for (let x = cx; x < cx + CELL; x += 2) {
+            const i = (y * base.width + x) * 4;
+            if (Math.max(Math.abs(edit.data[i] - base.data[i]), Math.abs(edit.data[i + 1] - base.data[i + 1]), Math.abs(edit.data[i + 2] - base.data[i + 2])) > 64) hit++;
+          }
+        }
+        if (hit > (CELL * CELL) / 4 / 4) busy++;
+      }
+    }
+    if (busy >= 3) out.push(`${busy} other places changed too`);
+  }
+  // FRINGE: opaque pixels on the cut part that are still the background colour —
+  // more of them than the base itself has in the same place (a pink-ish
+  // character keeps some by right; the owl fixture has 0.7%).
+  const fringeShare = (img: Img) => {
+    let solid = 0, fringe = 0;
+    for (let i = 0; i < img.data.length; i += 4) {
+      if (img.data[i + 3] < 128) continue;
+      solid++;
+      if (near(img.data, i, bg, 70)) fringe++;
+    }
+    return solid ? fringe / solid : 0;
+  };
+  const extra = fringeShare(cut.keyed) - fringeShare(crop(keyOut(base, bg), cut.box));
+  if (extra > 0.01) out.push(`background colour left on the edge (${(extra * 100).toFixed(1)}% more than the face had)`);
+  return out;
+}

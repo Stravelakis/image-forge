@@ -5,7 +5,7 @@
  */
 import type { Img } from "./pixels";
 import type { CutPart } from "./rig";
-import type { PartReport } from "./maker";
+import type { PartReport, TryRecord } from "./maker";
 import type { PuppetFraming, PuppetLook } from "./recipe";
 import { blobToImg, imgToPng } from "./pageIO";
 
@@ -74,6 +74,28 @@ async function put(slug: string, file: string, body: Blob | string): Promise<voi
 
 export const saveMeta = (m: WorkshopMeta) => put(m.slug, "meta.json", JSON.stringify({ ...m, updatedAt: new Date().toISOString() }, null, 1));
 export const saveImg = async (slug: string, file: string, img: Img) => put(slug, file, await imgToPng(img));
+
+/**
+ * EVERY TRY KEPT (#11): each attempt's record goes into tries.json and its
+ * whole picture into <part>.try<n>-<time>.png, next to the part — nothing a
+ * paid engine made is thrown away.
+ */
+export async function loadTries(slug: string): Promise<TryRecord[]> {
+  try {
+    const r = await fetch(workshopUrl(slug, "tries.json"), { headers: H });
+    return r.ok ? ((await r.json()) as TryRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+export const tryFile = (rec: Pick<TryRecord, "part" | "try" | "at">) => `${rec.part}.try${rec.try}-${rec.at.replace(/\D/g, "").slice(0, 14)}.png`;
+/** Add one try: its picture, then the whole list (read again first, so two runs can't drop each other's tries). */
+export async function saveTry(slug: string, rec: TryRecord, picture: Img): Promise<void> {
+  await saveImg(slug, tryFile(rec), picture);
+  const all = await loadTries(slug);
+  all.push(rec);
+  await put(slug, "tries.json", JSON.stringify(all, null, 1));
+}
 
 /** Save one part: the cut layer (as checked), the keyed one (as used), the whole edit for arms. */
 export async function savePart(slug: string, id: string, p: CutPart): Promise<void> {

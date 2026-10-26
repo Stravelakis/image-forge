@@ -13,7 +13,7 @@ const says = (name: string, facts: Record<string, unknown> | null): PanelChecker
     const fq = factsQuestions(PUPPET_PARTS.find((p) => p.id === "mouth_L")!).find((x) => x.ask === q)!;
     const key = fq.key in facts ? fq.key : undefined;
     // a fact the table does not mention gets the "nothing wrong" answer
-    if (key === undefined) return /same_|wanted_shape/.test(fq.key) ? "yes" : "no";
+    if (key === undefined) return fq.key === "mouth_shape_pick" ? "9" : fq.key === "eyes_count_right" ? "2" : /same_|wanted_shape/.test(fq.key) ? "yes" : "no";
     return typeof facts[key] === "number" ? String(facts[key]) : facts[key] ? "yes" : "no";
   },
 });
@@ -47,16 +47,16 @@ describe("the picture panel (15 Oct 2026)", () => {
     expect(fixNote(["tongue sticking out", "facial hair changed"], part("mouth_L"))).toMatch(/smallest tip.*nothing added/);
   });
 
-  it("green needs two clean checkers; a split asks the third", async () => {
+  it("strictest vote wins (Ak, 26 Oct 2026): one 'no' is no, a silent checker is 'maybe'", async () => {
     const clean = { right_mouth_is_the_wanted_shape: true };
     const bad = { tongue_reaches_past_the_teeth_or_lips: true };
-    expect((await panelVerdict(part("mouth_L"), lips, [says("A", clean), says("B", clean)]))!.ok).toBe(true);
-    expect((await panelVerdict(part("mouth_L"), lips, [says("A", bad), says("B", bad)], says("C", clean)))!.ok).toBe(false);
-    expect((await panelVerdict(part("mouth_L"), lips, [says("A", clean), says("B", bad)], says("C", clean)))!.ok).toBe(true);
-    expect((await panelVerdict(part("mouth_L"), lips, [says("A", clean), says("B", bad)], says("C", bad)))!.ok).toBe(false);
-    // one checker silent and no third: not green
-    expect((await panelVerdict(part("mouth_L"), lips, [says("A", clean), says("B", null)]))!.ok).toBe(false);
-    expect(await panelVerdict(part("mouth_L"), lips, [says("A", null), says("B", null)])).toBeNull();
+    const v = (cs: PanelChecker[], tb?: PanelChecker) => panelVerdict(part("mouth_L"), lips, cs, tb);
+    expect((await v([says("A", clean), says("B", clean)]))!.level).toBe("yes");
+    expect((await v([says("A", clean), says("B", clean)], says("C", bad)))!.level).toBe("no");
+    expect((await v([says("A", clean), says("B", bad)], says("C", clean)))!.ok).toBe(false);
+    // one checker offline: only one looked, so not green
+    expect((await v([says("A", clean), says("B", null)]))!.level).toBe("maybe");
+    expect(await v([says("A", null), says("B", null)])).toBeNull();
   });
 });
 

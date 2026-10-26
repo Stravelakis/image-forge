@@ -244,6 +244,87 @@ export interface PuppetLook {
   animal?: boolean;
   /** the TOOTH PROTOCOL's words for this character's teeth (teethFor) */
   teeth?: string;
+  /** the character's facts sheet, written once when the base is approved */
+  facts?: PuppetFacts;
+}
+
+/**
+ * THE FACTS SHEET (prompt regime v2, Ak, 26 Oct 2026). What is true of this
+ * character in every picture, written once when its base is approved and
+ * said in every edit — so an edit can't give a one-eyed robot two eyes (Blip,
+ * 25 Oct) or move a scar to the other cheek. The checks (quality.ts) read the
+ * same sheet for the answers they expect.
+ */
+export interface PuppetFacts {
+  /** what it is, in a few words: "a small grey robot", "a young woman" */
+  species?: string;
+  /** how many eyes; 2 when not said */
+  eyes?: number;
+  /** "two upright pointed ears", "no visible ears" */
+  ears?: string;
+  /** the main colours, plain words with a hex where known: "teal body (#1fa4a0)" */
+  colours?: string[];
+  clothing?: string;
+  /** details that are on one side only — said with the side, as the viewer sees it */
+  oneSided?: string[];
+  /** what must never appear on this character; goes to the "things to avoid" list, never into the request */
+  never?: string[];
+}
+
+export const eyesOf = (look?: PuppetLook): number => look?.facts?.eyes ?? 2;
+
+/**
+ * The recipe is written for two eyes ("both eyes … parallel"). A one-eyed
+ * character gets every eye sentence in the singular, and three or more get
+ * "all" — the wording itself drew a second eye on Blip (25 Oct 2026).
+ */
+export function eyeWords(text: string, eyes: number): string {
+  if (eyes === 2) return text;
+  if (eyes === 1)
+    return text
+      .replace(/both upper eyelids/g, "the upper eyelid")
+      .replace(/Lower both/g, "Lower the")
+      .replace(/Raise both/g, "Raise the")
+      .replace(/The eye OPENINGS stay/g, "The eye OPENING stays")
+      .replace(/the eyes are fully shut/g, "the eye is fully shut")
+      .replace(/each lid covers/g, "the lid covers")
+      .replace(/the visible part of each eye/g, "the visible part of the eye")
+      .replace(/the eyes look slightly wider/g, "the eye looks slightly wider")
+      .replace(/closing lids over eyes that do not move, not drawing smaller or different eyes/g, "closing a lid over an eye that does not move, not drawing a smaller or different eye")
+      .replace(/Change only the eyebrows so both are/g, "Change only the single eyebrow so it is")
+      .replace(/so ONE is raised high and the other is lowered and drawn in/g, "so it is raised high on one end and lowered on the other")
+      .replace(/the inner ends are lifted and pinched together and the outer ends droop/g, "its middle is lifted and both ends droop")
+      .replace(/both eyes look at a distant point far beyond the camera so the two lines of sight are PARALLEL — not cross-eyed, not staring/g, "the eye looks at a distant point far beyond the camera, not staring")
+      .replace(/both eyes look in the same direction/g, "the eye looks straight ahead")
+      .replace(/both lines of sight parallel/g, "looking straight ahead")
+      .replace(/The eyes themselves do not change: the irises and pupils stay/g, "The eye itself does not change: the iris and pupil stay")
+      .replace(/the eyes and where they look/g, "the eye and where it looks")
+      .replace(/Eyebrows level and calm/g, "The eyebrow level and calm")
+      .replace(/Eyes relaxed and normally open, upper lids resting over the top of the irises/g, "The eye relaxed and normally open, the upper lid resting over the top of the iris");
+  return text
+    .replace(/both upper eyelids/g, "every upper eyelid")
+    .replace(/Lower both/g, "Lower every")
+    .replace(/Raise both/g, "Raise every")
+    .replace(/both eyes/g, `all ${eyes} eyes`)
+    .replace(/the two lines of sight/g, "all the lines of sight")
+    .replace(/both lines of sight parallel/g, "all looking the same way");
+}
+
+/** The facts sheet, said as plain positive facts for the request. */
+export function factsSentence(look: PuppetLook = DEFAULT_LOOK): string {
+  const f = look.facts;
+  if (!f) return "";
+  const eyes = f.eyes ?? 2;
+  const said = [
+    f.species ? `it is ${f.species}` : "",
+    `it has exactly ${eyes === 1 ? "ONE eye" : eyes === 2 ? "TWO eyes" : `${eyes} eyes`}`,
+    look.lips ? "its mouth has drawn lips" : "its mouth has no separate lips",
+    f.ears ? `ears: ${f.ears}` : "",
+    f.colours?.length ? `colours: ${f.colours.join(", ")}` : "",
+    f.clothing ? `clothing: ${f.clothing}` : "",
+    ...(f.oneSided ?? []).map((d) => `on one side only: ${d}`),
+  ].filter(Boolean);
+  return `Facts about this character, true in every picture: ${said.join("; ")}.`;
 }
 
 /**
@@ -300,8 +381,9 @@ export const withoutLipWords = (text: string): string =>
     .replace(/the lips keep their original colour/g, "the edge of the mouth keeps the same colour as the skin around it");
 
 /** The negative prompt for an edit: a lipless puppet also says no to lips. */
+// The facts sheet's "never" list lives here, never in the request: naming a thing draws it.
 export const editNegative = (look: PuppetLook = DEFAULT_LOOK): string =>
-  look.lips ? EDIT_NEGATIVE : EDIT_NEGATIVE;
+  look.facts?.never?.length ? `${EDIT_NEGATIVE}, ${look.facts.never.join(", ")}` : EDIT_NEGATIVE;
 
 /**
  * The base picture's prompt. Each clause is there because its absence caused a
@@ -316,7 +398,7 @@ export function basePrompt(o: { description: string; style: string; framing: Pup
       : o.framing === "waist"
       ? "Shown from the waist up, facing the viewer, BOTH ARMS AND BOTH HANDS fully visible and relaxed at the sides, with generous empty space on both sides and above the head so a raised hand would still fit inside the picture. The head sits in the upper third."
       : "Head, neck and shoulders only, filling the frame, with generous headroom so the top of the head (and any ears or hair) is well clear of the top edge.";
-  return [
+  const prompt = [
     `A single character portrait: ${o.description.trim()}.`,
     `Drawn as ${style.prompt}.`,
     ...(style.smoothFur && isAnimal(o.description) ? [FUR_SMOOTH] : []),
@@ -335,6 +417,7 @@ export function basePrompt(o: { description: string; style: string; framing: Pup
   ]
     .filter(Boolean)
     .join(" ");
+  return eyeWords(prompt, eyesOf(look));
 }
 
 /**
@@ -474,9 +557,32 @@ export const pawWords = (text: string): string =>
     .replace(/hand/g, "paw")
     .replace(/Both paws are fully visible\./g, "Both front paws are fully visible.");
 
-export const editPrompt = (part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): string => (part.kind === "arms" && look.animal ? pawWords(editPromptRaw(part, look)) : editPromptRaw(part, look));
+/** The area each kind of edit may touch — said first, so the edit stays inside it (prompt regime v2). */
+export const REGION: Record<PartKind, string> = {
+  mouth: "the mouth area",
+  lid: "the eyelids",
+  brow: "the eyebrows",
+  arms: "the arms and hands",
+};
+
+/**
+ * What each kind of edit keeps exactly, named one by one (prompt regime v2,
+ * 26 Oct 2026): a list the engine can tick off holds better than "everything
+ * else". Said as what stays, never as what not to draw.
+ */
+export const KEEP_EXACTLY: Record<PartKind, string[]> = {
+  mouth: ["the eyes and where they look", "the eyelids", "the eyebrows", "the nose", "the outline of the head and face", "the hair or fur", "the ears", "every colour", "the background"],
+  lid: ["the eye openings' size, shape and position", "the eyebrows", "the mouth", "the nose", "the outline of the head and face", "the hair or fur", "every colour", "the background"],
+  brow: ["the eyes and where they look", "the eyelids", "the mouth", "the nose", "the outline of the head and face", "the hair or fur", "every colour", "the background"],
+  arms: ["the face and the head", "the body's size and position", "the clothing", "the legs and feet", "every colour", "the background"],
+};
+
+export const editPrompt = (part: PuppetPart, look: PuppetLook = DEFAULT_LOOK): string => {
+  const raw = editPromptRaw(part, look);
+  return eyeWords(part.kind === "arms" && look.animal ? pawWords(raw) : raw, eyesOf(look));
+};
 const editPromptRaw = (part: PuppetPart, look: PuppetLook): string =>
-  `Edit this picture. ${part.kind === "mouth" && !look.lips ? withoutLipWords(part.change) : part.change}${part.avoid ? ` ${part.kind === "mouth" && !look.lips ? withoutLipWords(part.avoid) : part.avoid}` : ""} ${guardFor(part, look)}${part.kind === "mouth" ? ` ${lipsClause(look)} ${look.lips ? "Keep the lips exactly as they are in the original picture — the same colour and thickness." : "The edge of the mouth stays exactly like the original: no rim and no colour around it."}` : ""}\n\n${keepFor(look)}`;
+  `Edit only ${REGION[part.kind]} of this picture. ${part.kind === "mouth" && !look.lips ? withoutLipWords(part.change) : part.change}${part.avoid ? ` ${part.kind === "mouth" && !look.lips ? withoutLipWords(part.avoid) : part.avoid}` : ""} ${guardFor(part, look)}${part.kind === "mouth" ? ` ${lipsClause(look)} ${look.lips ? "Keep the lips exactly as they are in the original picture — the same colour and thickness." : "The edge of the mouth stays exactly like the original: no rim and no colour around it."}` : ""}${look.facts ? ` ${factsSentence(look)}` : ""}\n\nKeep exactly as in the original: ${KEEP_EXACTLY[part.kind].join(", ")}. ${keepFor(look)}`;
 
 /**
  * Where on the picture each kind of part may sit, as fractions of the height.

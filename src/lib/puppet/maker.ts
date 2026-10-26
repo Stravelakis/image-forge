@@ -16,10 +16,10 @@
  * a picture) and optionally `judge`. The page passes Image Forge's engines; a
  * test passes stand-ins; a headless overnight run could pass anything.
  */
-import { composite, crop, cutPart, resize, sideBySide, type Box, type Img } from "./pixels";
+import { composite, crop, cutPart, pixelChecks, resize, sideBySide, type Box, type Img } from "./pixels";
 import { BASE_NEGATIVE, DEFAULT_LOOK, baseNegative, EDIT_NEGATIVE, editNegative, pawWords, VIEW_EDITS, basePrompt, editPrompt, partsFor, type PuppetFraming, type PuppetLook, type PuppetPart, type PuppetViewId } from "./recipe";
 import type { CutPart } from "./rig";
-import { fixNote, type PanelVerdict } from "./quality";
+import { fixNote, type PanelLevel, type PanelVerdict } from "./quality";
 
 export interface Verdict {
   ok: boolean;
@@ -36,6 +36,32 @@ export interface MakerIO {
    * part, the rules decide. Used for parts instead of judge when present.
    */
   inspect?(part: PuppetPart, look: PuppetLook, picture: Img, signal?: AbortSignal): Promise<PanelVerdict | null>;
+  /** the part engine's name, written into every try's record */
+  engine?: string;
+}
+
+/**
+ * ONE TRY, KEPT (#11, Ak, 26 Oct 2026): every attempt at a part with exactly
+ * what was asked and what came back, so a review can show the prompt on every
+ * picture and any earlier try can be reached again.
+ */
+export interface TryRecord {
+  part: string;
+  try: number;
+  at: string;
+  engine?: string;
+  prompt: string;
+  negative: string;
+  seed: number;
+  /** the cut's own check: "ok", or why the picture was unusable */
+  cut: string;
+  /** null = no checker could look */
+  level: PanelLevel | null;
+  why: string;
+  votes?: string;
+  checkers?: PanelVerdict["detail"];
+  /** what the free pixel checks found (pixels.ts pixelChecks) */
+  pixels?: string[];
 }
 
 export type PartStatus = "waiting" | "working" | "ok" | "unsure" | "missing";
@@ -56,7 +82,9 @@ export type MakerEvent =
   | { type: "kept"; id: string; part: CutPart }
   /** a part that did not get to green: its best tries, for you to choose from */
   | { type: "options"; id: string; options: { part: CutPart; preview: Img; why: string }[] }
-  | { type: "picture" }; // one more picture generated — for the running count
+  | { type: "picture" } // one more picture generated — for the running count
+  /** one try, with its record and the whole edit — save both to keep every try */
+  | { type: "try"; record: TryRecord; picture: Img };
 
 export const PUPPET_SIZE = 1024;
 
@@ -234,16 +262,29 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
     for (let t = 1; t <= tries; t++) {
       if (signal?.aborted) throw new DOMException("stopped", "AbortError");
       report.tries = t;
-      const edit = resize(
-        await io.generate({ prompt: editPrompt(part, req.look) + (req.notes?.[part.id] ? ` Also, and this matters most: ${req.notes[part.id]}.` : "") + (fix ? ` Make sure: ${part.kind === "arms" && req.look?.animal ? pawWords(fix) : fix}.` : ""), negative: editNegative(req.look), refs: [req.base], seed: seedFor(n * 31 + t + (req.notes?.[part.id] || req.reseed ? Date.now() % 9973 : 0)), width: req.base.width, height: req.base.height }, signal),
-        req.base.width,
-        req.base.height
-      );
+      const prompt = editPrompt(part, req.look) + (req.notes?.[part.id] ? ` Also, and this matters most: ${req.notes[part.id]}.` : "") + (fix ? ` Make sure: ${part.kind === "arms" && req.look?.animal ? pawWords(fix) : fix}.` : "");
+      const negative = editNegative(req.look);
+      const seed = seedFor(n * 31 + t + (req.notes?.[part.id] || req.reseed ? Date.now() % 9973 : 0));
+      const edit = resize(await io.generate({ prompt, negative, refs: [req.base], seed, width: req.base.width, height: req.base.height }, signal), req.base.width, req.base.height);
       pictures++;
       onEvent({ type: "picture" });
+      const record = (cut: string, v: PanelVerdict | Verdict | null): TryRecord => ({
+        part: part.id,
+        try: t,
+        at: new Date().toISOString(),
+        ...(io.engine ? { engine: io.engine } : {}),
+        prompt,
+        negative,
+        seed,
+        cut,
+        level: v ? ("level" in v ? v.level : v.ok ? "yes" : "no") : null,
+        why: v?.why ?? (cut === "ok" ? "no checker could look" : cut),
+        ...(v && "level" in v ? { votes: v.votes, checkers: v.detail } : {}),
+      });
       const cut = cutPart(req.base, edit, { kind: part.kind, framing: req.framing, eyeY: part.kind === "mouth" ? eyeYOf() : undefined });
       if (!cut.ok) {
         report.why = cut.detail;
+        onEvent({ type: "try", record: record(cut.detail, null), picture: edit });
         onEvent({ type: "part", report: { ...report } });
         continue;
       }
@@ -257,20 +298,34 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
       const whole = part.kind === "arms" ? shrink(sideBySide(req.base, edit), 1024) : pair;
       const panel = io.inspect ? await io.inspect(part, req.look ?? DEFAULT_LOOK, whole, signal).catch(() => null) : null;
       const verdict: Verdict | null = panel ?? (io.judge ? await io.judge(partQuestion(part, req.look, req.notes?.[part.id]), pair, signal).catch(() => null) : null);
+      // The free pixel checks: a finding makes a green part "maybe" — never a paid redo (yet).
+      const seen = pixelChecks(req.base, edit, cut, part.kind);
+      onEvent({ type: "try", record: { ...record("ok", verdict), ...(seen.length ? { pixels: seen } : {}) }, picture: edit });
       if (panel && !panel.ok) fix = fixNote(panel.reasons, part);
-      // With a panel set up, "nobody could look" is not a pass.
-      if ((!verdict && !io.inspect) || verdict?.ok) {
+      if (verdict?.ok) {
         parts[part.id] = candidate;
         onEvent({ type: "kept", id: part.id, part: candidate });
-        report.status = "ok";
-        report.why = verdict ? (panel ? panel.why : "checked") : "not checked (no picture checker set up)";
+        report.status = seen.length ? "unsure" : "ok";
+        report.why = seen.length ? `maybe no: ${seen.join(", ")} — the checkers saw nothing (${panel?.votes ?? "checked"})` : panel ? panel.why : "checked";
+        fallback = null;
+        onEvent({ type: "part", report: { ...report }, preview: pair });
+        break;
+      }
+      // NOT CHECKED IS NEVER GREEN (26 Oct 2026). With no checker at all the
+      // first clean cut is kept, but as "unsure": it waits for Ak's eyes.
+      if (!verdict && !io.inspect && !io.judge) {
+        parts[part.id] = candidate;
+        onEvent({ type: "kept", id: part.id, part: candidate });
+        report.status = "unsure";
+        report.why = "not checked (no picture checker set up) — look at it yourself";
         fallback = null;
         onEvent({ type: "part", report: { ...report }, preview: pair });
         break;
       }
       // The checker said no, but the cut itself was clean. Keep the best
-      // so far, so three "no"s still leave a usable — flagged — part.
-      const score = panel ? panel.reasons.length : 1;
+      // so far, so three "no"s still leave a usable — flagged — part. A
+      // "maybe no" ranks before any "no".
+      const score = panel ? (panel.level === "no" ? 100 : 0) + panel.reasons.length : 101;
       tried.push({ part: candidate, preview: pair, why: verdict?.why || "not checked", score });
       if (score < fallbackScore) {
         fallback = candidate;
@@ -280,7 +335,8 @@ export async function makeParts(req: PartsRequest, io: MakerIO, onEvent: (e: Mak
       report.why = verdict?.why || (io.inspect ? "no checker could look at it" : "the checker turned it down");
       onEvent({ type: "part", report: { ...report }, preview: pair });
     }
-    if (report.status !== "ok") {
+    // a kept part (green, or kept for your eyes) is done; only the turned-down ones go on
+    if (report.status !== "ok" && !parts[part.id]) {
       if (fallback) {
         parts[part.id] = fallback;
         onEvent({ type: "kept", id: part.id, part: fallback });
@@ -335,7 +391,7 @@ export async function recheckParts(
     }
     const pic = reviewPicture(req.base, part, cut);
     const v = await io.inspect(part, req.look ?? DEFAULT_LOOK, pic, signal).catch(() => null);
-    const report: PartReport = { id: part.id, label: part.label, status: v?.ok ? "ok" : "unsure", tries: 0, why: v ? v.why : "no checker could look at it" };
+    const report: PartReport = { id: part.id, label: part.label, status: v?.ok ? "ok" : "unsure", tries: 0, why: v ? v.why : "not checked — no checker could look at it" };
     out.push(report);
     onReport(report, pic);
   }
