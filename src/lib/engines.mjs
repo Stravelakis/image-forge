@@ -392,6 +392,23 @@ export function rowUsesBannedModel(row, settings) {
   return isBannedImageModel(engine, apiModel, def?.id, row?.model);
 }
 
+/**
+ * What a row would do to the wallet: free, paid at a known price, or paid at a
+ * price nobody knows. For callers with no dialog to ask (the agent server).
+ */
+export function rowSpend(row, settings, { batch = false } = {}) {
+  const route = resolveRoute(row, settings);
+  if (FREE_ENGINES.has(route.engine) || route.engine === "paused" || route.engine === "retired") {
+    return { paid: false, price: 0, banned: false, engine: route.engine };
+  }
+  return {
+    paid: true,
+    price: route.def ? priceFor(route.def.id, { batch }) : null,
+    banned: rowUsesBannedModel(row, settings),
+    engine: route.engine,
+  };
+}
+
 export const BANNED_MODEL_MESSAGE =
   "Pro image models are switched off in this forge (they cost too much). Pick Nano Banana 2 or Nano Banana 2 Lite instead.";
 

@@ -201,9 +201,14 @@ stay in step. Node has no CORS, so the MCP server calls both directly.
 `paidGuard.checkPaidRun` routes every row on its own, counts only the rows
 that bill, prices each at the billed model's rate, and names the credit that
 runs out soonest. Free engines (`local`, `simulated`, `cloudflare`,
-`pollinations`, `ovh`) are never gated. There is **no spending guard over
-MCP** — no human is there to confirm — so keep paid keys out of an agent's
-environment.
+`pollinations`, `ovh`) are never gated. A paid model with an UNKNOWN price
+counts as paid ("price unknown"), and Google "Pro" image models are refused
+everywhere. Every generating caller (Forge button, variants, Sheet maker, the
+Google half-price queue, the puppet maker) asks through `ensureAffordable()`
+in `src/lib/paidGate.ts`; the puppet maker also has a per-puppet limit
+(Settings, default $0 = free engines only). Over MCP there is no human to
+confirm, so paid engines are **refused** unless `FORGE_ALLOW_PAID=1`, capped
+by `FORGE_MAX_USD` (default 1), one run at a time (lock file).
 
 ---
 
