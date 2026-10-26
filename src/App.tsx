@@ -1297,28 +1297,12 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     [batches, pushToast]
   );
 
-  const exportXlsx = useCallback(async () => {
-    try {
-      const XLSX = await import("xlsx");
-      const ws = XLSX.utils.json_to_sheet(
-        rowsRef.current.map((r) => {
-          const dims = ASPECTS[r.aspect_ratio];
-          return {
-            id: r.id, filename: r.filename, prompt: r.prompt, negative_prompt: r.negative_prompt ?? "",
-            note: r.note ?? "", category: r.category, kind: r.kind ?? "", item_id: r.item_id, shop_id: r.shop_id,
-            event_id: r.event_id, style: r.style, aspect_ratio: r.aspect_ratio, width: dims.w, height: dims.h,
-            seed: r.seed, model: r.model, status: r.status, error: r.error, generated_at: r.generated_at,
-            imported_attachment_id: r.imported_attachment_id,
-          };
-        })
-      );
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "manifest");
-      XLSX.writeFile(wb, "marketplace-images.xlsx");
-      pushToast("ok", "marketplace-images.xlsx exported.");
-    } catch {
-      pushToast("err", "XLSX export failed.");
-    }
+  // For Excel: the same CSV as the plain export, with a byte-order mark so Excel reads accents,
+  // Greek and emoji correctly. (A real .xlsx writer was dropped: its library has open security
+  // advisories with no fix, and it was only ever used to write this one file.)
+  const exportXlsx = useCallback(() => {
+    downloadCsv("marketplace-images-for-excel.csv", String.fromCharCode(0xfeff) + rowsToCsv(rowsRef.current));
+    pushToast("ok", "marketplace-images-for-excel.csv exported — open it in Excel.");
   }, [pushToast]);
 
   /* ---------- advanced: repair / backup / reset / github ---------- */

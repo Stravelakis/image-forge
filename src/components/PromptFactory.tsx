@@ -204,14 +204,6 @@ export default function PromptFactory({
       pushToast("err", "Could not copy — use Export CSV instead.");
     }
   };
-  const exportXlsx = async () => {
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.json_to_sheet(items.filter((i) => i.filename && i.prompt).map((i) => ({ filename: i.filename, prompt: i.prompt, negative_prompt: i.negative_prompt ?? "", category: i.category ?? "image" })));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "prompts");
-    XLSX.writeFile(wb, "factory-prompts.xlsx");
-  };
-
   const valid = items.filter((i) => i.filename.trim() && i.prompt.trim()).length;
 
   return (
@@ -349,9 +341,6 @@ export default function PromptFactory({
               </Btn>
               <Btn onClick={() => void copyForSheets()} disabled={valid === 0} title="Copy the list, then paste it into Google Sheets — the columns land in place">
                 Copy for Google Sheets
-              </Btn>
-              <Btn data-tip="Saves this list as an Excel file you can open in a spreadsheet." onClick={() => void exportXlsx()} disabled={valid === 0}>
-                Excel
               </Btn>
               <Btn data-tip="Saves this list as a CSV file, a simple table that any spreadsheet can open." onClick={exportCsv} disabled={valid === 0}>
                 <IWand size={12} /> CSV

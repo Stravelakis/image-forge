@@ -161,7 +161,7 @@ integration with no API involved.
 ## Export
 
 **CSV** — the same format, round-trips exactly.
-**XLSX** — for handing to someone who wants a spreadsheet.
+**For Excel** — the same CSV with a byte-order mark, so Excel reads accents and Greek correctly.
 **ZIP** — the pictures in their folders, with the CSV inside.
 
 The app can also keep the CSV refreshed in your linked folder automatically
