@@ -16,6 +16,7 @@ import type { Batch } from "../lib/batches";
 import type { ForgeSettings } from "../lib/providers";
 import { formatUsd } from "../lib/providers";
 import { findModel } from "../lib/engines.mjs";
+import { plainError } from "../lib/plainError";
 
 type Kind = "all" | "pictures" | "sheets" | "motion" | "vectors" | "puppets";
 
@@ -182,7 +183,7 @@ export default function MadeView({
     <div className="mx-auto w-full max-w-6xl space-y-5 p-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-[26px] text-cream">Made</h1>
+          <h1 data-tip="Everything you have made, with its progress." className="font-display text-[26px] text-cream">Made</h1>
           <p className="text-[13px] text-dust">Everything Image Forge has produced, newest first.</p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -237,7 +238,7 @@ export default function MadeView({
       </div>
       {stats.engines.length > 0 && (
         <div className="rounded-[20px] border border-white/10 bg-panel p-4">
-          <p className="mb-2 text-[10.5px] tracking-[0.18em] text-dust uppercase">by engine</p>
+          <p data-tip="How many of your pictures each painter made." className="mb-2 text-[10.5px] tracking-[0.18em] text-dust uppercase">by engine</p>
           <div className="space-y-1.5">
             {stats.engines.slice(0, 6).map(([name, n]) => (
               <div key={name} className="flex items-center gap-3 text-[12.5px]">
@@ -247,7 +248,7 @@ export default function MadeView({
                 <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/5">
                   <i className="block h-full rounded-full bg-[var(--color-ember)]" style={{ width: `${(n / stats.made) * 100}%` }} />
                 </span>
-                <span className="w-10 text-right text-dust">{n}</span>
+                <span data-tip="How many pictures this painter made." className="w-10 text-right text-dust">{n}</span>
               </div>
             ))}
           </div>
@@ -301,7 +302,7 @@ export default function MadeView({
 
       {showPuppets && markedCount > 0 && (
         <div className="mb-3 flex flex-wrap items-center gap-3 rounded-[16px] border border-[var(--color-ember)]/40 bg-[var(--color-ember)]/10 px-4 py-3">
-          <p className="text-[13px] text-cream">
+          <p data-tip="How many puppet parts you marked to be made again, and on how many puppets." className="text-[13px] text-cream">
             {markedCount} part{markedCount === 1 ? "" : "s"} marked to remake, on {markedPuppets} puppet{markedPuppets === 1 ? "" : "s"}.
           </p>
           <button className="forge-btn primary ml-auto" onClick={onRemakeMarked} data-tip="Opens each puppet with marked parts in turn and makes those parts again, each with your note, checked by two checkers. You can leave it running.">
@@ -333,13 +334,13 @@ export default function MadeView({
                     <WorkshopImg slug={w.slug} file="base.png" className="h-full w-full object-contain" />
                   </button>
                   <div className="space-y-0.5 p-3">
-                    <p className="truncate text-[13px] font-medium text-cream">{w.name}</p>
-                    <p className="text-[11px] text-dust">
+                    <p data-tip="The name of this puppet." className="truncate text-[13px] font-medium text-cream">{w.name}</p>
+                    <p data-tip="What kind of puppet this is: how much of the body, the look, and when it was last changed." className="text-[11px] text-dust">
                       puppet · {w.framing === "full" ? "full body" : w.framing === "waist" ? "waist up" : "head"} · {w.style}
                       {w.views?.includes("side") ? " · side view" : ""} · {when(w.updatedAt)}
                     </p>
-                    <p className={`text-[11px] ${state.tone}`}>{state.word}</p>
-                    {markedParts(w).length > 0 && <p className="text-[11px] text-[var(--color-ember)]">{markedParts(w).length} marked to remake</p>}
+                    <p data-tip={`How far this puppet has got: ${state.word}.`} className={`text-[11px] ${state.tone}`}>{state.word}</p>
+                    {markedParts(w).length > 0 && <p data-tip="Parts of this puppet you marked to be made again." className="text-[11px] text-[var(--color-ember)]">{markedParts(w).length} marked to remake</p>}
                     {onReviewPuppet && w.reports.length > 0 && (
                       <button
                         className="mt-1.5 rounded-full border border-white/15 px-3 py-1 text-[11px] font-medium text-[#eef1f8] transition hover:border-[var(--color-ember)]"
@@ -365,9 +366,9 @@ export default function MadeView({
                 {puppetThumbs[p.slug] && <img src={puppetThumbs[p.slug]} alt="" className="h-full w-full object-contain" />}
               </button>
               <div className="space-y-0.5 p-3">
-                <p className="truncate text-[13px] font-medium text-cream">{p.name}</p>
-                <p className="text-[11px] text-dust">puppet · {p.framing === "waist" ? "waist up" : "head"} · {when(p.madeAt)}</p>
-                <p className="text-[11px] text-emerald-300">in Video Forge</p>
+                <p data-tip="The name of this puppet." className="truncate text-[13px] font-medium text-cream">{p.name}</p>
+                <p data-tip="What kind of puppet this is and when it was made." className="text-[11px] text-dust">puppet · {p.framing === "waist" ? "waist up" : "head"} · {when(p.madeAt)}</p>
+                <p data-tip="This puppet was already sent to Video Forge." className="text-[11px] text-emerald-300">in Video Forge</p>
               </div>
             </div>
           ))}
@@ -393,12 +394,12 @@ export default function MadeView({
                 {r.filename}
               </p>
               <p className="text-[11px] text-dust">
-                <span className={r.status === "failed" ? "text-blood" : r.status === "done" ? "text-moss" : ""}>{STATUS_WORD[r.status] ?? r.status}</span>
+                <span data-tip={`How this picture is going: ${STATUS_WORD[r.status] ?? r.status}.`} className={r.status === "failed" ? "text-blood" : r.status === "done" ? "text-moss" : ""}>{STATUS_WORD[r.status] ?? r.status}</span>
                 {r.generated_at && ` · ${when(r.generated_at)}`}
               </p>
               {r.status === "failed" && r.error && (
-                <p className="line-clamp-2 text-[10.5px] text-dust" title={r.error}>
-                  {r.error}
+                <p className="line-clamp-2 text-[10.5px] text-dust" title={plainError(r.error, "Open it and press Redo, or pick another painter.")}>
+                  {plainError(r.error, "Open it and press Redo.")}
                 </p>
               )}
               <div className="flex flex-wrap gap-1.5 pt-1">
@@ -429,7 +430,7 @@ export default function MadeView({
           </div>
         ))}
       </div>
-      {!shown.length && !(showPuppets && (puppetsShown.length || workshop.length)) && <p className="py-10 text-center text-[13px] text-dust">Nothing here yet.</p>}
+      {!shown.length && !(showPuppets && (puppetsShown.length || workshop.length)) && <p data-tip="Nothing to show yet. Make some pictures, or change your filters." className="py-10 text-center text-[13px] text-dust">Nothing here yet.</p>}
 
       {zoom && (
         <div data-tip="Click anywhere outside the picture to close it." className="forge-zoom" onClick={() => setZoom(null)} role="dialog" aria-label="Picture, large">

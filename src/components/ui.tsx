@@ -210,7 +210,7 @@ export const StatusChip = ({ status, pulse }: { status: Status; pulse?: boolean 
 export const CatChip = ({ category }: { category: Category }) => {
   const meta = CATEGORY_META[category] ?? CATEGORY_META.image;
   return (
-    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[10.5px] ${meta.chip}`}>
+    <span data-tip={`The kind of picture this is: ${category || "image"}.`} className={`inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[10.5px] ${meta.chip}`}>
       {category || "image"}
     </span>
   );
@@ -264,7 +264,7 @@ export function Modal({
       <div data-tip="Click outside the window to close it." className="absolute inset-0 bg-black/65 backdrop-blur-[3px]" onClick={onClose} />
       <div className={`pop-in relative w-full ${width} max-h-[88vh] overflow-y-auto rounded-2xl border border-line2 bg-panel shadow-[0_30px_80px_rgba(0,0,0,0.55)]`}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-panel/95 px-5 py-3.5 backdrop-blur">
-          <h3 className="font-display text-[15px] tracking-wide text-cream">{title}</h3>
+          <h3 data-tip="The title of this window." className="font-display text-[15px] tracking-wide text-cream">{title}</h3>
           <button data-tip="Closes this window." onClick={onClose} className="btn-press rounded-lg p-1.5 text-dust hover:bg-raise hover:text-cream">
             <IX size={15} />
           </button>
