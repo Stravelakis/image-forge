@@ -8,6 +8,7 @@
  * Video Forge placed on the Forge shelf.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { ManifestRow, Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { checkPaidRun } from "../lib/paidGuard";
@@ -1311,13 +1312,17 @@ export default function PuppetMaker({
           </div>
         )}
       </div>
-      {zoom && (
+      {/* In a portal on <body>: the review box above is blurred (backdrop-filter), which makes it the
+          anchor for "fixed" children, and it scrolls — so inside it this popup opened above what you
+          could see and moved when you scrolled (Ak, 25 Oct 2026). */}
+      {zoom && createPortal(
         <div className="forge-zoom" onClick={() => setZoom(null)} role="dialog" aria-label="Picture, large" data-tip="Click outside the picture, or press Esc, to close.">
           <div onClick={(e) => e.stopPropagation()} className="cursor-default">
             {zoom === "live" ? rig && <PuppetPreview rig={rig} size={720} /> : <img src={zoom.url} alt="" />}
             <p>{zoom === "live" ? "talking, blinking, nodding, shaking and laughing in turn" : zoom.caption} · Esc or click outside to close</p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
