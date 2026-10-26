@@ -24,6 +24,19 @@ export interface PartReview extends PartReport {
 /** The parts marked for remaking, with your notes. */
 export const markedParts = (m: WorkshopMeta) => m.reports.filter((r) => r.redo && !r.approved);
 
+/** The places on a face you can mark right or wrong in the review workbench. */
+export type MarkRegion = "mouth" | "eyes" | "brows" | "ears" | "outline" | "colours" | "background" | "other";
+/**
+ * Your marks on one picture (review workbench, #11): a region is "ok" (✓) or
+ * "bad" (✗); a region missing from the record is unmarked. These marks are the
+ * answer key the picture checks are tuned against later.
+ */
+export interface PartMarks {
+  regions: Partial<Record<MarkRegion, "ok" | "bad">>;
+  note?: string;
+  at: string;
+}
+
 export interface WorkshopMeta {
   v: 1;
   slug: string;
@@ -48,6 +61,10 @@ export interface WorkshopMeta {
   versions?: Record<string, { why: string; box: { x: number; y: number; w: number; h: number }; at: string }[]>;
   /** views made for this puppet ("side", "sit"): their parts, prefixed */
   views?: string[];
+  /** your ✓/✗ marks and notes per part, from the review workbench */
+  marks?: Record<string, PartMarks>;
+  /** groups (mouths, lids, brows, arms, side, sit) you accepted as a whole */
+  acceptedGroups?: string[];
 }
 
 export const workshopAvailable = async (): Promise<boolean> => {

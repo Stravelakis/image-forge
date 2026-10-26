@@ -592,3 +592,17 @@ html[data-forge] .btn-press.bg-ember {
   animation: forge-tip-in .14s ease-out; }
 @keyframes forge-tip-in { from { opacity: 0; translate: 0 3px; } }
 .forge-tip-more { display: block; margin-top: 6px; color: #c9bdff; text-decoration: underline; text-underline-offset: 2px; font-weight: 500; }
+
+/* ---- the puppet review workbench (components/PuppetWorkbench.tsx) ---- */
+.wb { background: #02030a; }
+.wb-bg { position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(900px 420px at 18% -8%, color-mix(in srgb, var(--color-ember) 20%, transparent), transparent 70%),
+    radial-gradient(700px 380px at 92% 0%, rgb(120 110 255 / .14), transparent 70%),
+    linear-gradient(rgb(255 255 255 / .022) 1px, transparent 1px) 0 0 / 100% 36px;
+  animation: wb-drift 18s ease-in-out infinite alternate; }
+@keyframes wb-drift { to { background-position: 40px 20px, -30px 10px, 0 36px; } }
+.wb-card { animation: wb-rise .35s ease-out both; }
+@keyframes wb-rise { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .wb-bg, .wb-card { animation: none; } }
+:root[data-motion="reduced"] .wb-bg, :root[data-motion="off"] .wb-bg, :root[data-motion="reduced"] .wb-card, :root[data-motion="off"] .wb-card { animation: none; }

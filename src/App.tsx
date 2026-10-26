@@ -92,7 +92,7 @@ import MadeView from "./components/MadeView";
 import { TipLayer } from "./components/TipLayer";
 import CanvaFill from "./components/CanvaFill";
 import { canvaUpload } from "./lib/canva";
-import { listWorkshop, markedParts, type WorkshopMeta } from "./lib/puppet/workshop";
+import { listWorkshop, markedParts, saveMeta as saveWorkshopMeta, type WorkshopMeta } from "./lib/puppet/workshop";
 import type { PuppetTemplate } from "./lib/batches";
 import { DEFAULT_SETUP } from "./lib/batches";
 import { CATEGORY_FOLDER } from "./lib/output";
@@ -118,6 +118,7 @@ import { CountUp, type MotionLevel } from "./components/motion";
 import Letterer from "./components/Letterer";
 import SheetMaker from "./components/SheetMaker";
 import PuppetMaker from "./components/PuppetMaker";
+import PuppetWorkbench, { workshopIO } from "./components/PuppetWorkbench";
 import { openOrders as openPuppetOrders, type PuppetOrder } from "./lib/puppet/shelf";
 import VectorMaker from "./components/VectorMaker";
 import TopMenu, { type View } from "./components/TopMenu";
@@ -274,6 +275,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const [puppet, setPuppet] = useState<{ order: PuppetOrder | null; template?: PuppetTemplate | null; open?: WorkshopMeta | null; autoRemake?: boolean } | null>(null);
   // Made reads the puppets again each time the maker closes.
   const [puppetsSeen, setPuppetsSeen] = useState(0);
+  // The puppet review workbench opened from Made (#11); from the puppet maker it opens inside that.
+  const [workbench, setWorkbench] = useState<WorkshopMeta | null>(null);
   // "Remake all marked": the puppets still to do, one after another.
   const remakeQueue = useRef<WorkshopMeta[]>([]);
   const nextRemake = useCallback(() => {
@@ -2285,6 +2288,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               onMakeGif={openGifMaker}
               onSendToCanva={(ids) => void sendToCanva(ids)}
               onOpenPuppet={(m) => setPuppet({ order: null, open: m })}
+              onReviewPuppet={(m) => setWorkbench(m)}
               onRemakeMarked={() => void remakeAllMarked()}
               puppetsSeen={puppetsSeen}
             />
@@ -2597,6 +2601,19 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               [pool]: prev[pool].map((k) => (k.id === id ? { ...k, exhaustedUntil: until } : k)),
             }))
           }
+        />
+      )}
+
+      {workbench && (
+        <PuppetWorkbench
+          key={workbench.slug}
+          meta={workbench}
+          io={workshopIO(workbench.slug)}
+          onSave={(m) => void saveWorkshopMeta(m)}
+          onClose={() => {
+            setWorkbench(null);
+            setPuppetsSeen((n) => n + 1);
+          }}
         />
       )}
 
