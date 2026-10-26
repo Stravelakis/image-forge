@@ -126,7 +126,7 @@ Templates), Docs (the manual, Agents & API), Settings. The app opens on
 | `lib/sharedKeys.ts` + `electron/forgeKeys.mjs` | keys shared with Video Forge | DPAPI file `%APPDATA%\Forge\shared-keys.bin`; a shared key only fills an empty box |
 | `lib/vault.ts` + `electron/vault.mjs` | the vault | page storage mirrored to a file the app owns; loaded first; other ports' boxes merged once; `flushVault()` before a reset |
 | `electron/forgeShelf.mjs` + `lib/puppet/shelf.ts` | puppet orders and puppets | `%APPDATA%\Forge\` — same file as Video Forge's |
-| `components/TipLayer.tsx` | hover help | `data-tip` / `data-tip-more` / `title`; `tests/hoverHelp.test.ts` + `scripts/hoverHelp.mjs` fail on any naked control. Same file in Video Forge |
+| `components/TipLayer.tsx` | hover help | `data-tip` / `data-tip-more` / `title`; `tests/hoverHelp.test.ts` + `scripts/hoverHelp.mjs` fail on any naked control, label, status or number (item 17). Shows on Tab focus, Esc closes. Errors: `lib/plainError.ts` + `components/ErrorLine.tsx` (Open Settings button). Same TipLayer as Video Forge |
 | `lib/cursorChaser.ts` | cursor chasers | one chase script (CHASER_CORE) shared by "Try it here" in `SheetMaker.tsx` and the website download |
 | `components/AgentsView.tsx`, `DocsView.tsx` | the in-app Docs and Agents pages | must match `scripts/mcp-server.js` (8 tools) and the real menus |
 | `electron/main.js` | desktop shell | see §9 |

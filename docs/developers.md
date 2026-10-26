@@ -205,8 +205,12 @@ Worth knowing:
 - `version.test.ts` — the version is the same in `package.json`, the app and
   the MCP server.
 - `sourceHygiene.test.ts` — no invisible or control characters in source.
-- `hoverHelp.test.ts` — fails on any clickable control without a `data-tip` or
-  `title`. New buttons need one.
+- `hoverHelp.test.ts` — fails on any clickable control, label, heading, status,
+  badge or number without a `data-tip` (or a tip on something around it);
+  sentences of 7+ words explain themselves. Each help is at most two sentences
+  and 230 characters, with a banned-jargon list. Only `motion.tsx` (animation
+  wrappers) is skipped. Errors go through `lib/plainError.ts` and
+  `components/ErrorLine.tsx` so each one says what to do next.
 - `puppet.test.ts` — the real puppet code on owl pictures in
   `tests/fixtures/puppet/`; no engine is called.
 - `vault.test.ts`, `sharedKeys.test.ts` — the real files, in a temp folder.
