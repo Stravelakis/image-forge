@@ -133,8 +133,8 @@ export default function GifMaker({
       <div className="my-8 w-full max-w-3xl rounded-2xl border border-line bg-panel shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <div>
-            <p className="font-display text-[17px] tracking-wide text-cream">Turn into a GIF</p>
-            <p className="font-mono text-[10.5px] text-dust">{row.filename}</p>
+            <p data-tip="Turns this picture into a small moving picture (a GIF). It is free and happens on your computer." className="font-display text-[17px] tracking-wide text-cream">Turn into a GIF</p>
+            <p data-tip="The name of the picture you are working on." className="font-mono text-[10.5px] text-dust">{row.filename}</p>
           </div>
           <button data-tip="Closes the GIF maker without saving." onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
             <IX size={16} />
@@ -144,7 +144,7 @@ export default function GifMaker({
         <div className="grid gap-5 p-5 md:grid-cols-[360px_1fr]">
           {/* preview */}
           <div>
-            <p className="mb-1.5 font-mono text-[10px] tracking-[0.2em] text-dust uppercase">live preview</p>
+            <p data-tip="A quick look at how the movement will play." className="mb-1.5 font-mono text-[10px] tracking-[0.2em] text-dust uppercase">live preview</p>
             <canvas ref={canvasRef} className="w-full rounded-lg border border-line bg-black" />
             <p className="mt-1.5 text-[11px] text-dust">
               This is exactly what the GIF will do — the same drawing code makes both.
@@ -152,7 +152,7 @@ export default function GifMaker({
 
             {gifUrl && (
               <div className="mt-4">
-                <p className="mb-1.5 font-mono text-[10px] tracking-[0.2em] text-moss uppercase">
+                <p data-tip={`The finished moving picture. It is ${Math.round(gifSize / 1024)} KB big.`} className="mb-1.5 font-mono text-[10px] tracking-[0.2em] text-moss uppercase">
                   finished gif · {Math.round(gifSize / 1024)} KB
                 </p>
                 <img src={gifUrl} alt="the finished GIF" className="w-full rounded-lg border border-moss/40" />
@@ -163,7 +163,7 @@ export default function GifMaker({
           {/* controls */}
           <div className="space-y-4">
             <div>
-              <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
+              <label data-tip="Say in your own words how the picture should move." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
                 what should it do?
               </label>
               <textarea data-tip="Say in plain words how the picture should move, for example the lantern flickers. The AI turns it into camera and light moves."
@@ -182,7 +182,7 @@ export default function GifMaker({
                 )}
               </div>
               {note && (
-                <p
+                <p data-tip="A note from the helper about what it understood, or what it could not do."
                   className={`mt-2 rounded-lg border px-3 py-2 text-[11.5px] ${
                     plan.beyondReach
                       ? "border-ember/40 bg-ember/10 text-ember"
@@ -195,7 +195,7 @@ export default function GifMaker({
             </div>
 
             <div>
-              <p className="mb-1.5 font-mono text-[10px] tracking-[0.2em] text-dust uppercase">or pick a movement</p>
+              <p data-tip="Or skip the words and choose a ready-made movement." className="mb-1.5 font-mono text-[10px] tracking-[0.2em] text-dust uppercase">or pick a movement</p>
               <div className="flex flex-wrap gap-1.5">
                 {MOTION_PRESETS.map((p) => (
                   <button
@@ -215,7 +215,7 @@ export default function GifMaker({
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">
+                <label data-tip={`How many pictures the GIF is made of: ${plan.frames}. More is smoother but a bigger file.`} className="mb-1 block font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">
                   frames · {plan.frames}
                 </label>
                 <input data-tip="How many pictures the GIF is made of. More frames look smoother but make a bigger file."
@@ -228,7 +228,7 @@ export default function GifMaker({
                 />
               </div>
               <div>
-                <label className="mb-1 block font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">
+                <label data-tip={`How long each picture shows: ${plan.frameMs} thousandths of a second. Smaller is faster.`} className="mb-1 block font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">
                   speed · {plan.frameMs}ms
                 </label>
                 <input data-tip="How long each frame stays on screen. A smaller number plays faster."

@@ -323,8 +323,8 @@ export default function SheetMaker({
       <div className="my-6 w-full max-w-5xl rounded-2xl border border-line bg-panel shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <div>
-            <p className="font-display text-[17px] tracking-wide text-cream">Make a sheet</p>
-            <p className="font-mono text-[10.5px] text-dust">many frames of the same character</p>
+            <p data-tip="Make a sheet: one picture with many small pictures of the same character, like a flip book." className="font-display text-[17px] tracking-wide text-cream">Make a sheet</p>
+            <p data-tip="A sheet is a set of small pictures of one character, each showing a different pose or mouth shape." className="font-mono text-[10.5px] text-dust">many frames of the same character</p>
           </div>
           <button data-tip="Closes the sheet maker." onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
             <IX size={16} />
@@ -335,7 +335,7 @@ export default function SheetMaker({
           {/* left: what to make */}
           <div className="space-y-4">
             <div>
-              <label className={label}>what kind of sheet</label>
+              <label data-tip="Pick which kind of sheet to make." className={label}>what kind of sheet</label>
               <div className="grid gap-2 sm:grid-cols-2">
                 {SHEET_DEFS.map((d) => (
                   <button data-tip={`${d.label}: ${d.blurb} (${d.frames.length} frames)`}
@@ -354,7 +354,7 @@ export default function SheetMaker({
             </div>
 
             <div>
-              <label className={label}>describe the character</label>
+              <label data-tip="Say who the character is and how it looks." className={label}>describe the character</label>
               <textarea data-tip="Say who the character is and how it should look, for example a stout dwarf blacksmith in claymation style."
                 value={character}
                 onChange={(e) => setCharacter(e.target.value)}
@@ -365,7 +365,7 @@ export default function SheetMaker({
             </div>
 
             <div>
-              <label className={label}>how to make it</label>
+              <label data-tip="Choose how the sheet gets made." className={label}>how to make it</label>
               <div className="grid gap-2 sm:grid-cols-2">
                 <button data-tip="Draws the character once, then changes that same picture into every pose. Slower, but the character stays the same in every frame."
                   onClick={() => setMethod("from-reference")}
@@ -402,14 +402,14 @@ export default function SheetMaker({
             </div>
 
             <div className="rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5">
-              <p className="text-[12px] text-parch">
+              <p data-tip="How many pictures will be drawn, and what they cost. Image Forge asks you before it spends anything." className="text-[12px] text-parch">
                 {shots} generation{shots === 1 ? "" : "s"} ·{" "}
                 <span className={cost.total > 0 ? "text-ember" : "text-moss"}>
                   {cost.total > 0 ? `about ${formatUsd(cost.total)}` : "free"}
                 </span>
-                {cost.unknown > 0 && <span className="text-dust"> ({cost.unknown} at an unknown price)</span>}
+                {cost.unknown > 0 && <span data-tip="For this many pictures the painter has not published a price, so the cost is not known." className="text-dust"> ({cost.unknown} at an unknown price)</span>}
               </p>
-              <p className="mt-0.5 font-mono text-[10.5px] text-dust">
+              <p data-tip="Which painter will draw the sheet." className="mt-0.5 font-mono text-[10.5px] text-dust">
                 using {route.engine} · {route.apiModel}
               </p>
             </div>
@@ -423,7 +423,7 @@ export default function SheetMaker({
                   Stop
                 </Btn>
               )}
-              {progress && <span className="text-[11.5px] text-dust">{progress}</span>}
+              {progress && <span data-tip="How far along the sheet is." className="text-[11.5px] text-dust">{progress}</span>}
             </div>
           </div>
 
@@ -431,21 +431,21 @@ export default function SheetMaker({
           <div className="space-y-3">
             {shown?.url && (
               <div>
-                <p className={label}>playing · {shown.labelText}</p>
+                <p data-tip="The small picture that is showing now." className={label}>playing · {shown.labelText}</p>
                 <img src={shown.url} alt={shown.labelText} className="w-full rounded-lg border border-ember/50" />
               </div>
             )}
 
             {sheetUrl && !shown && (
               <div>
-                <p className={label}>the sheet</p>
+                <p data-tip="The finished sheet with all the small pictures." className={label}>the sheet</p>
                 <img src={sheetUrl} alt="the finished sheet" className="w-full rounded-lg border border-moss/40" />
               </div>
             )}
 
             {refUrl && !sheetUrl && !shown && (
               <div>
-                <p className={label}>the character everything is based on</p>
+                <p data-tip="The first picture that every other one copies the character from." className={label}>the character everything is based on</p>
                 <img src={refUrl} alt="reference" className="w-full rounded-lg border border-line" />
               </div>
             )}
@@ -464,11 +464,11 @@ export default function SheetMaker({
                           }`}
                         />
                       ) : (
-                        <div className="flex aspect-square items-center justify-center rounded border border-blood/40 bg-blood/10 p-1 text-center font-mono text-[8px] text-blood">
+                        <div data-tip="This small picture did not work. You can make it again." className="flex aspect-square items-center justify-center rounded border border-blood/40 bg-blood/10 p-1 text-center font-mono text-[8px] text-blood">
                           failed
                         </div>
                       )}
-                      <p className="mt-0.5 truncate font-mono text-[8.5px] text-dust">{f.labelText}</p>
+                      <p data-tip="The name of this small picture." className="mt-0.5 truncate font-mono text-[8.5px] text-dust">{f.labelText}</p>
                     </div>
                   ))}
                 </div>
@@ -489,7 +489,7 @@ export default function SheetMaker({
                 </div>
 
                 <div className="rounded-lg border border-line bg-[var(--color-field)] p-3">
-                  <p className={label}>play it</p>
+                  <p data-tip="Play the small pictures one after another to see them move." className={label}>play it</p>
                   <div className="flex flex-wrap gap-2">
                     {!playing ? (
                       <Btn data-tip={`Plays the frames here as a small animation: ${stripFor(def).label}.`}
@@ -509,7 +509,7 @@ export default function SheetMaker({
 
                   {def.kind === "visemes" && (
                     <div className="mt-3">
-                      <label className={label}>make it say something</label>
+                      <label data-tip="Type some words to see the mouth shapes move with them." className={label}>make it say something</label>
                       <div className="flex gap-2">
                         <input data-tip="Type a few words and the mouth shapes will play along with them."
                           value={say}

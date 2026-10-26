@@ -251,8 +251,8 @@ export default function Letterer({
       <div className="my-6 w-full max-w-5xl rounded-2xl border border-line bg-panel shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <div>
-            <p className="font-display text-[17px] tracking-wide text-cream">Add lettering</p>
-            <p className="font-mono text-[10.5px] text-dust">{row.filename}</p>
+            <p data-tip="Writes words onto this picture. It is free and happens on your computer." className="font-display text-[17px] tracking-wide text-cream">Add lettering</p>
+            <p data-tip="The name of the picture you are working on." className="font-mono text-[10.5px] text-dust">{row.filename}</p>
           </div>
           <button data-tip="Closes the lettering window without saving." onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
             <IX size={16} />
@@ -286,7 +286,7 @@ export default function Letterer({
               </Btn>
             </div>
             {note && (
-              <p className="mt-2 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[11.5px] text-parch">{note}</p>
+              <p data-tip="A note about what just happened or what to fix." className="mt-2 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[11.5px] text-parch">{note}</p>
             )}
           </div>
 
@@ -331,7 +331,7 @@ export default function Letterer({
             {active && (
               <>
                 <div>
-                  <label className={label}>the words</label>
+                  <label data-tip="The words that will be written on the picture." className={label}>the words</label>
                   <textarea data-tip="The words that go on the picture."
                     value={active.text}
                     onChange={(e) => patch({ text: e.target.value })}
@@ -342,7 +342,7 @@ export default function Letterer({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={label}>font</label>
+                    <label data-tip="The style of the letters." className={label}>font</label>
                     <select data-tip="The style of the letters." value={active.font} onChange={(e) => patch({ font: e.target.value })} className={field}>
                       {FONT_CHOICES.map((f) => (
                         <option key={f.id} value={f.stack}>{f.label}</option>
@@ -350,7 +350,7 @@ export default function Letterer({
                     </select>
                   </div>
                   <div>
-                    <label className={label}>alignment</label>
+                    <label data-tip="Whether the words sit on the left, in the middle or on the right." className={label}>alignment</label>
                     <select data-tip="Where lines of text sit inside the box: left, middle or right."
                       value={active.align}
                       onChange={(e) => patch({ align: e.target.value as TextLayer["align"] })}
@@ -365,7 +365,7 @@ export default function Letterer({
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={label}>colour</label>
+                    <label data-tip="The colour of the letters." className={label}>colour</label>
                     <input data-tip="The main colour of the letters."
                       type="color"
                       value={active.color}
@@ -374,7 +374,7 @@ export default function Letterer({
                     />
                   </div>
                   <div>
-                    <label className={label}>outline</label>
+                    <label data-tip="A thin edge around the letters so they stay easy to read." className={label}>outline</label>
                     <input data-tip="The colour of the thin line around each letter."
                       type="color"
                       value={active.strokeColor}
