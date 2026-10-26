@@ -5,7 +5,9 @@
  * Kept apart from maker.ts so the maker itself has no DOM in it and the tests
  * and a headless run use the same code.
  */
-import { generateBytes, localRoute, type ProviderId } from "../engines.mjs";
+import { findModel, formatUsd, generateBytes, localRoute, priceFor, resolveRoute, type ProviderId } from "../engines.mjs";
+import { FREE_ENGINES } from "../paidGuard";
+import type { PuppetSpend } from "./spend";
 import { panelVerdict, type Facts, type PanelChecker } from "./quality";
 import type { ForgeSettings } from "../providers";
 import { askVision, jsonFromReply, type VisionEngine } from "../visionEngine";
@@ -84,9 +86,30 @@ export function puppetEngines(localModels: string[]): PuppetEngine[] {
     { id: "ovh-sdxl", label: "OVHcloud SDXL", free: true, refs: false, price: 0, note: "Free, no key. Older model; draws from words only, so faces only." },
     { id: "cloudflare-flux2-klein", label: "Cloudflare FLUX.2 klein", free: true, refs: true, price: 0, note: "Free daily allowance — only a few pictures a day." },
     { id: "cloudflare-flux2-dev", label: "Cloudflare FLUX.2 dev", free: true, refs: true, price: 0, note: "Best free quality online, but about 1–2 pictures a day on the free allowance." },
-    { id: "nano-banana-2-lite", label: "Google Nano Banana 2 Lite", free: false, refs: true, price: 0.034, note: "Paid: about $0.034 a picture." },
-    { id: "nano-banana-2", label: "Google Nano Banana 2", free: false, refs: true, price: 0.067, note: "Paid: about $0.067 a picture." },
+    paidEngine("nano-banana-2-lite", "Google Nano Banana 2 Lite"),
+    paidEngine("nano-banana-2", "Google Nano Banana 2"),
   ];
+}
+
+/** A paid engine, priced from the model catalogue — never a number typed in here. */
+function paidEngine(id: string, label: string): PuppetEngine {
+  const price = priceFor(id) ?? findModel(id)?.priceUsd ?? 0;
+  return { id, label, free: false, refs: true, price, note: `Paid: about ${formatUsd(price)} a picture.` };
+}
+
+/**
+ * How a puppet engine id turns into a generation: your own machine takes its
+ * model from settings, every other engine is a catalogue id. Shared by
+ * pageGenerate and by the cost check, so the price asked about is the price
+ * of the route that really runs.
+ */
+export function puppetRoute(settings: ForgeSettings, engineId: string): { localModel: string; model: string; settings: ForgeSettings } {
+  const localModel = engineId.startsWith("local:") ? engineId.slice(6) : engineId === "local" ? settings.localModel : "";
+  return {
+    localModel,
+    model: localModel ? "" : engineId,
+    settings: localModel ? { ...settings, provider: "local" as ProviderId, localModel } : settings,
+  };
 }
 
 /** The image models LocalAI (or similar) has, by name. Empty when it is not running. */
@@ -124,8 +147,35 @@ export const sizeFor = (engineId: string) => (engineId.startsWith("local") ? 768
 /** A rest after each picture on your own machine, so the card can cool. */
 export const LOCAL_REST_MS = 20000;
 
-export function pageGenerate(settings: ForgeSettings, engineId: string, onExhaust: (pool: string, id: string, until: number) => void): MakerIO["generate"] {
-  const localModel = engineId.startsWith("local:") ? engineId.slice(6) : engineId === "local" ? settings.localModel : "";
+/**
+ * Count one picture against the approved spend, or refuse it. Free engines
+ * cost nothing and pass. A price we cannot read from the catalogue counts as
+ * unaffordable, not as free. Counted when the picture is asked for, because a
+ * request that fails half way can still be billed.
+ */
+export function chargeOrRefuse(row: { model: string }, s: ForgeSettings, spend?: PuppetSpend): void {
+  const route = resolveRoute(row as never, s as never) as { engine: string; def?: { id: string } };
+  // A paused or retired engine stops with its own message further on and bills nothing.
+  if (FREE_ENGINES.has(route.engine) || route.engine === "paused" || route.engine === "retired") return;
+  const price = route.def ? priceFor(route.def.id) : null;
+  if (price === null || !spend) {
+    throw new Error("This engine's price is unknown, so the puppet maker will not use it. Pick a free engine or one with a listed price.");
+  }
+  if (spend.spentUsd + price > spend.approvedUsd + 1e-6) {
+    throw new Error("The money approved for this puppet is used up, so it stopped. Press the button again to approve more, or pick a free engine.");
+  }
+  spend.spentUsd += price;
+}
+
+/**
+ * Every picture the puppet maker draws comes through here, so this is also
+ * where money is stopped. A free route passes. A paid route needs `spend` and
+ * must fit inside what the person approved before the run started — the
+ * dialog in PuppetMaker.tsx raises `spend.approvedUsd`; this only enforces it.
+ * No `spend` means no paid pictures.
+ */
+export function pageGenerate(settings: ForgeSettings, engineId: string, onExhaust: (pool: string, id: string, until: number) => void, spend?: PuppetSpend): MakerIO["generate"] {
+  const { localModel, model, settings: s } = puppetRoute(settings, engineId);
   let last = 0;
   return async (req, signal) => {
     if (localModel && last) {
@@ -141,10 +191,10 @@ export function pageGenerate(settings: ForgeSettings, engineId: string, onExhaus
       aspect_ratio: "1:1",
       category: "image",
       // Local engines take their model from settings; the others are catalogue ids.
-      model: localModel ? "" : engineId,
+      model,
       seed: req.seed,
     };
-    const s = localModel ? { ...settings, provider: "local" as ProviderId, localModel } : settings;
+    chargeOrRefuse(row, s, spend);
     const out = await generateBytes(row as never, s as never, signal, onExhaust as never, 3600e3, { refImages: refs, size: { w: req.width, h: req.height } });
     last = Date.now();
     return blobToImg(new Blob([out.bytes as BlobPart], { type: out.mime }));
