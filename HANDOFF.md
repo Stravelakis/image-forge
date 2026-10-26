@@ -158,7 +158,11 @@ would silently move every user's data to a new empty folder.** A test forbids
 it.
 
 `imagesRef` (a `Map<filename, Blob>`) is in memory only. Pictures reach disk
-through the folder, ZIP or per-picture save.
+through the folder, ZIP or per-picture save — and, with no folder linked, every
+picture is also written the moment it arrives to `<userData>/images/<folder>/`
+(`electron/autosave.mjs`, `saveToFolder` in `App.tsx`); `getPicture` and
+`getBlobFor` read it back. Pictures with no copy anywhere trigger a
+`beforeunload` warning (a dialog in the desktop window).
 
 ---
 

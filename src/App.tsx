@@ -59,6 +59,7 @@ import { styleById } from "./lib/styleCatalogue";
 import type { PaidRunCheck } from "./lib/paidGuard";
 import { ensureAffordable, registerPaidAsker, type PaidAnswer, type PaidAskOptions } from "./lib/paidGate";
 import PaidConfirm from "./components/PaidConfirm";
+import { autosaveImage, loadAutosaved, unsavedPictures } from "./lib/autosave";
 import { checkBatch, collectBatch, describeJob, submitBatch } from "./lib/geminiBatch.mjs";
 import {
   clearTauriFolder,
@@ -371,6 +372,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const folderRef = useRef<FileSystemDirectoryHandle | null>(null);
   const tauriFolderRef = useRef<string | null>(null);
   const imagesRef = useRef<Map<string, Blob>>(new Map());
+  /** names of pictures that exist somewhere besides this page's memory (a folder, the safety copy, a zip) */
+  const persistedRef = useRef<Set<string>>(new Set());
   const toastId = useRef(1);
   /** set once repairForge exists, so the load-time warning can offer to run it */
   const repairForgeRef = useRef<null | (() => void)>(null);
@@ -554,6 +557,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     const cached = imagesRef.current.get(r.filename);
     if (cached) return cached;
     if (!r.preview) return null;
+    // Made in an earlier session: the full picture is in the safety copy; the preview is only a thumbnail.
+    const kept = await loadAutosaved(r);
+    if (kept) return kept;
     if (r.preview.startsWith("<svg") || r.preview.startsWith("data:image/svg")) {
       const dims = ASPECTS[r.aspect_ratio];
       try {
@@ -595,34 +601,56 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
   const saveToFolder = useCallback(
     async (row: ManifestRow, blob: Blob) => {
+      let saved = false;
       try {
         if (isTauri() && tauriFolderRef.current) {
           const path = await tauriWriteImage(tauriFolderRef.current, row, blob);
           pushLog(`⤓ ${row.filename} → ${path}`, "ok");
-          return;
+          saved = true;
+        } else if (folderRef.current) {
+          const path = await writeImageFile(folderRef.current, row, blob);
+          pushLog(`⤓ ${row.filename} → ${path}`, "ok");
+          saved = true;
         }
-        const h = folderRef.current;
-        if (!h) return;
-        const path = await writeImageFile(h, row, blob);
-        pushLog(`⤓ ${row.filename} → ${path}`, "ok");
       } catch {
         pushLog(`⚠ could not write ${row.filename} into the linked folder`, "err");
       }
+      // No folder linked, or writing to it failed: keep a copy in the app's own folder, so
+      // closing or crashing after a paid run loses nothing (only works in the desktop app).
+      if (!saved && (await autosaveImage(row, blob))) {
+        saved = true;
+        pushLog(`⤓ ${row.filename} kept in the app's own pictures folder`, "info");
+      }
+      if (saved) persistedRef.current.add(row.filename);
     },
     [pushLog]
   );
 
-  /** The full picture of a row: in memory if made this session, else from the linked folder. */
+  /* Closing the window or the tab while pictures exist nowhere but in memory: ask first.
+     In the desktop app the safety copy normally covers every picture, so this fires only when
+     that copy could not be written (disk full, folder locked) or in a plain browser tab with no
+     folder linked. electron/main.js turns the request into a dialog. */
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (unsavedPictures(imagesRef.current.keys(), persistedRef.current).length === 0) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
+  /** The full picture of a row: in memory if made this session, else from the linked folder, else the safety copy. */
   const getPicture = useCallback(async (r: ManifestRow): Promise<Blob | null> => {
     const mem = imagesRef.current.get(r.filename);
     if (mem) return mem;
     const dir = folderRef.current;
-    if (!dir) return null;
+    if (!dir) return loadAutosaved(r);
     try {
       const sub = await dir.getDirectoryHandle(CATEGORY_FOLDER[r.category]);
       return await (await sub.getFileHandle(r.filename)).getFile();
     } catch {
-      return null;
+      return loadAutosaved(r);
     }
   }, []);
 
@@ -1175,6 +1203,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     try {
       const { blob, count } = await buildZipBlob(rowsRef.current, getBlobFor, rowsToCsv(rowsRef.current));
       downloadBlob("marketplace-images.zip", blob);
+      for (const name of imagesRef.current.keys()) persistedRef.current.add(name); // they are in the zip now
       pushToast("ok", `ZIP ready — ${count} plate${count === 1 ? "" : "s"} in shops/items/events/npcs plus the CSV.`);
     } catch {
       pushToast("err", "ZIP packing failed.");
@@ -1246,12 +1275,14 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         const trueName = nameForMime(row.filename, blob.type);
         if (trueName !== row.filename && !rowsRef.current.some((r) => r.id !== id && r.filename === trueName)) filename = trueName;
         imagesRef.current.set(filename, blob);
+        // the kept variant replaces the old picture everywhere it is saved
+        void saveToFolder({ ...row, filename }, blob);
       }
       patchRow(id, { preview: compare.variant, seed: compare.variantSeed, ...(row ? { filename } : {}) });
       setCompare(null);
       pushToast("ok", "Variant kept — it replaces the original.");
     },
-    [compare, patchRow, pushToast]
+    [compare, patchRow, pushToast, saveToFolder]
   );
 
   /* ---------- exports ---------- */
@@ -1685,8 +1716,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         const failed = [...outcome.failed];
         const done: string[] = [];
         for (const filename of outcome.done) {
-          const blob = imagesRef.current.get(filename);
-          // A picture made in an earlier session is not in memory any more.
+          const rowFor = rowsRef.current.find((x) => x.filename === filename);
+          // A picture made in an earlier session is not in memory any more: the safety copy has it.
+          const blob = imagesRef.current.get(filename) ?? (rowFor ? await getPicture(rowFor) : null);
           if (blob && (await linkSend(id, filename, blob))) done.push(filename);
           else failed.push({ filename, error: "the picture was made, but is not in memory any more — press Redo in Image Forge" });
         }
@@ -1699,7 +1731,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         );
       })();
     }
-  }, [rows, linkAvailable, pushLog]);
+  }, [rows, linkAvailable, pushLog, getPicture]);
 
   /**
    * A whole list from the chat, into the manifest.
