@@ -144,11 +144,9 @@ describe("the Content-Security-Policy", () => {
     expect(rules["script-src"]).toEqual(["'self'", "'unsafe-eval'"]);
   });
 
-  it("limits plain-http connections to this computer", () => {
+  it("lets the page reach engines over https and your own http servers (OmniRoute on the mini PC), nothing else", () => {
     const connect = rules["connect-src"];
-    expect(connect).toContain("https:");
-    expect(connect).toContain("http://127.0.0.1:*");
-    expect(connect).not.toContain("http:");
+    expect(connect).toEqual(["'self'", "https:", "http:"]);
     expect(connect).not.toContain("*");
   });
 

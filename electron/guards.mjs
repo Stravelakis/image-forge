@@ -10,8 +10,11 @@
  * the page (model-written SVG, a pasted prompt) cannot run. 'unsafe-eval' is
  * needed for one thing, the cursor chaser (lib/cursorChaser.ts builds its
  * function with new Function).
- * connect-src lets the page talk to itself, to https services (the engines)
- * and to this computer (your own picture server).
+ * connect-src lets the page talk to itself, to https services (the engines),
+ * to this computer (your own picture server), and to plain-http servers on
+ * your own network, such as a model gateway on another of your machines
+ * (OmniRoute on the mini PC is http://100.x). Allowing http: adds no new way
+ * out — https: to anywhere is already allowed — and blocking it broke those.
  * The style and font lines are there because the page genuinely needs them:
  * inline style attributes and style tags (React, the charts) and the Google
  * Fonts stylesheet linked from index.html.
@@ -19,7 +22,7 @@
 export const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
   "img-src 'self' data: blob:",
-  "connect-src 'self' https: http://127.0.0.1:* http://localhost:*",
+  "connect-src 'self' https: http:",
   "script-src 'self' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "font-src 'self' data: https://fonts.gstatic.com",
