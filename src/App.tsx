@@ -2229,7 +2229,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
           </div>
           )}
           <span className="hidden font-mono text-[10.5px] text-dust xl:block">
-            {queueLen > 0 ? `${queueLen} awaiting the hammer` : coolingCount > 0 ? `${coolingCount} cooling` : "queue clear"}
+            {queueLen > 0 ? `${queueLen} waiting to be made` : coolingCount > 0 ? `${coolingCount} resting (engine limit)` : "nothing waiting"}
           </span>
           {settings.batchJobs.length > 0 && (
             <button
