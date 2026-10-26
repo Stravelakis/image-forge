@@ -489,10 +489,10 @@ details summary::-webkit-details-marker {
  * The twin marks — the switch between the two Forges (12 Oct 2026). Same
  * shape as Video Forge's header; the light here is this app's own accent.
  * ------------------------------------------------------------------------- */
-.forge-twin { position: relative; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 999px; background: rgba(0, 0, 0, .55); }
+.forge-twin { position: relative; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 999px; }
 .forge-twin .slot-mark { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; position: relative; z-index: 1;
   transition: filter .35s, opacity .35s, transform .35s; border: 0; background: none; padding: 0; cursor: pointer; overflow: hidden; }
-.forge-twin .slot-mark img { height: 40px; mix-blend-mode: screen; pointer-events: none; }
+.forge-twin .slot-mark img { height: 40px; pointer-events: none; }
 .forge-twin .slot-mark.off { filter: grayscale(.85) brightness(.85); opacity: .85; transform: scale(.82); }
 .forge-twin .slot-mark.off:hover { filter: grayscale(.15) brightness(.95); opacity: 1; transform: scale(.9); }
 .forge-twin .slot-mark:focus-visible { outline: 2px solid var(--color-ember); outline-offset: 2px; }
