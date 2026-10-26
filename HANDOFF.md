@@ -598,3 +598,52 @@ itself: heat (83 °C pause → 72 °C), Image Forge restart, Docker/LocalAI rest
 | Clean faces unless asked (then "experimental"); photo style = high-fashion retouch; lifelike/photo/furry marked experimental; smoother mid-detail fur | `recipe.ts`, style picker |
 
 **Open:** the mouth ruler (face-part model + pixel measurements, `%TEMP%\qc\measure\ruler.py`) works for openings/teeth/lip colour but not yet tongue-vs-lips on humans or small dog mouths — not in the app yet. Dog L still shows the tongue. FLUX.1 Kontext tested (ComfyUI) — not better than FLUX.2 klein, 9× slower; ComfyUI needs `SSLKEYLOGFILE` unset to start.
+
+## 26 Oct 2026 — ultra plan Phase 1 (money, doors, puppet foundations)
+
+The plan lives in Video Forge: `docs/FORGES-ULTRA-PLAN.md`.
+
+**Tests:** 890 in 49 files, tsc clean, `npm run build` clean, `npm audit` 0.
+
+**Real app on a throwaway data folder (`IMAGEFORGE_USER_DATA`, port 47891):**
+- the security header is sent;
+- a foreign Host gets 403;
+- `/app/keys` without the app header gets 403;
+- `/%` gets 400;
+- the relay without the header gets 403;
+- the page renders with no console errors.
+
+**Money (#2):**
+- `ensureAffordable()` (`src/lib/paidGate.ts`) is the one door for every paid picture.
+- An unknown price counts as paid.
+- "Pro" image models are refused.
+- The puppet maker asks for the worst case first; its per-puppet limit defaults to $0, which means free engines only.
+- MCP needs `FORGE_ALLOW_PAID` and has `FORGE_MAX_USD`.
+
+**Doors (#4):**
+- SVG goes through an allow-list cleaner.
+- The security header (CSP) is enforced.
+  - `connect-src` allows `https:` and `http:`. The http part is for your own gateways, such as OmniRoute on the mini PC.
+- A wrong Host header is refused.
+- Only http/https links open outside the app.
+
+**Nothing lost (#5):** pictures autosave to `<userData>/images/`, and closing warns about unsaved ones.
+
+**Puppets (#51, #12, #11):** in `src/lib/puppet`.
+- `recipe.ts`: the facts sheet (`look.facts`), `eyeWords`, `REGION`, `KEEP_EXACTLY`.
+- `quality.ts`:
+  - `panelVerdict` gives yes/maybe/no; the strictest vote wins.
+  - the mouth-shape pick is in `SHAPE_OK`;
+  - the eye count is checked against the facts sheet.
+- `pixels.ts`: `pixelChecks` (the character moved, other places changed, background fringe).
+  - A finding only downgrades the part to "maybe".
+  - It never triggers a paid redo until it has been tuned on Ak's marks.
+- `maker.ts`:
+  - not checked is never green;
+  - every try emits `{type:"try"}`, and `workshop.saveTry` writes `tries.json` plus `<part>.try<n>-<time>.png`.
+
+**Sharp edges:**
+- `src/lib/puppet/spend.ts` repeats maker.ts's 3 tries and 2 fix rounds. Change them together.
+- Engine ids starting with `local` count as free.
+- The harvest server has no Host check.
+
