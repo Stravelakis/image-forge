@@ -102,6 +102,30 @@ function factsQuestionsRaw(part: PuppetPart): FactQuestion[] {
   ];
 }
 
+/** Each question in a few plain words, for the review screen (never the code name). */
+export const FACT_LABEL: Record<string, string> = {
+  beard_or_facial_hair_same_as_left: "is the facial hair the same?",
+  skin_marks_same_as_left: "are the skin marks the same?",
+  eyes_look_same_direction_as_left: "do the eyes look the same way?",
+  right_looks_broken: "does it look broken?",
+  right_mouth_is_the_wanted_shape: "is the mouth the shape asked for?",
+  mouth_shape_pick: "which mouth shape is it?",
+  tongue_visible: "is the tongue showing?",
+  tongue_reaches_past_the_teeth_or_lips: "does the tongue stick out?",
+  smiling_right: "is it smiling?",
+  lips_drawn_left: "lips on the original?",
+  lips_drawn_right: "lips on the new picture?",
+  wanted_change_visible: "can the change be seen?",
+  mouth_changed: "did the mouth change too?",
+  eyes_count_right: "how many eyes?",
+  right_picture_shows_the_wanted_arm_pose: "is the arm pose right?",
+  arms_count_right: "how many arms?",
+  hands_visible_right: "how many hands?",
+  hand_covers_face_right: "does a hand cover the face?",
+  face_changed: "did the face change?",
+};
+export const factLabel = (key: string) => FACT_LABEL[key] ?? key.replace(/_/g, " ");
+
 /** A checker's answer, read: yes / no / a number / not readable. */
 export function readAnswer(text: string | null, number?: boolean): boolean | number | undefined {
   if (!text) return undefined;

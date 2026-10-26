@@ -1,3 +1,4 @@
+import { factLabel } from "../lib/puppet/quality";
 /**
  * THE PUPPET REVIEW WORKBENCH (#11, Ak, 26 Oct 2026) — a full page, not a
  * pop-up. Left: the pictures grouped by pose, with counts and filters. Middle:
@@ -568,7 +569,7 @@ function Inspector({ row, meta, io, tries, baseUrl, baseW, view, setView, tryKey
                 <div key={c.name} className="rounded-xl border border-white/[.08] bg-white/[.03] px-3 py-2" data-tip="What this one checker found, and the questions it could not answer.">
                   <p className="font-medium">{c.name} <span className="font-light text-[#8f98ab]">{c.facts ? "" : "· could not look"}</span></p>
                   {c.faults.length > 0 && <ul className="mt-1 list-inside list-disc text-red-300/90">{c.faults.map((f, i) => <li key={i}>{f.replace(/^[~?]\s*/, "")}</li>)}</ul>}
-                  {c.unanswered.length > 0 && <p className="mt-1 text-amber-300/90" data-tip="Questions it gave no usable answer to. Unanswered is never counted as a yes.">Unanswered: {c.unanswered.join(", ")}</p>}
+                  {c.unanswered.length > 0 && <p className="mt-1 text-amber-300/90" data-tip="Questions it gave no usable answer to. Unanswered is never counted as a yes.">Could not answer: {c.unanswered.map(factLabel).join(" · ")}</p>}
                   {c.facts && !c.faults.length && !c.unanswered.length && <p className="text-emerald-300/80">found nothing wrong</p>}
                 </div>
               ))}
