@@ -24,6 +24,7 @@ import {
   writeResult,
   finishRequest,
 } from "./link.mjs";
+import { CONTENT_SECURITY_POLICY, hostAllowed, isAppCall, isOwnPage, safeDecodeUri, safeExternalUrl } from "./guards.mjs";
 import { readMode, writeMode, writeHandover, takeHandover, isTrustedInstallerUrl, download, MODES } from "./appctl.mjs";
 import { sharedValues, putShared } from "./forgeKeys.mjs";
 import { openVault, HARVEST_PAGE } from "./vault.mjs";
@@ -433,11 +434,20 @@ function proxyLocal(req, res) {
 function startServer(distDir) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
+      // Only requests addressed to 127.0.0.1:<port> or localhost:<port> are ours. A web page that has
+      // pointed its own name at this computer (DNS rebinding) sends its own Host, and gets nothing.
+      if (!hostAllowed(req.headers.host, server.address()?.port)) {
+        res.writeHead(403, { "Content-Type": "text/plain" });
+        res.end("forbidden");
+        return;
+      }
       // Cloudflare and NVIDIA both refuse browser callers. Forward those
       // requests from here. Mirrors the proxies in vite.config.js used
       // during `npm run dev`.
       const proxied = Object.keys(PROXIED).find((p) => (req.url || "").startsWith(p + "/"));
       if (proxied) {
+        // Like every other call that does something: only the app's own page, which always sends this header.
+        if (!isAppCall(req)) return json(res, 403, { error: "forbidden" });
         proxyUpstream(proxied, req, res);
         return;
       }
@@ -459,7 +469,13 @@ function startServer(distDir) {
         return;
       }
 
-      let urlPath = decodeURIComponent((req.url || "/").split("?")[0]);
+      // A bad escape such as "/%" used to throw here and pop an error box in the main process.
+      let urlPath = safeDecodeUri((req.url || "/").split("?")[0]);
+      if (urlPath === null) {
+        res.writeHead(400, { "Content-Type": "text/plain" });
+        res.end("bad request");
+        return;
+      }
       if (urlPath === "/") urlPath = "/index.html";
       let filePath = path.normalize(path.join(distDir, urlPath));
       // keep requests inside dist. The separator matters: without it a
@@ -473,7 +489,11 @@ function startServer(distDir) {
         filePath = path.join(distDir, "index.html"); // SPA fallback
       }
       const ext = path.extname(filePath).toLowerCase();
-      res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
+      res.writeHead(200, {
+        "Content-Type": MIME[ext] || "application/octet-stream",
+        "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+        "X-Content-Type-Options": "nosniff",
+      });
       fs.createReadStream(filePath).pipe(res);
     });
     /*
@@ -816,13 +836,15 @@ if (!app.requestSingleInstanceLock()) {
 
     // external links open in the real browser, Windows deep-links open in the OS
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-      if (url.startsWith("http") || url.startsWith("ms-settings:")) shell.openExternal(url);
+      const ok = safeExternalUrl(url);
+      if (ok) shell.openExternal(ok);
       return { action: "deny" };
     });
     mainWindow.webContents.on("will-navigate", (e, url) => {
-      if (!url.startsWith(`http://127.0.0.1:${port}`)) {
+      if (!isOwnPage(url, port)) {
         e.preventDefault();
-        shell.openExternal(url);
+        const ok = safeExternalUrl(url);
+        if (ok) shell.openExternal(ok);
       }
     });
 
