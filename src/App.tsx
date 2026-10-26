@@ -20,6 +20,7 @@ type UpdateReady = {
 };
 import { SEED_ROWS } from "./lib/seed";
 import { downloadCsv, parseCsv, rowsFromCsv, rowsToCsv } from "./lib/csv";
+import { toFlowJobs } from "./lib/flowExport";
 import { renderPreview } from "./lib/preview";
 import { nameForMime, styleDriftCount, uniqueName, violationCount, withSuffix } from "./lib/validate";
 import {
@@ -1297,6 +1298,26 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     [batches, pushToast]
   );
 
+  // For Google Flow: a plain list of prompts the Flow Prompt Feeder extension reads,
+  // so pictures can still be re-made by hand after the Google credit ends.
+  const exportFlow = useCallback(() => {
+    const file = toFlowJobs({ rows: rowsRef.current, source: "Image Forge manifest" });
+    if (file.jobs.length === 0) {
+      pushToast("info", "Nothing to export yet: no row has a prompt.");
+      return;
+    }
+    const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "flow-jobs.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    pushToast("ok", `flow-jobs.json exported: ${file.jobs.length} picture${file.jobs.length === 1 ? "" : "s"} for the Flow extension.`);
+  }, [pushToast]);
+
   // For Excel: the same CSV as the plain export, with a byte-order mark so Excel reads accents,
   // Greek and emoji correctly. (A real .xlsx writer was dropped: its library has open security
   // advisories with no fix, and it was only ever used to write this one file.)
@@ -2119,6 +2140,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
           motion={motionLevel}
               onExportCsv={exportCsv}
               onExportXlsx={exportXlsx}
+              onExportFlow={exportFlow}
             />
 
         <div className="ml-auto flex items-center gap-2">

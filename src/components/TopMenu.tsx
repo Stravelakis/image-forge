@@ -232,6 +232,7 @@ export default function TopMenu({
   onZip,
   onExportCsv,
   onExportXlsx,
+  onExportFlow,
   motion,
 }: {
   view: View;
@@ -251,6 +252,7 @@ export default function TopMenu({
   onZip: () => void;
   onExportCsv: () => void;
   onExportXlsx: () => void;
+  onExportFlow: () => void;
   motion: MotionLevel;
 }) {
   const [panel, setPanel] = useState<PanelId | null>(null);
@@ -385,6 +387,13 @@ export default function TopMenu({
                   hint: "a CSV file Excel opens straight away",
                   icon: <IDownload size={15} />,
                   onPick: onExportXlsx,
+                },
+                {
+                  id: "flow",
+                  title: "Prompts for Google Flow",
+                  hint: "a list the Flow extension types in for you, to re-make pictures by hand",
+                  icon: <IDownload size={15} />,
+                  onPick: onExportFlow,
                 },
                 {
                   id: "wp",
