@@ -11,7 +11,7 @@
  */
 
 import type { ApiKey, ForgeSettings } from "./providers";
-import { estimateCost, formatUsd, resolveRoute } from "./providers";
+import { BANNED_MODEL_MESSAGE, estimateCost, formatUsd, resolveRoute, rowUsesBannedModel } from "./providers";
 import type { ManifestRow } from "../types";
 
 /** Engines that never cost anything. */
@@ -56,7 +56,12 @@ export interface PaidRunCheck {
   model: string;
   /** how many rows would actually be billed — NOT the size of the queue */
   rows: number;
+  /** the price of the rows we CAN price; rows with no known price are not in it */
   totalUsd: number;
+  /** how many billed rows have no known price */
+  unknownPriceRows: number;
+  /** set when the run is refused outright (a banned Pro model); there is nothing to approve */
+  blocked: string | null;
   /** the credit it would come out of, when we know */
   credit: CreditNote | null;
   /** everything free you could use instead */
@@ -97,14 +102,28 @@ export function checkPaidRun(rows: ManifestRow[], s: ForgeSettings, opts: { batc
    * The `model` column routes each row on its own, which is the feature that
    * lets one batch mix free and paid — so the check has to work the same way.
    */
+  /*
+   * An unknown price is NOT a free price. A model name the catalogue does not
+   * know (typed in a table cell, imported from a sheet, sent by another
+   * program) used to add $0 and the run was announced as free while it spent
+   * real money. On any engine that is not known to be free, a row we cannot
+   * price counts as paid, and the dialog says "price unknown".
+   */
   const paidRows = rows.filter((r) => {
     const route = resolveRoute(r as never, s);
-    if (FREE_ENGINES.has(String(route.engine))) return false;
-    return estimateCost([r] as never, s, opts).total > 0;
+    const engine = String(route.engine);
+    if (FREE_ENGINES.has(engine)) return false;
+    // A paused or retired engine fails at once and bills nothing.
+    if (engine === "paused" || engine === "retired") return false;
+    if (rowUsesBannedModel(r as never, s)) return true;
+    const one = estimateCost([r] as never, s, opts);
+    return one.total > 0 || one.unknown > 0;
   });
 
-  const { total } = estimateCost(rows as never, s, opts);
-  const costs = paidRows.length > 0 && total > 0;
+  const { total } = estimateCost(paidRows as never, s, opts);
+  const unknownRows = paidRows.filter((r) => estimateCost([r] as never, s, opts).unknown > 0).length;
+  const bannedRows = paidRows.filter((r) => rowUsesBannedModel(r as never, s)).length;
+  const costs = paidRows.length > 0;
 
   // Describe the engine that will actually be billed, not whichever row
   // happened to sort first.
@@ -129,7 +148,8 @@ export function checkPaidRun(rows: ManifestRow[], s: ForgeSettings, opts: { batc
 
   // Per-picture is the price of a PAID picture. Averaging over the free ones
   // too would print a number no row will ever be charged.
-  const per = paidRows.length ? total / paidRows.length : 0;
+  const knownRows = paidRows.length - unknownRows;
+  const per = knownRows > 0 ? total / knownRows : 0;
   const free = rows.length - paidRows.length;
   const label = route.def?.label ?? route.apiModel;
   const n = paidRows.length;
@@ -138,11 +158,22 @@ export function checkPaidRun(rows: ManifestRow[], s: ForgeSettings, opts: { batc
   if (!costs) {
     headline = "This run is free.";
   } else {
-    const priced =
-      `${n} picture${n === 1 ? "" : "s"} on ${label} — about ${formatUsd(total)}` +
-      `${n > 1 ? ` (${formatUsd(per)} each)` : ""}${opts.batch ? ", at the half-price batch rate" : ""}.`;
+    const rate = opts.batch ? ", at the half-price batch rate" : "";
+    let priced: string;
+    if (unknownRows === 0) {
+      priced =
+        `${n} picture${n === 1 ? "" : "s"} on ${label} — about ${formatUsd(total)}` +
+        `${n > 1 ? ` (${formatUsd(per)} each)` : ""}${rate}.`;
+    } else if (knownRows === 0) {
+      priced = `${n} picture${n === 1 ? "" : "s"} on ${label} — price unknown, so this may cost money${rate}.`;
+    } else {
+      priced =
+        `${n} pictures on ${label} — about ${formatUsd(total)} for the ${knownRows} we can price, ` +
+        `and price unknown for the other ${unknownRows}${rate}.`;
+    }
     headline = free > 0 ? `${priced} The other ${free} ${free === 1 ? "is" : "are"} free.` : priced;
   }
+  const blocked = bannedRows > 0 ? BANNED_MODEL_MESSAGE : null;
 
   let creditWarning: string | null = null;
   if (credit?.expired) {
@@ -163,6 +194,8 @@ export function checkPaidRun(rows: ManifestRow[], s: ForgeSettings, opts: { batc
     // for; the free rows in the same queue are named in the headline.
     rows: paidRows.length,
     totalUsd: total,
+    unknownPriceRows: unknownRows,
+    blocked,
     credit,
     freeAlternatives: freeAlternativesFor(s),
     headline,

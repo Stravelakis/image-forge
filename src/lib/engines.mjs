@@ -335,6 +335,8 @@ export function estimateCost(rows, settings, { batch = false } = {}) {
     const { def, engine } = resolveRoute(row, settings);
     // A model running on your own machine costs nothing, whatever it is called.
     if (!def && FREE_ENGINES.has(engine)) continue;
+    // A paused or switched-off engine fails at once and never bills anything.
+    if (engine === "paused" || engine === "retired") continue;
     const p = def ? priceFor(def.id, { batch }) : null;
     if (p === null) unknown++;
     else total += p;
@@ -373,6 +375,25 @@ export class RetiredModelError extends Error {
 
 /** Engines that cost nothing, whoever the model turns out to be. */
 const FREE_ENGINES = new Set(["local", "simulated", "cloudflare", "pollinations", "ovh"]);
+
+/**
+ * Google image models the owner has banned: anything called "Pro" (Nano
+ * Banana Pro, Gemini 3 Pro Image). Matches the word on its own, so a model
+ * called "prompt-something" is not caught by accident.
+ */
+const BANNED_WORD = /(^|[^a-z0-9])pro($|[^a-z0-9])/i;
+export function isBannedImageModel(engine, ...names) {
+  return engine === "gemini" && names.some((n) => BANNED_WORD.test(String(n ?? "")));
+}
+
+/** Is this row's route a banned Google "Pro" image model? */
+export function rowUsesBannedModel(row, settings) {
+  const { engine, apiModel, def } = resolveRoute(row, settings);
+  return isBannedImageModel(engine, apiModel, def?.id, row?.model);
+}
+
+export const BANNED_MODEL_MESSAGE =
+  "Pro image models are switched off in this forge (they cost too much). Pick Nano Banana 2 or Nano Banana 2 Lite instead.";
 
 /** Which engine + API model id a row should be struck with. */
 /**
@@ -1050,6 +1071,8 @@ async function generateBytesRaw(rawRow, s, signal, exhaust, cooldownMs, opts = {
   const { engine, apiModel, pausedEngine } = resolveRoute(rawRow, s);
   if (engine === "retired") throw new RetiredModelError(apiModel, RETIRED_MODELS[apiModel]);
   if (engine === "paused") throw new PausedEngineError(PROVIDER_LABELS[pausedEngine] ?? pausedEngine ?? "That engine");
+  // The last line of defence: no caller can spend on a banned model, whatever it checked before.
+  if (rowUsesBannedModel(rawRow, s)) throw new Error(BANNED_MODEL_MESSAGE);
   // Models that cannot write get told not to try.
   const row = suppressTextIfWeak(rawRow, s);
   const refImages = opts.refImages ?? [];
