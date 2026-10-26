@@ -28,7 +28,7 @@ and the app asks before spending a penny.
 
 [![CI](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Stravelakis/image-forge?label=release&color=f2a33c)](https://github.com/Stravelakis/image-forge/releases/latest)
-[![Licence](https://img.shields.io/badge/licence-Apache--2.0-8cb56f)](LICENSE)
+[![Licence](https://img.shields.io/badge/licence-none%20(all%20rights%20reserved)-8cb56f)](#licence)
 [![Tests](https://img.shields.io/badge/tests-715-56b8a5)](tests/)
 
 </div>
@@ -409,12 +409,11 @@ Being straight about this saves everyone time.
 
 ## Licence
 
-[Apache-2.0](LICENSE). Use it, sell what you make with it, build on it.
+No licence: all rights reserved (since 26 Oct 2026). You may look at the code;
+you may not copy, redistribute or build on it without permission. Copies taken
+before that date keep the Apache-2.0 licence they came with.
 
-If you redistribute it or something derived from it, the [NOTICE](NOTICE)
-file has to travel with it — in your docs, your own NOTICE, or your credits
-screen. That is the one thing asked in return. Just *using* the app carries no
-obligation at all.
+The [NOTICE](NOTICE) file credits the other people's work this app uses.
 
 ---
 

@@ -103,6 +103,20 @@ that works **from** a picture.
 | OVHcloud SDXL | ✓ | — | Free, no key; older. |
 | Cloudflare FLUX.2 klein / dev | ✓ | ✓ | Free allowance is 10,000 neurons/day; one dev picture at 1024 used ~6,100. A puppet takes days. |
 | Google Nano Banana 2 (Lite) | ✓ | ✓ | Paid, ~$0.034–0.067 a picture; cost shown before running. |
+| Google Nano Banana 2.1 (`gemini-nano-banana-2.1`), batch | ✓ best | ✓ best | Half price by batch. See the note below. |
+
+> **Parts need a stronger model than Z-Image / FLUX.2 klein.** Tested 23 Oct
+> 2026 on Blip and Grump with the same recipe prompts: the local engines left
+> more than half the parts needing a redo, and the checkers caught only about
+> half of those. Nano Banana 2.1 by batch kept the character the same across
+> all 46 edits; about 4 needed a redo. The local engines redraw the whole
+> picture on every edit, so mouths drift, eyes move and cut-outs land in the
+> wrong place. Use them for trying ideas; make the puppet you keep with a
+> stronger model.
+>
+> **Known recipe bug (open):** `basePrompt` always says "both eyes … parallel",
+> which overrides a one-eyed (or many-eyed) description. Blip came out with two
+> eyes until the clause was rewritten for him.
 
 **Picture checker:** Image Forge's own vision engine if set up, otherwise
 Google's free `gemini-flash-lite-latest` through the Google key (free tier can
