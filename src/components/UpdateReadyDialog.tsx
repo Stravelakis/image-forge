@@ -40,8 +40,8 @@ export default function UpdateReadyDialog({
       <div className="w-full max-w-lg rounded-2xl border border-line bg-panel p-5 shadow-2xl">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 className="font-display text-2xl text-cream">Version {info.version} is out</h2>
-            <p className="mt-1 font-mono text-[11.5px] text-dust">you are on v{current}</p>
+            <h2 data-tip="A newer version of Image Forge is ready to install." className="font-display text-2xl text-cream">Version {info.version} is out</h2>
+            <p data-tip="The version you have now." className="mt-1 font-mono text-[11.5px] text-dust">you are on v{current}</p>
           </div>
           <button data-tip="Closes this. You can update later." onClick={onClose} className="rounded-lg p-1.5 text-dust transition hover:text-cream" aria-label="Close">
             <IX size={16} />
@@ -50,7 +50,7 @@ export default function UpdateReadyDialog({
 
         <div className="mt-4 rounded-xl border border-moss/40 bg-moss/10 p-3">
           <p className="text-[12.5px] leading-relaxed text-parch">
-            <span className="text-cream">Nothing of yours is touched.</span> Your keys, settings, manifest and pictures
+            <span data-tip="Updating only replaces the app. Your keys, settings and pictures stay." className="text-cream">Nothing of yours is touched.</span> Your keys, settings, manifest and pictures
             all stay exactly where they are — the installer updates the app around them.
           </p>
         </div>
@@ -102,8 +102,8 @@ export default function UpdateReadyDialog({
         {info.assetUrl && !installs && (
           <p className="mt-3 text-[11px] leading-relaxed text-dust">
             Once it has downloaded, run it. It installs over the version you have. Windows will show its usual warning
-            about unsigned software — click <span className="text-parch">More info</span>, then{" "}
-            <span className="text-parch">Run anyway</span>.
+            about unsigned software — click <span data-tip="The link in the Windows warning that shows the Run anyway button." className="text-parch">More info</span>, then{" "}
+            <span data-tip="The button in the Windows warning that lets the installer start. It is safe for this download." className="text-parch">Run anyway</span>.
           </p>
         )}
       </div>

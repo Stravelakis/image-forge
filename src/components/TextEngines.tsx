@@ -24,6 +24,7 @@ import type { ForgeSettings } from "../lib/providers";
 import { filterModels, listChatModels, statesPricing, type ChatModel } from "../lib/visionEngine";
 import { testCode, testConnection, testVision, type TestResult } from "../lib/testConnection";
 import { Btn, IAlert, ICheck, IFlask, IQuill, ISparkle, ITrash } from "./ui";
+import { plainError } from "../lib/plainError";
 
 type Provider = ForgeSettings["textProviders"][number];
 type JobId = "scribe" | "coder" | "vision";
@@ -161,7 +162,7 @@ export default function TextEngines({
     <>
       {/* ---------- the accounts ---------- */}
       <div className="rounded-xl border border-line bg-panel/50 p-4">
-        <p className="font-display text-[15px] tracking-wide text-cream">Your accounts</p>
+        <p data-tip="The writing helpers you have signed up to. Add each one here once, then pick which job it does below." className="font-display text-[15px] tracking-wide text-cream">Your accounts</p>
         <p className="mt-1 text-[12.5px] leading-relaxed text-dust">
           The addresses and keys the three jobs below draw from. Enter an account once here, load its models, and every
           job can choose from them. One Mistral key can cover all three.
@@ -188,8 +189,8 @@ export default function TextEngines({
         </div>
 
         {providers.length === 0 && (
-          <p className="mt-3 rounded-lg border border-ember/40 bg-ember/10 p-3 text-[12.5px] text-parch">
-            Nothing set up yet. <span className="text-cream">Mistral</span> is the quickest start — it is free and one
+          <p data-tip="You have not added any writing helper yet. Mistral is a free one to start with." className="mt-3 rounded-lg border border-ember/40 bg-ember/10 p-3 text-[12.5px] text-parch">
+            Nothing set up yet. <span data-tip="Mistral is a free writing helper. One key from them covers writing, code and looking at pictures." className="text-cream">Mistral</span> is the quickest start — it is free and one
             key covers writing, code and vision.
           </p>
         )}
@@ -230,11 +231,11 @@ export default function TextEngines({
                   <ITrash size={13} />
                 </button>
                 {models[p.id] && (
-                  <span className="font-mono text-[10.5px] text-moss">
+                  <span data-tip="How many of this helper's models are showing, out of all it offers." className="font-mono text-[10.5px] text-moss">
                     {shownFor(p.id).length} of {models[p.id].length} shown
                   </span>
                 )}
-                {notes[p.id] && !models[p.id] && <span className="text-[11.5px] text-rust">{notes[p.id]}</span>}
+                {notes[p.id] && !models[p.id] && <span data-tip="What went wrong loading this helper's models, and what to try." className="text-[11.5px] text-rust">{plainError(notes[p.id], "Check the address and key, then press Load models again.")}</span>}
               </div>
             </div>
           ))}
@@ -250,13 +251,13 @@ export default function TextEngines({
                 className="accent-[var(--color-ember)]"
                 disabled={!anyPricing}
               />
-              <span className="text-[12.5px] text-cream">
+              <span data-tip="Hide models that cost money, so you only see free ones." className="text-[12.5px] text-cream">
                 Only show models that are free
-                {!anyPricing && <span className="ml-1.5 text-dust">— nothing loaded here publishes prices</span>}
+                {!anyPricing && <span data-tip="None of the loaded helpers say which models are free, so this cannot filter." className="ml-1.5 text-dust">— nothing loaded here publishes prices</span>}
               </span>
             </label>
             {anyPricing && silentOnPricing.length > 0 && (
-              <p className="mt-1.5 text-[11.5px] leading-relaxed text-dust">
+              <p data-tip="Some helpers do not say what their models cost, so they are left in the list instead of guessing." className="mt-1.5 text-[11.5px] leading-relaxed text-dust">
                 This cannot narrow{" "}
                 <span className="text-parch">{silentOnPricing.map((p) => p.label).join(", ")}</span> — those endpoints
                 return a model id and nothing else, no price and no capabilities. Rather than hide models on a guess
@@ -284,13 +285,13 @@ export default function TextEngines({
         return (
           <div key={job.id} className="rounded-xl border border-line bg-panel/50 p-4">
             <p className="flex items-center gap-2 font-display text-[15px] tracking-wide text-cream">
-              <span className="text-dust">{job.icon}</span>
+              <span data-tip="A small picture for this job." className="text-dust">{job.icon}</span>
               {job.title}
             </p>
-            <p className="mt-1 text-[12.5px] leading-relaxed text-dust">{job.what}</p>
+            <p data-tip="What this job does for you." className="mt-1 text-[12.5px] leading-relaxed text-dust">{job.what}</p>
 
             <div className="mt-3">
-              <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">model</label>
+              <label data-tip="Which model does this job." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">model</label>
               <select data-tip="Pick which model does this job. Load an account's models first to fill the list."
                 value={engine.model}
                 onChange={(e) => {
@@ -332,7 +333,7 @@ export default function TextEngines({
                 })}
               </select>
               {engine.key.trim() ? (
-                <p className="mt-1.5 font-mono text-[10.5px] text-dust">
+                <p data-tip="Which account this job will use." className="mt-1.5 font-mono text-[10.5px] text-dust">
                   using {chosen?.providerLabels[0] ?? engine.base.replace(/^https?:\/\//, "")}
                 </p>
               ) : (
@@ -347,11 +348,11 @@ export default function TextEngines({
               {result && (
                 <span className={`flex items-center gap-1.5 text-[12px] ${result.ok ? "text-moss" : "text-rust"}`}>
                   {result.ok ? <ICheck size={13} /> : <IAlert size={13} />}
-                  {result.message}
+                  {result.ok ? result.message : plainError(result.message, "Check the address and key above, then test again.")}
                 </span>
               )}
             </div>
-            {result?.detail && <p className="mt-1.5 text-[11.5px] leading-relaxed text-dust">{result.detail}</p>}
+            {result?.detail && <p data-tip="The result of the test: what worked, or what to fix." className="mt-1.5 text-[11.5px] leading-relaxed text-dust">{result.detail}</p>}
           </div>
         );
       })}
