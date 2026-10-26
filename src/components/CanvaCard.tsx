@@ -6,12 +6,13 @@
 import { useEffect, useState } from "react";
 import type { ForgeSettings } from "../lib/providers";
 import { canvaConnect, canvaDisconnect, canvaStatus } from "../lib/canva";
+import { plainError } from "../lib/plainError";
 
 export function CanvaCard({ settings, patchSettings }: { settings: ForgeSettings; patchSettings: (p: Partial<ForgeSettings>) => void }) {
   const [state, setState] = useState<{ connected: boolean; name?: string; redirectUri: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
-  const check = () => void canvaStatus(settings).then(setState).catch((e) => setNote(String(e.message ?? e)));
+  const check = () => void canvaStatus(settings).then(setState).catch((e) => setNote(plainError(e, "Check your internet and the Client ID and secret, then try again.")));
   useEffect(check, []); // eslint-disable-line react-hooks/exhaustive-deps
   // Signing in happens in your browser; look again when you come back.
   useEffect(() => {
@@ -23,13 +24,13 @@ export function CanvaCard({ settings, patchSettings }: { settings: ForgeSettings
   const set = (p: Partial<ForgeSettings["canva"]>) => patchSettings({ canva: { ...settings.canva, ...p } });
   return (
     <div className="max-w-2xl space-y-4">
-      <h2 className="font-display text-2xl text-cream">Canva</h2>
+      <h2 data-tip="Connect Image Forge to your Canva account." className="font-display text-2xl text-cream">Canva</h2>
       <p className="text-[13.5px] text-parch">
         Send your pictures straight into Canva, and fill your Canva templates from a list — one finished design per row,
         back here in Made. Works with Canva Pro, Teams, Education and Nonprofits (filling templates needs one of those; sending
         pictures works on any plan).
       </p>
-      <ol className="list-decimal space-y-1.5 pl-5 text-[13px] text-parch">
+      <ol data-tip="Four steps to connect Canva. The first three are done on Canva's website; the last one is here." className="list-decimal space-y-1.5 pl-5 text-[13px] text-parch">
         <li>
           Open{" "}
           <a className="underline" href="https://www.canva.com/developers/integrations/connect-api" target="_blank" rel="noreferrer" data-tip="Canva's page for your own connections. Opens in your browser.">
@@ -59,7 +60,7 @@ export function CanvaCard({ settings, patchSettings }: { settings: ForgeSettings
               await canvaConnect(settings);
               setNote("Your browser opened Canva — say yes there, then come back here.");
             } catch (e) {
-              setNote(String((e as Error).message));
+              setNote(plainError(e, "Check the Client ID and secret above, then press Connect again."));
             }
           }}
           data-tip="Opens Canva in your browser to ask for your yes. Once only."
@@ -73,7 +74,7 @@ export function CanvaCard({ settings, patchSettings }: { settings: ForgeSettings
         )}
         <span className="text-[13px] text-parch">{state?.connected ? `✓ Connected${state.name ? ` as ${state.name}` : ""}` : "Not connected"}</span>
       </div>
-      {note && <p className="text-[12.5px] text-dust">{note}</p>}
+      {note && <p data-tip="The latest message about the Canva connection." className="text-[12.5px] text-dust">{note}</p>}
     </div>
   );
 }
