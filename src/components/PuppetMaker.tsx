@@ -19,7 +19,7 @@ import { PUPPET_STYLES, VIEW_PARTS, asksForFaceMarks, hardAnimalWhy, faceMarksNo
 import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, recheckParts, PUPPET_SIZE, type MakerEvent, type PartReport, type Verdict } from "../lib/puppet/maker";
 import { resize, type Img } from "../lib/puppet/pixels";
 import { buildRig, embedView, puppetSlug, type CutPart, type ForgePuppet } from "../lib/puppet/rig";
-import { loadImg, loadWorkshop, removeWorkshop, saveImg, saveMeta, savePart, workshopPic, type PartReview, type WorkshopMeta } from "../lib/puppet/workshop";
+import { loadImg, loadWorkshop, removeWorkshop, saveImg, saveMeta, savePart, saveTry, workshopPic, type PartReview, type WorkshopMeta } from "../lib/puppet/workshop";
 import { type PuppetEngine, sizeFor, blobToImg, describeInspiration, imgToPng, imgToUrl, judgeName, listLocalImageModels, pageGenerate, pageInspect, pageJudge, puppetEngines, unloadLocal } from "../lib/puppet/pageIO";
 import { finishOrder, orderPictures, removeFromShelf, shelfAvailable, shelvePuppet, type PuppetOrder } from "../lib/puppet/shelf";
 import type { PuppetTemplate } from "../lib/batches";
@@ -174,7 +174,7 @@ export default function PuppetMaker({
   // refuses any paid picture that does not fit inside it.
   const spendRef = useRef(newPuppetSpend());
   const faceIO = useMemo(() => ({ generate: pageGenerate(settings, faceEng.id, onExhaust as never, spendRef.current), judge: pageJudge(settings) }), [settings, faceEng.id, onExhaust]);
-  const io = useMemo(() => ({ generate: pageGenerate(settings, partEng.id, onExhaust as never, spendRef.current), judge: pageJudge(settings), inspect: pageInspect(settings) }), [settings, partEng.id, onExhaust]);
+  const io = useMemo(() => ({ generate: pageGenerate(settings, partEng.id, onExhaust as never, spendRef.current), judge: pageJudge(settings), inspect: pageInspect(settings), engine: partEng.label }), [settings, partEng.id, partEng.label, onExhaust]);
   const slug = puppetSlug(name || description.split(/[,.]/)[0] || "puppet");
 
   /**
@@ -420,6 +420,7 @@ export default function PuppetMaker({
           io,
           async (e) => {
             if (e.type === "picture") setPictures((n) => n + 1);
+            if (e.type === "try") void persist(() => saveTry(slug, e.record, e.picture));
             if (e.type === "kept") {
               const { id, part } = e;
               void persist(() => savePart(slug, id, part));
@@ -473,6 +474,7 @@ export default function PuppetMaker({
             void persist(() => saveImg(slug, `${v}_base.png`, vb));
             const vr = await makeParts({ base: vb, framing: vf, only: VIEW_PARTS[v], look }, io, (e) => {
               if (e.type === "picture") setPictures((n) => n + 1);
+              if (e.type === "try") void persist(() => saveTry(slug, { ...e.record, part: `${v}_${e.record.part}` }, e.picture));
               if (e.type === "kept") {
                 const { id, part } = e;
                 void persist(() => savePart(slug, `${v}_${id}`, part));
@@ -683,6 +685,7 @@ export default function PuppetMaker({
   const onPartEvent = useCallback(
     async (e: MakerEvent, pre: string, notes?: Record<string, string>, recheck = false) => {
       if (e.type === "picture") setPictures((n) => n + 1);
+      if (e.type === "try") void persist(() => saveTry(slug, { ...e.record, part: pre + e.record.part }, e.picture));
       if (e.type === "kept") {
         const { id, part } = e;
         archiveCurrent(pre + id);
@@ -861,6 +864,7 @@ export default function PuppetMaker({
       void persist(() => saveImg(slug, "side_base.png", vb));
       const vr = await makeParts({ base: vb, framing, only: VIEW_PARTS.side, look }, io, (e) => {
         if (e.type === "picture") setPictures((n) => n + 1);
+        if (e.type === "try") void persist(() => saveTry(slug, { ...e.record, part: `side_${e.record.part}` }, e.picture));
         if (e.type === "kept") {
           const { id, part } = e;
           void persist(() => savePart(slug, `side_${id}`, part));
