@@ -56,7 +56,8 @@ import { measureStorage, safeSet, storageWarning, type SaveResult } from "./lib/
 import { saveSettingsVerified, type SaveProof } from "./lib/settingsBackup";
 import { tailorPrompt } from "./lib/promptTailor";
 import { styleById } from "./lib/styleCatalogue";
-import { checkPaidRun, type PaidRunCheck } from "./lib/paidGuard";
+import type { PaidRunCheck } from "./lib/paidGuard";
+import { ensureAffordable, registerPaidAsker, type PaidAnswer, type PaidAskOptions } from "./lib/paidGate";
 import PaidConfirm from "./components/PaidConfirm";
 import { checkBatch, collectBatch, describeJob, submitBatch } from "./lib/geminiBatch.mjs";
 import {
@@ -284,7 +285,13 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   }, [nextRemake]);
   const [vectorOpen, setVectorOpen] = useState(false);
   const [animateOpen, setAnimateOpen] = useState(false);
-  const [paidAsk, setPaidAsk] = useState<null | { check: PaidRunCheck; targets: number[] }>(null);
+  /* The cost question. Every caller reaches it through ensureAffordable() in
+     lib/paidGate.ts; this is the one window that asks it and hands the answer back. */
+  const [paidAsk, setPaidAsk] = useState<null | { check: PaidRunCheck; opts: PaidAskOptions; answer: (a: PaidAnswer) => void }>(null);
+  useEffect(() => {
+    registerPaidAsker((check, opts) => new Promise<PaidAnswer>((resolve) => setPaidAsk({ check, opts, answer: resolve })));
+    return () => registerPaidAsker(null);
+  }, []);
 
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
@@ -816,21 +823,30 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   );
 
   const runQueue = useCallback(
-    async (targets?: number[], approvedCost = false) => {
+    async (targets?: number[]) => {
       if (isRunning) return;
       const ids = targets ?? rowsRef.current.filter((r) => r.status === "pending" || r.status === "failed").map((r) => r.id);
       if (ids.length === 0) return;
 
-      // Nothing spends money without being asked. Free engines never get here.
-      if (!approvedCost && settingsRef.current.confirmPaidRuns) {
-        const about = ids
-          .map((id) => rowsRef.current.find((r) => r.id === id))
-          .filter((r): r is ManifestRow => Boolean(r));
-        const check = checkPaidRun(about, settingsRef.current);
-        if (check.costs) {
-          setPaidAsk({ check, targets: ids });
-          return;
+      // Nothing spends money without being asked. Free engines pass straight through.
+      const about = ids
+        .map((id) => rowsRef.current.find((r) => r.id === id))
+        .filter((r): r is ManifestRow => Boolean(r));
+      const gate = await ensureAffordable(about, settingsRef.current);
+      if (!gate.ok) {
+        if (gate.useFree) {
+          const engineId = gate.useFree;
+          patchSettings({ provider: engineId as ForgeSettings["provider"] });
+          pushLog(`↪ switched to ${engineId} instead — this run is free`, "ok");
+          // let the new engine settle into state, then ask the question again for what is left
+          setTimeout(() => void runQueue(ids), 60);
+        } else {
+          pushToast("info", gate.reason);
         }
+        return;
+      }
+      if (gate.check.costs && settingsRef.current.confirmPaidRuns) {
+        pushLog(`⚑ you approved about ${formatUsd(gate.check.totalUsd)} on ${gate.check.model}`, "info");
       }
 
       stopRef.current = false;
@@ -1190,10 +1206,18 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       }
       const variantSeed = row.seed + 1;
       const s = settingsRef.current;
+      const isSvgPlate = row.preview.startsWith("<svg") || row.preview.startsWith("image/svg");
+      // A variant is one more picture on the same route: it asks first like any other paid run.
+      if (!isSvgPlate && s.provider !== "simulated") {
+        const gate = await ensureAffordable([{ ...row, seed: variantSeed }], s);
+        if (!gate.ok) {
+          pushToast("info", gate.reason);
+          return;
+        }
+      }
       pushToast("info", `Forging a variant of ${row.filename}…`);
       try {
         let variant: string;
-        const isSvgPlate = row.preview.startsWith("<svg") || row.preview.startsWith("image/svg");
         if (isSvgPlate || s.provider === "simulated") {
           // procedural — instant and free
           variant = renderPreview({ ...row, seed: variantSeed });
@@ -1326,20 +1350,32 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
   const sendBatch = useCallback(async () => {
     const s = settingsRef.current;
-    const pending = rowsRef.current.filter((r) => r.status === "pending" || r.status === "failed");
-    if (!pending.length) {
+    const waiting = rowsRef.current.filter((r) => r.status === "pending" || r.status === "failed");
+    if (!waiting.length) {
       pushToast("info", "Nothing pending to send.");
       return;
     }
-    const modelId = findModel((pending[0].model || "").trim())?.id ?? s.geminiModel;
-    const def = findModel(modelId);
-    if (!def || def.engine !== "gemini" || def.batchPriceUsd === null) {
+    // Only rows that really go to Google. Rows meant for a free engine stay where they are.
+    const googleRows = waiting.filter((r) => {
+      const route = resolveRoute(r, s);
+      return route.engine === "gemini" && route.def?.batchPriceUsd != null;
+    });
+    if (!googleRows.length) {
       pushToast("err", "Batch jobs are a Google feature — set those rows to a Nano Banana model first.");
       return;
     }
+    // One batch job is one model: take the first Google row's model and the rows that share it.
+    const modelId = resolveRoute(googleRows[0], s).def?.id ?? s.geminiModel;
+    const pending = googleRows.filter((r) => resolveRoute(r, s).def?.id === modelId);
     const apiKey = s.geminiKeys.find((k) => k.key.trim())?.key ?? "";
     if (!apiKey.trim()) {
       pushToast("err", "Add a Google key in Settings → Engines before sending a batch.");
+      return;
+    }
+    // Paid: ask first, on the Google rows only, at the half-price rate.
+    const gate = await ensureAffordable(pending, s, { batch: true, approveLabel: "Send to Google — spend it" });
+    if (!gate.ok) {
+      pushToast("info", gate.reason);
       return;
     }
     const { total } = estimateCost(pending, s, { batch: true });
@@ -1876,8 +1912,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   /* Batch is a Google-only trick, so only offer it when the waiting rows can use it. */
   const batchable = rows.filter((r) => {
     if (r.status !== "pending" && r.status !== "failed") return false;
-    const def = findModel((r.model || "").trim()) ?? findModel(settings.geminiModel);
-    return def?.engine === "gemini" && def.batchPriceUsd !== null;
+    const route = resolveRoute(r, settings);
+    return route.engine === "gemini" && route.def?.batchPriceUsd != null;
   }).length;
   const doneCount = rows.filter((r) => r.status === "done").length;
   const finishedCount = doneCount + rows.filter((r) => r.status === "imported").length;
@@ -2151,9 +2187,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               onClick={() => void sendBatch()}
               disabled={isRunning}
               className="btn-press hidden items-center gap-1.5 rounded-lg border border-line bg-panel/70 px-3 py-2 text-[12px] font-semibold text-parch hover:text-cream disabled:opacity-35 xl:flex"
-              title={`Send ${batchable} row${batchable > 1 ? "s" : ""} to Google as a background job at HALF PRICE. You collect them later — usually within the hour. Nothing to do with a "batch" of rows; this is only about cost.`}
+              title={`PAID. Sends the ${batchable} waiting row${batchable > 1 ? "s" : ""} that use a Google model to Google as a background job at HALF PRICE. It asks you first, with the price. You collect them later — usually within the hour. Rows on free engines are left alone.`}
             >
-              New €/2 delayed queue
+              Send to Google at half price (paid)
             </button>
           )}
           {/* One "make what is waiting" button, the same words as Made's, shown
@@ -2481,22 +2517,19 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       {paidAsk && (
         <PaidConfirm
           check={paidAsk.check}
-          onCancel={() => setPaidAsk(null)}
-          onApprove={() => {
-            const t = paidAsk.targets;
-            const spend = formatUsd(paidAsk.check.totalUsd);
-            const on = paidAsk.check.model;
+          note={paidAsk.opts.note}
+          approveLabel={paidAsk.opts.approveLabel}
+          onCancel={() => {
+            paidAsk.answer({ kind: "cancel" });
             setPaidAsk(null);
-            pushLog(`⚑ you approved about ${spend} on ${on}`, "info");
-            void runQueue(t, true);
+          }}
+          onApprove={() => {
+            paidAsk.answer({ kind: "approve" });
+            setPaidAsk(null);
           }}
           onUseFree={(engineId) => {
-            const t = paidAsk.targets;
+            paidAsk.answer({ kind: "free", engineId });
             setPaidAsk(null);
-            patchSettings({ provider: engineId as ForgeSettings["provider"] });
-            pushLog(`↪ switched to ${engineId} instead — this run is free`, "ok");
-            // let the new engine settle into state before running
-            setTimeout(() => void runQueue(t, true), 60);
           }}
         />
       )}

@@ -14,8 +14,14 @@ export default function PaidConfirm({
   onApprove,
   onUseFree,
   onCancel,
+  note,
+  approveLabel,
 }: {
   check: PaidRunCheck;
+  /** an extra paragraph under the price, e.g. what the worst case includes */
+  note?: string;
+  /** the words on the go-ahead button */
+  approveLabel?: string;
   onApprove: () => void;
   onUseFree: (engineId: string) => void;
   onCancel: () => void;
@@ -42,6 +48,8 @@ export default function PaidConfirm({
         <div className="space-y-3.5 p-5">
           <p className="text-[14px] leading-relaxed text-cream">{check.headline}</p>
 
+          {note && <p className="text-[12px] leading-relaxed text-parch">{note}</p>}
+
           {check.creditWarning && (
             <p className={`rounded-lg border px-3 py-2.5 text-[12px] leading-relaxed ${tone}`}>{check.creditWarning}</p>
           )}
@@ -52,7 +60,7 @@ export default function PaidConfirm({
 
           <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3.5">
             <Btn data-tip="This spends real money from your account, the amount shown above. Press it only if you agree to pay." variant="primary" onClick={onApprove}>
-              Spend it — go ahead
+              {approveLabel ?? "Spend it — go ahead"}
             </Btn>
             <Btn data-tip="Does not spend anything and does not make the pictures." onClick={onCancel}>Cancel</Btn>
           </div>
