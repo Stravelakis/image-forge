@@ -18,6 +18,11 @@ installForgeFetch();
 // First the vault (the file the app keeps everything in — lib/vault.ts), then
 // any handover, which is newer still.
 (window as unknown as { __flushVault?: () => Promise<void> }).__flushVault = flushVault;
+// DEV ONLY: ?demo=workbench shows the review workbench on a sample owl (src/demo).
+const demo = import.meta.env.DEV && new URLSearchParams(location.search).get("demo");
+if (demo === "workbench") {
+  void import("./demo/workbenchDemo").then(({ default: Demo }) => ReactDOM.createRoot(document.getElementById("root")!).render(<Demo />));
+} else
 hydrateFromVault()
   .then(() => importHandover())
   .finally(() => {

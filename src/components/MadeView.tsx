@@ -64,6 +64,7 @@ export default function MadeView({
   onMakeGif,
   onSendToCanva,
   onOpenPuppet,
+  onReviewPuppet,
   onRemakeMarked,
   puppetsSeen,
 }: {
@@ -83,6 +84,8 @@ export default function MadeView({
   onSendToCanva?: (ids: number[]) => void;
   /** open a workshop puppet in the puppet maker, to review and tweak */
   onOpenPuppet?: (m: WorkshopMeta) => void;
+  /** the review workbench for a puppet (#11) */
+  onReviewPuppet?: (m: WorkshopMeta) => void;
   /** remake every marked part on every puppet, one puppet after another */
   onRemakeMarked?: () => void;
   /** changes whenever the puppet maker closes, so the list is read again */
@@ -337,6 +340,15 @@ export default function MadeView({
                     </p>
                     <p className={`text-[11px] ${state.tone}`}>{state.word}</p>
                     {markedParts(w).length > 0 && <p className="text-[11px] text-[var(--color-ember)]">{markedParts(w).length} marked to remake</p>}
+                    {onReviewPuppet && w.reports.length > 0 && (
+                      <button
+                        className="mt-1.5 rounded-full border border-white/15 px-3 py-1 text-[11px] font-medium text-[#eef1f8] transition hover:border-[var(--color-ember)]"
+                        data-tip="Opens the review workbench for this puppet: a full page to look at every picture closely, tick and cross what is right or wrong, and accept by group."
+                        onClick={() => onReviewPuppet(w)}
+                      >
+                        Review
+                      </button>
+                    )}
                   </div>
                 </div>
               );

@@ -24,6 +24,7 @@ import { type PuppetEngine, sizeFor, blobToImg, describeInspiration, imgToPng, i
 import { finishOrder, orderPictures, removeFromShelf, shelfAvailable, shelvePuppet, type PuppetOrder } from "../lib/puppet/shelf";
 import type { PuppetTemplate } from "../lib/batches";
 import { downloadBlob } from "../lib/output";
+import PuppetWorkbench, { workshopIO } from "./PuppetWorkbench";
 import { IX } from "./ui";
 
 // The Forge look (index.css, .forge-*): glass, Sora, round, two button kinds.
@@ -89,6 +90,8 @@ export default function PuppetMaker({
   const lips = lipsTouched ?? lipsFor(description, style);
   const look = useMemo(() => ({ key: keyColourFor(description), lips, animal: isAnimal(description), teeth: teethFor(description) }), [description, lips]);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // The review workbench (#11), a full page over this window.
+  const [bench, setBench] = useState(false);
   // The other views (recipe.ts VIEW_EDITS): side-facing for dialogue, sitting for full body.
   const [wantSide, setWantSide] = useState(true);
   const [wantSit, setWantSit] = useState(true);
@@ -1152,6 +1155,14 @@ export default function PuppetMaker({
               {/* THE REVIEW (Ak, 14 Oct 2026): every part with its before/after,
                   what the checker said, your note, and your verdict. A redo
                   takes your note along. */}
+              {step === "done" && !busy && metaRef.current && reports.length > 0 && (
+                <div className="forge-note mb-3 flex flex-wrap items-center gap-3 border border-[color-mix(in_srgb,var(--color-ember)_45%,transparent)] bg-[color-mix(in_srgb,var(--color-ember)_10%,transparent)]">
+                  <span className="min-w-0 flex-1 text-[12.5px] text-[#eef1f8]">The review workbench is the better place to look: a full page, every try with its words, tick and cross marks, zoomed checks.</span>
+                  <button className="forge-btn primary !px-4 !py-2 !text-[12px]" onClick={() => setBench(true)} data-tip="Opens the review on a full page: zoomed checks, every try with its prompt, ticks and crosses, accept per group. This list below still works too.">
+                    Open the review workbench
+                  </button>
+                </div>
+              )}
               {step === "done" && (
                 <p className="mb-2 text-[12.5px] text-[#c4cbe0]">
                   Look at each part. <b>Looks good</b> when you agree; otherwise write what is wrong (“less tongue”, “no smile”) and press{" "}
@@ -1319,6 +1330,18 @@ export default function PuppetMaker({
       {/* In a portal on <body>: the review box above is blurred (backdrop-filter), which makes it the
           anchor for "fixed" children, and it scrolls — so inside it this popup opened above what you
           could see and moved when you scrolled (Ak, 25 Oct 2026). */}
+      {bench && metaRef.current && createPortal(
+        <PuppetWorkbench
+          meta={metaRef.current}
+          io={workshopIO(metaRef.current.slug)}
+          onSave={(m) => {
+            writeMeta({ reports: m.reports, marks: m.marks, acceptedGroups: m.acceptedGroups, status: m.status });
+            setReports(m.reports);
+          }}
+          onClose={() => setBench(false)}
+        />,
+        document.body
+      )}
       {zoom && createPortal(
         <div className="forge-zoom" onClick={() => setZoom(null)} role="dialog" aria-label="Picture, large" data-tip="Click outside the picture, or press Esc, to close.">
           <div onClick={(e) => e.stopPropagation()} className="cursor-default">

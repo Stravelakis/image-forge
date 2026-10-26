@@ -647,3 +647,9 @@ The plan lives in Video Forge: `docs/FORGES-ULTRA-PLAN.md`.
 - Engine ids starting with `local` count as free.
 - The harvest server has no Host check.
 
+
+**Review workbench (#11):** `src/components/PuppetWorkbench.tsx` (screen), `src/lib/puppet/workbench.ts` (tested logic).
+- Opens from Made → puppet card → Review, and from the puppet maker's finished screen. The old card review still works next to it.
+- Marks go in `meta.marks`, accepted groups in `meta.acceptedGroups`; a ✗ or "Make again" sets the old `redo` flag and note, so Remake all marked finds it.
+- See it without the desktop app: `npx vite --port 3317`, open `/?demo=workbench` (dev only, sample owl in `src/demo`).
+- Not done: "use this try" (making an older try the part), and the old options/versions pickers are only in the old review.
