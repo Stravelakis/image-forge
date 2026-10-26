@@ -1111,6 +1111,27 @@ export default function SettingsView({
               </div>
             </div>
 
+            {/* ---- puppet spending limit ---- */}
+            <div className="rounded-xl border border-line bg-panel/50 p-4">
+              <p className="font-display text-[15px] tracking-wide text-cream">Puppet maker — spending limit</p>
+              <p className="mt-1 text-[12px] text-dust">
+                The most one puppet may spend on paid pictures, in dollars. 0 means the puppet maker uses free engines only.
+                A puppet that needs fix rounds can use several times the first estimate, so the limit counts every try.
+              </p>
+              <div className="mt-3 flex items-center gap-3">
+                <span className="font-mono text-[12px] text-dust">$</span>
+                <input data-tip="The most one puppet may spend on paid pictures. 0 = paid engines are switched off for puppets."
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={settings.puppetSpendCapUsd}
+                  onChange={(e) => patchSettings({ puppetSpendCapUsd: Math.max(Number(e.target.value) || 0, 0) })}
+                  className="w-24 rounded-lg border border-line bg-[var(--color-field)] px-2.5 py-1.5 font-mono text-[12px] text-cream"
+                />
+                <span className="font-mono text-[11px] text-dust">{settings.puppetSpendCapUsd > 0 ? "per puppet" : "free engines only"}</span>
+              </div>
+            </div>
+
             <div className="rounded-xl border border-line bg-panel/50 p-4">
               <p className="font-display text-[15px] tracking-wide text-cream">Cooldowns — you choose the wait</p>
               <p className="mt-1 text-[12px] text-dust">hours a row rests after its whole key pool is rate-limited. 24h suits daily quotas; 0 retries at once.</p>

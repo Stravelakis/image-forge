@@ -8,8 +8,12 @@
  * Video Forge placed on the Forge shelf.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Toast } from "../types";
+import { createPortal } from "react-dom";
+import type { ManifestRow, Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
+import { checkPaidRun } from "../lib/paidGuard";
+import { ensureAffordable } from "../lib/paidGate";
+import { capLeftUsd, fixPictures, newPuppetSpend, partPictures, viewBasePictures, wholePuppetPictures } from "../lib/puppet/spend";
 import { formatUsd } from "../lib/providers";
 import { PUPPET_STYLES, VIEW_PARTS, asksForFaceMarks, hardAnimalWhy, faceMarksNote, furNote, isAnimal, keyColourFor, teethFor, lipsFor, partsFor, type PuppetFraming, type PuppetViewId } from "../lib/puppet/recipe";
 import { baseQuestion, makeBaseOptions, makeParts, makeViewBase, pictureBudget, recheckParts, PUPPET_SIZE, type MakerEvent, type PartReport, type Verdict } from "../lib/puppet/maker";
@@ -155,11 +159,60 @@ export default function PuppetMaker({
   const partEng = engines.find((e) => e.id === partId && e.refs) ?? engines.find((e) => e.refs)!;
   const budget = pictureBudget(framing);
   const nParts = partsFor(framing).length;
-  const cost = { best: faceEng.price * 4 + partEng.price * nParts, worst: faceEng.price * 4 + partEng.price * nParts * 3 };
+  // The most this puppet could cost, priced from the model catalogue (pageIO.puppetEngines):
+  // best = every part first time; worst = three tries on every part of every view
+  // AND two "Check and fix" rounds with everything still not green.
+  const viewPartCounts = useMemo(() => views.map((v) => VIEW_PARTS[v].length), [views.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  const extraViewPictures = viewPartCounts.reduce((n, c) => n + 1 + c, 0);
+  const worstPartPictures = wholePuppetPictures({ faces: 0, frontParts: nParts, views: viewPartCounts });
+  const cost = {
+    best: faceEng.price * 4 + partEng.price * (nParts + extraViewPictures),
+    worst: faceEng.price * 4 + partEng.price * worstPartPictures,
+  };
   const checker = judgeName(settings);
-  const faceIO = useMemo(() => ({ generate: pageGenerate(settings, faceEng.id, onExhaust as never), judge: pageJudge(settings) }), [settings, faceEng.id, onExhaust]);
-  const io = useMemo(() => ({ generate: pageGenerate(settings, partEng.id, onExhaust as never), judge: pageJudge(settings), inspect: pageInspect(settings) }), [settings, partEng.id, onExhaust]);
+  // Money approved for this puppet and used so far (lib/puppet/spend.ts). pageGenerate
+  // refuses any paid picture that does not fit inside it.
+  const spendRef = useRef(newPuppetSpend());
+  const faceIO = useMemo(() => ({ generate: pageGenerate(settings, faceEng.id, onExhaust as never, spendRef.current), judge: pageJudge(settings) }), [settings, faceEng.id, onExhaust]);
+  const io = useMemo(() => ({ generate: pageGenerate(settings, partEng.id, onExhaust as never, spendRef.current), judge: pageJudge(settings), inspect: pageInspect(settings) }), [settings, partEng.id, onExhaust]);
   const slug = puppetSlug(name || description.split(/[,.]/)[0] || "puppet");
+
+  /**
+   * Ask before paid pictures, for the worst case of what is about to run.
+   * Free and own-machine engines pass untouched. A paid engine needs the
+   * per-puppet limit in Settings above $0, a price from the catalogue, and a
+   * yes in the same window as every other paid run. What is said yes to is
+   * then the most this puppet may spend; pageGenerate stops at it.
+   */
+  const approveSpend = useCallback(
+    async (items: { engineId: string; pictures: number }[], note: string): Promise<boolean> => {
+      const rows: ManifestRow[] = [];
+      for (const it of items) {
+        if (it.engineId === "local" || it.engineId.startsWith("local:")) continue; // your own machine: free
+        for (let i = 0; i < it.pictures; i++) rows.push({ id: i, prompt: "", aspect_ratio: "1:1", seed: i + 1, model: it.engineId } as ManifestRow);
+      }
+      if (!rows.length) return true;
+      const sp = spendRef.current;
+      const check = checkPaidRun(rows, settings);
+      if (!check.costs) return true;
+      // Already approved earlier for this puppet, and it still fits.
+      if (!check.blocked && check.unknownPriceRows === 0 && sp.spentUsd + check.totalUsd <= sp.approvedUsd + 1e-6) return true;
+      const cap = settings.puppetSpendCapUsd ?? 0;
+      const gate = await ensureAffordable(rows, settings, {
+        capUsd: capLeftUsd(cap, sp),
+        capFor: "this puppet",
+        approveLabel: "Spend it — up to this much",
+        note: `${note} It stops by itself when this amount is used up. Your limit for one puppet: ${cap > 0 ? formatUsd(cap) : "$0 (free engines only)"}.`,
+      });
+      if (!gate.ok) {
+        setProblem(gate.useFree ? "Pick a free engine in the lists above, then try again." : gate.reason);
+        return false;
+      }
+      sp.approvedUsd = sp.spentUsd + gate.check.totalUsd;
+      return true;
+    },
+    [settings]
+  );
 
   const addInspo = useCallback(async (files: FileList | File[]) => {
     const add: Pic[] = [];
@@ -274,6 +327,12 @@ export default function PuppetMaker({
   /* ---------- step 1 → 2: four faces ---------- */
   const makeFaces = useCallback(async () => {
     setProblem("");
+    // "Pick the face automatically" carries straight on into the parts, so the question covers both.
+    const toBuild = partPictures(nParts) + viewPartCounts.reduce((n, c) => n + viewBasePictures() + partPictures(c), 0);
+    if (!(await approveSpend(
+      [{ engineId: faceEng.id, pictures: 4 }, ...(autoPick ? [{ engineId: partEng.id, pictures: toBuild }] : [])],
+      `Worst case: 4 faces${autoPick ? ` and then the whole puppet (${toBuild} pictures: three tries on every part of every view)` : ""}.`
+    ))) return;
     setBusy("Drawing four faces…");
     setStep("pick");
     setBases([]);
@@ -319,7 +378,7 @@ export default function PuppetMaker({
       setBusy("");
       setRound((r) => r + 1);
     }
-  }, [description, style, framing, inspo, round, faceIO, faceEng.refs, settings, autoPick, name, pushLog, look]);
+  }, [description, style, framing, inspo, round, faceIO, faceEng.refs, faceEng.id, partEng.id, settings, autoPick, name, pushLog, look, approveSpend, nParts, viewPartCounts]);
 
   const useOwnPicture = useCallback(async (f: File) => {
     const img = resize(await blobToImg(f), sizeFor(partEng.id), sizeFor(partEng.id));
@@ -338,8 +397,13 @@ export default function PuppetMaker({
     async (only?: string[], picked?: Pic, notes?: Record<string, string>) => {
       const base = picked ?? baseRef.current;
       if (!base) return;
-      await ensureMeta(base.img);
       setProblem("");
+      // Worst case of what is about to run: parts still to make with three tries each,
+      // and (on a full build) every extra view — its own picture and its parts.
+      const missing = only ? only.length : Math.max(0, nParts - Object.keys(parts).length);
+      const pictures = partPictures(missing) + (only ? 0 : viewPartCounts.reduce((n, c) => n + viewBasePictures() + partPictures(c), 0));
+      if (!(await approveSpend([{ engineId: partEng.id, pictures }], `Worst case: ${pictures} pictures, three tries on every part${only ? "" : " of every view"}.`))) return;
+      await ensureMeta(base.img);
       setStep("build");
       setBusy("Making the parts…");
       const ctrl = new AbortController();
@@ -434,7 +498,7 @@ export default function PuppetMaker({
         setBusy("");
       }
     },
-    [framing, io, parts, slug, name, description, style, faceEng, partEng, settings, pushLog, look, views, ensureMeta, persist, writeMeta]
+    [framing, io, parts, slug, name, description, style, faceEng, partEng, settings, pushLog, look, views, ensureMeta, persist, writeMeta, approveSpend, nParts, viewPartCounts]
   );
   const buildRef = useRef(build);
   buildRef.current = build;
@@ -665,6 +729,8 @@ export default function PuppetMaker({
       const b = baseRef.current;
       if (!b || !ids.length) return;
       setProblem("");
+      const pictures = partPictures(ids.length);
+      if (!(await approveSpend([{ engineId: partEng.id, pictures }], `Worst case: ${pictures} pictures, three tries on each of ${ids.length} part${ids.length === 1 ? "" : "s"}.`))) return;
       setBusy(`Making ${ids.length} part${ids.length === 1 ? "" : "s"} again…`);
       const ctrl = new AbortController();
       stopRef.current = ctrl;
@@ -705,7 +771,7 @@ export default function PuppetMaker({
         setBusy("");
       }
     },
-    [framing, look, io, onPartEvent, rigFrom, writeMeta]
+    [framing, look, io, onPartEvent, rigFrom, writeMeta, approveSpend, partEng.id]
   );
 
   /**
@@ -719,6 +785,11 @@ export default function PuppetMaker({
       const inspect = io.inspect;
       const b = baseRef.current;
       if (!inspect || !b) return;
+      // The worst case for the WHOLE job, fix rounds included: every part of every view
+      // not green in every round. Asked once here, so the rounds do not ask again.
+      const allParts = nParts + viewPartCounts.reduce((n, c) => n + c, 0);
+      const pictures = fixPictures(allParts, rounds);
+      if (!(await approveSpend([{ engineId: partEng.id, pictures }], `Worst case: ${pictures} pictures — if every one of ${allParts} parts needed fixing, ${rounds} rounds of three tries each.`))) return;
       const ctrl = new AbortController();
       stopRef.current = ctrl;
       haltRef.current = false;
@@ -761,7 +832,7 @@ export default function PuppetMaker({
         setBusy("");
       }
     },
-    [io.inspect, framing, look, onPartEvent, fixParts, pushLog, name, slug, writeMeta]
+    [io.inspect, framing, look, onPartEvent, fixParts, pushLog, name, slug, writeMeta, approveSpend, partEng.id, nParts, viewPartCounts]
   );
   const remakeMarked = useCallback(async () => {
     const list = (metaRef.current?.reports ?? []).filter((r) => r.redo && !r.approved);
@@ -779,6 +850,8 @@ export default function PuppetMaker({
   /** A side-facing view for a puppet that does not have one yet. */
   const addSideView = async () => {
     if (!base || !rig) return;
+    const pictures = viewBasePictures() + partPictures(VIEW_PARTS.side.length);
+    if (!(await approveSpend([{ engineId: partEng.id, pictures }], `Worst case: ${pictures} pictures, three tries on the side picture and on each of its ${VIEW_PARTS.side.length} parts.`))) return;
     setBusy("Turning them to the side, for dialogue…");
     const ctrl = new AbortController();
     stopRef.current = ctrl;
@@ -980,7 +1053,7 @@ export default function PuppetMaker({
                 </p>
                 {cost.worst > 0 && (
                   <p className="mt-1 text-amber-300">
-                    About {formatUsd(cost.best)}–{formatUsd(cost.worst)} in all.
+                    Paid engine: about {formatUsd(cost.best)} if every part works first time, up to {formatUsd(cost.worst)} at worst — that counts three tries on every part of every view and two rounds of Check and fix. You are asked before anything is spent, and the limit for one puppet is set in Settings (now {settings.puppetSpendCapUsd > 0 ? formatUsd(settings.puppetSpendCapUsd) : "$0, free engines only"}).
                   </p>
                 )}
                 <p className="mt-1 text-[#8f98ab]">
@@ -1239,13 +1312,17 @@ export default function PuppetMaker({
           </div>
         )}
       </div>
-      {zoom && (
+      {/* In a portal on <body>: the review box above is blurred (backdrop-filter), which makes it the
+          anchor for "fixed" children, and it scrolls — so inside it this popup opened above what you
+          could see and moved when you scrolled (Ak, 25 Oct 2026). */}
+      {zoom && createPortal(
         <div className="forge-zoom" onClick={() => setZoom(null)} role="dialog" aria-label="Picture, large" data-tip="Click outside the picture, or press Esc, to close.">
           <div onClick={(e) => e.stopPropagation()} className="cursor-default">
             {zoom === "live" ? rig && <PuppetPreview rig={rig} size={720} /> : <img src={zoom.url} alt="" />}
             <p>{zoom === "live" ? "talking, blinking, nodding, shaking and laughing in turn" : zoom.caption} · Esc or click outside to close</p>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

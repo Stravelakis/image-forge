@@ -83,6 +83,8 @@ Or use environment variables:
 | `OPENAI_API_KEY` / `OPENAI_API_KEYS` | Keys for any OpenAI-compatible endpoint |
 | `OPENAI_BASE_URL` · `OPENAI_IMAGE_MODEL` | Point at Together, OpenRouter, a local server |
 | `FORGE_PROVIDER` | Force `ovh` / `cloudflare` / `pollinations` / `gemini` / `openai` |
+| `FORGE_ALLOW_PAID` | `1` lets rows run on paid engines. Off by default |
+| `FORGE_MAX_USD` | Most the server may spend in total once paid is allowed. Default 1 |
 
 Which engine it uses when a row names none:
 
@@ -102,8 +104,11 @@ A row's own `model` column beats all of it, exactly as in the app.
 
 **Give it a free engine.** An agent in a loop is exactly how you discover what
 your paid balance was. The app's paid confirmation dialog does not exist over
-MCP — there is no human there to confirm — so the server has **no spending
-guard**. Keep paid keys out of its environment unless you are watching.
+MCP — there is no human there to confirm — so paid engines are **refused**
+unless the operator starts the server with `FORGE_ALLOW_PAID=1`. Even then it
+stops at `FORGE_MAX_USD` in total (1 if you set nothing), and a model with no
+known price is refused. Only one generating run goes at a time. Keep paid keys
+out of its environment unless you want it able to spend.
 
 **Cap the batch.** `forge_generate_pending` takes a `limit`. Use it.
 

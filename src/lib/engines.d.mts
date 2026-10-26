@@ -96,6 +96,9 @@ export declare function estimateCost(
   opts?: { batch?: boolean }
 ): { total: number; unknown: number; count: number };
 export declare function formatUsd(n: number): string;
+export declare function isBannedImageModel(engine: string, ...names: unknown[]): boolean;
+export declare function rowUsesBannedModel(row: EngineRow, settings: EngineSettings): boolean;
+export declare const BANNED_MODEL_MESSAGE: string;
 export declare function explainFailure(status: number, body: string, engine: string): string;
 
 export declare class RateLimitError extends Error {

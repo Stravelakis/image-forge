@@ -13,6 +13,8 @@ import {
   priceFor,
   estimateCost,
   formatUsd,
+  rowUsesBannedModel,
+  BANNED_MODEL_MESSAGE,
   MODEL_TRAITS,
   NO_TEXT_NEGATIVE,
   textQualityFor,
@@ -33,6 +35,8 @@ export {
   priceFor,
   estimateCost,
   formatUsd,
+  rowUsesBannedModel,
+  BANNED_MODEL_MESSAGE,
   MODEL_TRAITS,
   NO_TEXT_NEGATIVE,
   textQualityFor,
@@ -90,6 +94,8 @@ export interface ForgeSettings {
   tailorPrompts: boolean;
   /** ask before anything that costs money. On, and it should stay on. */
   confirmPaidRuns: boolean;
+  /** the most one puppet may spend on paid pictures, in dollars. 0 = free engines only. */
+  puppetSpendCapUsd: number;
   /** how many images to draw at once; 1 = one at a time, as it has always been */
   concurrency: number;
   /** batch jobs sent to Google that have not been collected yet */
@@ -218,6 +224,7 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   suppressTextOnWeakModels: true,
   tailorPrompts: false,
   confirmPaidRuns: true,
+  puppetSpendCapUsd: 0,
   concurrency: 1,
   batchJobs: [],
   storageWarnAtPct: 70,
@@ -264,6 +271,7 @@ export function normalizeSettings(s: Partial<ForgeSettings>): ForgeSettings {
     cloudflare: { ...DEFAULT_SETTINGS.cloudflare, ...(s.cloudflare ?? {}) },
     batchJobs: Array.isArray(s.batchJobs) ? s.batchJobs : [],
     concurrency: Math.min(Math.max(Number(s.concurrency) || 1, 1), 8),
+    puppetSpendCapUsd: Math.max(Number(s.puppetSpendCapUsd) || 0, 0),
     scribe: { ...DEFAULT_SETTINGS.scribe, ...(s.scribe ?? {}) },
     coder: { ...DEFAULT_SETTINGS.coder, ...(s.coder ?? {}) },
     vision: { ...DEFAULT_SETTINGS.vision, ...(s.vision ?? {}) },

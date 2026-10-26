@@ -24,6 +24,8 @@ import {
   writeResult,
   finishRequest,
 } from "./link.mjs";
+import { autosaveRoot, readAutosave, writeAutosave } from "./autosave.mjs";
+import { CONTENT_SECURITY_POLICY, hostAllowed, isAppCall, isOwnPage, safeDecodeUri, safeExternalUrl } from "./guards.mjs";
 import { readMode, writeMode, writeHandover, takeHandover, isTrustedInstallerUrl, download, MODES } from "./appctl.mjs";
 import { sharedValues, putShared } from "./forgeKeys.mjs";
 import { openVault, HARVEST_PAGE } from "./vault.mjs";
@@ -253,6 +255,21 @@ async function handleApp(req, res) {
     // (electron/forgeShelf.mjs). Names are checked there, not here.
     const shelf = shelfRoot();
     const seg = route.split(" ")[1].split("/").map(decodeURIComponent); // ["", "app", "orders", id, file]
+    // THE SAFETY COPY (electron/autosave.mjs): every picture, the moment it arrives, so closing the app loses nothing.
+    if (seg[2] === "autosave" && seg.length === 5) {
+      const root = autosaveRoot(userData);
+      if (req.method === "PUT") {
+        const r = writeAutosave(root, seg[3], seg[4], await readBody(req, 41 * 1024 * 1024));
+        return json(res, r.ok ? 200 : 400, r);
+      }
+      if (req.method === "GET") {
+        const bytes = readAutosave(root, seg[3], seg[4]);
+        if (!bytes) return json(res, 404, { error: "no such picture" });
+        const ext = path.extname(seg[4]).toLowerCase();
+        res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
+        return res.end(bytes);
+      }
+    }
     if (route === "GET /app/orders") return json(res, 200, { orders: openOrders(shelf) });
     if (req.method === "GET" && seg[2] === "orders" && seg.length === 5) {
       const bytes = orderPicture(shelf, seg[3], seg[4]);
@@ -433,11 +450,20 @@ function proxyLocal(req, res) {
 function startServer(distDir) {
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
+      // Only requests addressed to 127.0.0.1:<port> or localhost:<port> are ours. A web page that has
+      // pointed its own name at this computer (DNS rebinding) sends its own Host, and gets nothing.
+      if (!hostAllowed(req.headers.host, server.address()?.port)) {
+        res.writeHead(403, { "Content-Type": "text/plain" });
+        res.end("forbidden");
+        return;
+      }
       // Cloudflare and NVIDIA both refuse browser callers. Forward those
       // requests from here. Mirrors the proxies in vite.config.js used
       // during `npm run dev`.
       const proxied = Object.keys(PROXIED).find((p) => (req.url || "").startsWith(p + "/"));
       if (proxied) {
+        // Like every other call that does something: only the app's own page, which always sends this header.
+        if (!isAppCall(req)) return json(res, 403, { error: "forbidden" });
         proxyUpstream(proxied, req, res);
         return;
       }
@@ -459,7 +485,13 @@ function startServer(distDir) {
         return;
       }
 
-      let urlPath = decodeURIComponent((req.url || "/").split("?")[0]);
+      // A bad escape such as "/%" used to throw here and pop an error box in the main process.
+      let urlPath = safeDecodeUri((req.url || "/").split("?")[0]);
+      if (urlPath === null) {
+        res.writeHead(400, { "Content-Type": "text/plain" });
+        res.end("bad request");
+        return;
+      }
       if (urlPath === "/") urlPath = "/index.html";
       let filePath = path.normalize(path.join(distDir, urlPath));
       // keep requests inside dist. The separator matters: without it a
@@ -473,7 +505,11 @@ function startServer(distDir) {
         filePath = path.join(distDir, "index.html"); // SPA fallback
       }
       const ext = path.extname(filePath).toLowerCase();
-      res.writeHead(200, { "Content-Type": MIME[ext] || "application/octet-stream" });
+      res.writeHead(200, {
+        "Content-Type": MIME[ext] || "application/octet-stream",
+        "Content-Security-Policy": CONTENT_SECURITY_POLICY,
+        "X-Content-Type-Options": "nosniff",
+      });
       fs.createReadStream(filePath).pipe(res);
     });
     /*
@@ -816,14 +852,32 @@ if (!app.requestSingleInstanceLock()) {
 
     // external links open in the real browser, Windows deep-links open in the OS
     mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-      if (url.startsWith("http") || url.startsWith("ms-settings:")) shell.openExternal(url);
+      const ok = safeExternalUrl(url);
+      if (ok) shell.openExternal(ok);
       return { action: "deny" };
     });
     mainWindow.webContents.on("will-navigate", (e, url) => {
-      if (!url.startsWith(`http://127.0.0.1:${port}`)) {
+      if (!isOwnPage(url, port)) {
         e.preventDefault();
-        shell.openExternal(url);
+        const ok = safeExternalUrl(url);
+        if (ok) shell.openExternal(ok);
       }
+    });
+
+    // The page asks to stay when pictures exist that were saved nowhere (App.tsx, beforeunload).
+    // Electron shows nothing by itself and would simply refuse to close, so ask here.
+    mainWindow.webContents.on("will-prevent-unload", (e) => {
+      const choice = dialog.showMessageBoxSync(mainWindow, {
+        type: "warning",
+        buttons: ["Stay and keep working", "Close anyway"],
+        defaultId: 0,
+        cancelId: 0,
+        title: "Pictures not saved",
+        message: "Some pictures were not saved anywhere yet.",
+        detail: "Link an output folder (or use Save all) first, or they will be lost.",
+      });
+      if (choice === 1) e.preventDefault(); // preventDefault here means: go ahead and leave
+      else vaultFlushed = false; // staying: the next close must flush the vault again
     });
 
     mainWindow.on("closed", () => {

@@ -116,7 +116,7 @@ PAID (never run without asking first):
 - nano-banana-2-lite  $0.034/image (delayed $0.017)
 - nano-banana-2       $0.067 (delayed $0.034)
 - nano-banana         $0.039 (delayed $0.019) — Google switches it off 2 Oct 2026
-- gemini-3-pro-image  $0.134 (delayed $0.067)
+- gemini-3-pro-image  $0.134 (delayed $0.067) — switched off: Pro image models are refused
 - dall-e-3 / gpt-image-1 on any OpenAI-compatible endpoint, about $0.04
 Google, Cloudflare and OpenAI prices checked 2 September 2026.
 
@@ -142,8 +142,8 @@ Free engines are never gated. Before any paid run a dialog shows how many
 pictures will be billed, the model, the price each, the total, which credit
 pays, and how many rows in the same queue are free — with free engines to
 switch to. Free Google keys are always tried before paid ones. When Google's
-half price is available, a "New €/2 delayed queue" button appears: pictures
-cost half and you collect them later.
+half price is available, a "Send to Google at half price (paid)" button appears: it asks first,
+sends only the rows that use a Google model, and you collect them later.
 
 THE GOOGLE CREDIT TRAP (very common)
 Linking a Google Cloud project to billing marks it "paid tier", which bills

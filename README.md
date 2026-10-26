@@ -320,7 +320,7 @@ applied. A writing job with no key takes a provider that has one, and a busy
 **Wizards** — four makers: *Make pictures* (three steps), *Make a puppet*,
 *Animate a character* (sprite sheets, turnarounds, expressions, mouth shapes)
 and *Prompt factory* (a big prompt list, copied for Google Sheets or saved as
-Excel or CSV). Uploading to WordPress lives under **Download**.
+CSV). Uploading to WordPress lives under **Download**.
 
 **Gallery** — *Everything made*, *Styles* (36 looks in six families, with notes
 on which engines can do them; star the ones you use) and *Templates* (picture
@@ -364,7 +364,7 @@ id,filename,prompt,category,aspect_ratio,seed,model,status
 ```
 
 `filename` is the only required column. Everything else has a sensible
-default. Import forgives missing columns; export is CSV or XLSX.
+default. Import forgives missing columns; export is CSV (also a copy made for Excel).
 
 Any tool that can read and write this CSV is a first-class citizen of the
 project. That is the whole design. [Every column, explained](docs/manifest.md).

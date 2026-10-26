@@ -381,8 +381,8 @@ export default function TopMenu({
                 },
                 {
                   id: "xlsx",
-                  title: "The manifest, as a spreadsheet",
-                  hint: "for handing to someone who wants Excel",
+                  title: "The manifest, for Excel",
+                  hint: "a CSV file Excel opens straight away",
                   icon: <IDownload size={15} />,
                   onPick: onExportXlsx,
                 },

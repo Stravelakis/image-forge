@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ManifestRow, Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { estimateCost, formatUsd, generateReal, resolveRoute } from "../lib/providers";
+import { ensureAffordable } from "../lib/paidGate";
 import {
   SHEET_DEFS,
   cellPosition,
@@ -118,6 +119,15 @@ export default function SheetMaker({
 
   const run = useCallback(async () => {
     stopRef.current = false;
+    // Every picture of the sheet is a real generation: ask before spending, like the Forge button does.
+    const gate = await ensureAffordable(
+      Array.from({ length: shots }, (_, i) => makeRow("sheet", i + 1)),
+      settings
+    );
+    if (!gate.ok) {
+      pushToast("info", gate.reason);
+      return;
+    }
     setBusy(true);
     setFrames([]);
     setSheetUrl("");
@@ -176,7 +186,7 @@ export default function SheetMaker({
       setBusy(false);
       setProgress("");
     }
-  }, [character, def, method, onExhaust, pushLog, pushToast, settings]);
+  }, [character, def, method, onExhaust, pushLog, pushToast, settings, shots]);
 
   /** Lay every finished frame onto one picture. */
   const assemble = useCallback(async () => {

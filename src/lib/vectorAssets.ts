@@ -79,10 +79,79 @@ const SYSTEMS: Record<VectorKind, string> = {
 
 /* ---------------- making SVG safe ---------------- */
 
-/** Anything that can execute, phone home, or escape the picture. */
-const BANNED_TAGS = ["script", "foreignobject", "iframe", "object", "embed", "audio", "video", "animate", "set", "handler"];
-const BANNED_ATTR_PREFIX = "on"; // onclick, onload, onmouseover…
-const URL_ATTRS = ["href", "xlink:href", "src", "from", "to", "values"];
+/*
+ * An ALLOW-LIST, not a block-list.
+ *
+ * The first cleaner worked on text and removed a list of bad tags. It missed
+ * `<svg><img/src=x/onerror=alert(1)></svg>` (an HTML parser lets <img> out of
+ * the svg, and its onerror runs in the app's own page) and `<style>@import
+ * url(…)</style>`. A block-list can only ever be as good as the attacker's
+ * imagination is bad.
+ *
+ * This one parses the markup the way the browser will, walks the result, and
+ * writes out ONLY the shapes and presentation attributes named below. Anything
+ * else — unknown tags, every on… attribute, <style>, <image>, <a>, <foreignObject>,
+ * links that leave the file — is dropped, and what was dropped is reported.
+ * The output is built from scratch, never by re-serialising the parsed tree,
+ * so there is nothing for a second parse to disagree about.
+ */
+
+/** Elements that may stay. The key is the lower-case name, the value how to write it. */
+const ALLOWED_TAGS: Record<string, string> = Object.fromEntries(
+  [
+    "svg", "g", "defs", "symbol", "use", "path", "rect", "circle", "ellipse", "line", "polyline", "polygon",
+    "text", "tspan", "textPath", "title", "desc",
+    "linearGradient", "radialGradient", "stop", "clipPath", "mask", "pattern", "marker",
+    "filter", "feGaussianBlur", "feOffset", "feColorMatrix", "feComposite", "feFlood", "feMerge", "feMergeNode",
+    "feDropShadow", "feBlend",
+    // a spin or a pulse is the point of an animated icon; it may only ever animate `transform` (checked below)
+    "animateTransform",
+  ].map((t) => [t.toLowerCase(), t])
+);
+
+/** Only these hold text. Everywhere else a text node is dropped. */
+const TEXT_TAGS = new Set(["text", "tspan", "textpath", "title", "desc"]);
+
+/** Attributes that may stay, on any allowed element. Lower-case key, written form as value. */
+const ALLOWED_ATTRS: Record<string, string> = Object.fromEntries(
+  [
+    // geometry
+    "x", "y", "x1", "x2", "y1", "y2", "cx", "cy", "r", "rx", "ry", "fx", "fy", "width", "height", "d", "points",
+    "transform", "viewBox", "preserveAspectRatio", "dx", "dy", "rotate", "textLength", "lengthAdjust", "startOffset",
+    // painting
+    "fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-dasharray", "stroke-dashoffset",
+    "stroke-miterlimit", "stroke-opacity", "fill-opacity", "fill-rule", "clip-rule", "opacity", "color",
+    "stop-color", "stop-opacity", "offset", "flood-color", "flood-opacity", "color-interpolation-filters",
+    "clip-path", "mask", "filter", "marker-start", "marker-mid", "marker-end", "paint-order", "vector-effect",
+    "shape-rendering", "visibility", "display",
+    // text
+    "font-family", "font-size", "font-weight", "font-style", "text-anchor", "dominant-baseline", "letter-spacing",
+    "text-decoration",
+    // gradients, patterns, clips, markers, filters
+    "gradientUnits", "gradientTransform", "spreadMethod", "patternUnits", "patternContentUnits", "patternTransform",
+    "clipPathUnits", "maskUnits", "maskContentUnits", "markerWidth", "markerHeight", "markerUnits", "refX", "refY",
+    "orient", "filterUnits", "primitiveUnits", "stdDeviation", "in", "in2", "result", "values", "type", "mode",
+    "operator", "k1", "k2", "k3", "k4",
+    // animateTransform
+    "attributeName", "from", "to", "dur", "repeatCount", "begin", "end", "additive", "calcMode", "keyTimes",
+    "keySplines", "accumulate", "repeatDur", "restart",
+    // naming and accessibility
+    "id", "version", "role", "aria-label", "aria-hidden", "aria-labelledby", "aria-describedby",
+    "focusable",
+  ].map((a) => [a.toLowerCase(), a])
+);
+
+/** The only elements that may point at something else, and only inside this file (#id). */
+const REF_TAGS = new Set(["use", "lineargradient", "radialgradient", "pattern", "textpath"]);
+
+/** Style declarations that are plain painting. Anything else in a style attribute is dropped. */
+const STYLE_PROPS = new Set([
+  "fill", "stroke", "stroke-width", "stroke-linecap", "stroke-linejoin", "stroke-dasharray", "stroke-dashoffset",
+  "stroke-miterlimit", "stroke-opacity", "fill-opacity", "fill-rule", "clip-rule", "opacity", "color",
+  "stop-color", "stop-opacity", "flood-color", "flood-opacity", "font-family", "font-size", "font-weight",
+  "font-style", "text-anchor", "dominant-baseline", "letter-spacing", "paint-order", "display", "visibility",
+  "mix-blend-mode", "transform", "transform-origin", "transform-box",
+]);
 
 export interface SanitiseResult {
   svg: string;
@@ -91,15 +160,65 @@ export interface SanitiseResult {
   ok: boolean;
 }
 
+const esc = (s: string): string =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+
+/** Does a value try to run something or fetch something from outside the file? */
+function unsafeValue(v: string): string | null {
+  const t = v.replace(/[\u0000- \u007f]+/g, "").toLowerCase(); // "java\nscript:" is still javascript:
+  if (/javascript:|vbscript:/.test(t)) return "javascript: urls";
+  if (/data:|expression\(|@import|-moz-binding|behavior:/.test(t)) return "external references";
+  // url(...) is fine only when it points at an #id inside this file
+  for (const m of t.matchAll(/url\(([^)]*)\)/g)) {
+    const target = m[1].replace(/^['"]|['"]$/g, "");
+    if (!target.startsWith("#")) return "external references";
+  }
+  return null;
+}
+
+/** A style attribute with only the plain painting declarations left. */
+function cleanStyle(v: string, note: (what: string) => void): string {
+  const keep: string[] = [];
+  for (const decl of v.split(";")) {
+    const i = decl.indexOf(":");
+    if (i < 0) continue;
+    const prop = decl.slice(0, i).trim().toLowerCase();
+    const val = decl.slice(i + 1).trim();
+    const bad = unsafeValue(val);
+    if (bad) note(bad);
+    else if (STYLE_PROPS.has(prop)) keep.push(`${prop}:${val}`);
+  }
+  return keep.join(";");
+}
+
+/** The markup as a DOM, the way the browser will read it. Null when this environment has no parser. */
+function parseMarkup(markup: string): Element | null {
+  if (typeof DOMParser === "undefined") return null;
+  const parser = new DOMParser();
+  // Strict XML first: it keeps well-formed SVG exactly as written.
+  try {
+    const xml = parser.parseFromString(markup, "image/svg+xml");
+    const root = xml.documentElement;
+    if (root && root.localName === "svg" && !xml.getElementsByTagName("parsererror").length) return root;
+  } catch {
+    /* fall through to the forgiving parser */
+  }
+  // Models often write slightly broken SVG (a bare &, a missing quote). The HTML
+  // parser copes; what it does with it is exactly what a browser would do.
+  const html = parser.parseFromString(markup, "text/html");
+  return html.querySelector("svg");
+}
+
 /**
- * Strip everything dangerous from model-written SVG.
- *
- * Deliberately blunt: it works on the text, so it cannot be defeated by a DOM
- * parser quirk, and it removes rather than escapes. A slightly broken icon is a
- * far better outcome than running someone else's script.
+ * Keep only what is on the allow-list of model-written SVG, and say what went.
+ * Needs a DOM parser (every browser and Electron page has one); without one it
+ * keeps nothing, which is the safe failure.
  */
 export function sanitiseSvg(raw: string): SanitiseResult {
   const removed: string[] = [];
+  const note = (what: string) => {
+    if (!removed.includes(what)) removed.push(what);
+  };
   let svg = String(raw);
 
   // markdown fences, if the model added them despite being told not to
@@ -111,44 +230,78 @@ export function sanitiseSvg(raw: string): SanitiseResult {
   if (start < 0 || end < 0) return { svg: "", removed: ["no <svg> element found"], ok: false };
   svg = svg.slice(start, end + 6);
 
-  for (const tag of BANNED_TAGS) {
-    const paired = new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}\\s*>`, "gi");
-    const single = new RegExp(`<${tag}\\b[^>]*\\/?>`, "gi");
-    if (paired.test(svg) || single.test(svg)) removed.push(`<${tag}>`);
-    svg = svg.replace(paired, "").replace(single, "");
+  const root = parseMarkup(svg);
+  if (!root) return { svg: "", removed: ["could not read the SVG safely"], ok: false };
+
+  // Tags the text had in it that are not on the list, so the report is honest even for
+  // ones an HTML parser would have thrown out of the picture (the <img> trick).
+  for (const m of svg.matchAll(/<\s*([a-z][a-z0-9:-]*)/gi)) {
+    const tag = m[1].toLowerCase();
+    if (!ALLOWED_TAGS[tag] && tag !== "a") note(`<${tag}>`);
   }
 
-  // event handlers: on…="…"
-  svg = svg.replace(/\son[a-z]+\s*=\s*(".*?"|'.*?'|[^\s>]+)/gi, () => {
-    if (!removed.includes("event handlers")) removed.push("event handlers");
-    return "";
-  });
-
-  // anything that reaches outside — but keep harmless in-document #fragments
-  for (const attr of URL_ATTRS) {
-    const re = new RegExp(`\\s${attr.replace(":", "\\:")}\\s*=\\s*("([^"]*)"|'([^']*)')`, "gi");
-    svg = svg.replace(re, (whole, _q, dq, sq) => {
-      const value = (dq ?? sq ?? "").trim();
-      if (value.startsWith("#")) return whole;
-      if (!removed.includes("external references")) removed.push("external references");
+  const walk = (el: Element, isRoot = false): string => {
+    const lower = el.localName.toLowerCase();
+    // <a> only wraps shapes: keep what is inside, drop the link.
+    if (lower === "a") {
+      note("links");
+      return Array.from(el.childNodes).map((n) => (n.nodeType === 1 ? walk(n as Element) : "")).join("");
+    }
+    const tag = ALLOWED_TAGS[lower];
+    if (!tag) {
+      // dropped, with everything inside it (the tag itself is reported above)
+      if (el.hasAttribute("href") || el.hasAttribute("xlink:href") || el.hasAttribute("src")) note("external references");
       return "";
-    });
-  }
+    }
 
-  // javascript: and data: urls anywhere left in style attributes
-  if (/javascript\s*:/i.test(svg)) {
-    removed.push("javascript: urls");
-    svg = svg.replace(/javascript\s*:/gi, "");
-  }
+    const attrs: string[] = [];
+    for (const a of Array.from(el.attributes)) {
+      const name = a.name.toLowerCase();
+      const value = a.value;
+      if (name.startsWith("on")) {
+        note("event handlers");
+        continue;
+      }
+      if (name === "xmlns") continue; // written once on the root, below, always the right one
+      if (name === "href" || name === "xlink:href") {
+        // inside-the-file references only, and only where they mean something
+        if (REF_TAGS.has(lower) && value.trim().startsWith("#")) attrs.push(` ${name}="${esc(value.trim())}"`);
+        else note("external references");
+        continue;
+      }
+      if (name === "style") {
+        const s = cleanStyle(value, note);
+        if (s) attrs.push(` style="${esc(s)}"`);
+        continue;
+      }
+      if (name.startsWith("xmlns:") || name === "xml:space") continue; // other namespaces carry nothing we draw
+      const written = ALLOWED_ATTRS[name];
+      if (!written) continue; // unknown attribute: dropped quietly
+      const bad = unsafeValue(value);
+      if (bad) {
+        note(bad);
+        continue;
+      }
+      // an animation may only ever move the picture, never rewrite another attribute
+      if (lower === "animatetransform" && name === "attributename" && value.trim().toLowerCase() !== "transform") {
+        note("animation of other attributes");
+        return "";
+      }
+      attrs.push(` ${written}="${esc(value)}"`);
+    }
+    if (lower === "use" && !attrs.some((a) => a.startsWith(" href=") || a.startsWith(" xlink:href="))) return ""; // a <use> with nothing local to use
 
-  // An SVG shown in an <img>, or saved as a .svg file, is its own document and
-  // MUST declare the namespace. Models routinely leave it out — the markup then
-  // looks perfect and renders as a broken-image icon everywhere. Add it back.
-  if (!/\sxmlns\s*=/i.test(svg)) {
-    svg = svg.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg"');
-  }
+    let inner = "";
+    for (const n of Array.from(el.childNodes)) {
+      if (n.nodeType === 1) inner += walk(n as Element);
+      else if ((n.nodeType === 3 || n.nodeType === 4) && TEXT_TAGS.has(lower)) inner += esc(n.textContent ?? "");
+    }
+    const open = isRoot ? `<${tag} xmlns="http://www.w3.org/2000/svg"${attrs.join("")}` : `<${tag}${attrs.join("")}`;
+    return inner ? `${open}>${inner}</${tag}>` : `${open}/>`;
+  };
 
-  return { svg: svg.trim(), removed, ok: svg.includes("<svg") };
+  const out = walk(root, true).trim();
+  return { svg: out, removed, ok: out.startsWith("<svg") };
 }
 
 /** Does this look like a usable icon? */
