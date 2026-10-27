@@ -496,7 +496,7 @@ const retiredRows = (rows) =>
 /* ---------------- MCP server ---------------- */
 
 const server = new Server(
-  { name: "image-forge", version: "1.1.0" },
+  { name: "image-forge", version: "1.1.1" },
   { capabilities: { tools: {} } }
 );
 
