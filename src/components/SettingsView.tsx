@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { CanvaCard } from "./CanvaCard";
+import { useRef, useState, useEffect } from "react";
 import DesktopModeCard from "./DesktopModeCard";
 import type { ManifestRow, Toast } from "../types";
 import { ACCENTS, STYLES } from "../types";
@@ -31,6 +32,7 @@ import {
 import type { FolderState } from "./SettingsDrawer";
 import { BorderGlow } from "./effects";
 import { Btn, IAlert, ICheck, IDownload, IFolder, IRetry, IUpload, ISparkle, ITrash, IX } from "./ui";
+import { plainError } from "../lib/plainError";
 
 export type SettingsSection =
   | "engines"
@@ -40,18 +42,20 @@ export type SettingsSection =
   | "filenames"
   | "folders"
   | "wp"
+  | "canva"
   | "appearance"
   | "advanced";
 
 const SECTIONS: { id: SettingsSection; label: string; hint: string }[] = [
   { id: "engines", label: "Image engines", hint: "who paints" },
-  { id: "styles", label: "Image styles", hint: "the look" },
+  { id: "styles", label: "Image styles", hint: "how pictures are drawn" },
   { id: "text", label: "Text engines", hint: "who writes" },
   { id: "prompts", label: "Text prompts", hint: "how they write" },
   { id: "filenames", label: "Filenames", hint: "the rules" },
   { id: "folders", label: "Folders", hint: "where files go" },
   { id: "wp", label: "WP connections", hint: "the hand-off" },
-  { id: "appearance", label: "Appearance", hint: "the vibe" },
+  { id: "canva", label: "Canva", hint: "send pictures, fill templates" },
+  { id: "appearance", label: "Language", hint: "the app's own words" },
   { id: "advanced", label: "Advanced", hint: "care & updates" },
 ];
 
@@ -68,17 +72,38 @@ function TestButton({
   target,
   settings,
   label = "Test it",
+  watch,
+  "data-tip": tip,
 }: {
   target: TestTarget;
   settings: ForgeSettings;
   label?: string;
+  /** the key or token it checks — a pasted one (a jump from short to long) is checked straight away */
+  watch?: string;
+  /** the hover help for the button */
+  "data-tip"?: string;
 }) {
   const [busy, setBusy] = useState(false);
   const [res, setRes] = useState<TestResult | null>(null);
+  const last = useRef(watch ?? "");
+  useEffect(() => {
+    const before = last.current;
+    last.current = watch ?? "";
+    if (watch === undefined || watch.length < 12 || watch.length - before.length < 12) return;
+    const t = window.setTimeout(async () => {
+      setBusy(true);
+      setRes(null);
+      setRes(await testConnection(target, settings));
+      setBusy(false);
+    }, 500);
+    return () => window.clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [watch]);
   return (
     <div className="mt-2">
       <div className="flex flex-wrap items-center gap-2">
         <Btn
+          data-tip={tip ?? "Checks that this connection works."}
           onClick={async () => {
             setBusy(true);
             setRes(null);
@@ -92,13 +117,48 @@ function TestButton({
         {res && (
           <span className={`text-[11.5px] ${res.ok ? "text-moss" : "text-blood"}`}>
             {res.ok ? "✓ " : "✗ "}
-            {res.message}
+            {res.ok ? res.message : plainError(res.message, "Check what you pasted, then test again.")}
           </span>
         )}
-        {res?.ok && res.free && <span className="font-mono text-[9.5px] text-dust">cost nothing</span>}
+        {res?.ok && res.free && <span data-tip="This test used nothing that costs money." className="font-mono text-[9.5px] text-dust">cost nothing</span>}
       </div>
-      {res?.detail && <p className="mt-1 text-[11px] leading-snug text-dust">{res.detail}</p>}
+      {res?.detail && <p data-tip="More detail about the test result." className="mt-1 text-[11px] leading-snug text-dust">{res.detail}</p>}
     </div>
+  );
+}
+
+/**
+ * One key, checked on its own (Ak, 13 Oct 2026: "a test button for the api
+ * keys when they are pasted in"). The pool is narrowed to just this key, so
+ * the answer is about this key and not the first one.
+ */
+function KeyCheck({ target, settings, pool, keyId, auto }: { target: TestTarget; settings: ForgeSettings; pool: "geminiKeys" | "geminiPaidKeys" | "openaiKeys"; keyId: string; auto: number }) {
+  const [busy, setBusy] = useState(false);
+  const [res, setRes] = useState<TestResult | null>(null);
+  const run = async () => {
+    const only = settings[pool].filter((k) => k.id === keyId);
+    if (!only.length || !only[0].key.trim()) return;
+    setBusy(true);
+    setRes(null);
+    setRes(await testConnection(target, { ...settings, [pool]: only.map((k) => ({ ...k, exhaustedUntil: 0 })) }));
+    setBusy(false);
+  };
+  // Pasted in: check straight away.
+  useEffect(() => {
+    if (auto) void run();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto]);
+  return (
+    <span className="flex shrink-0 items-center gap-1.5">
+      <Btn data-tip="Checks that this one key works." onClick={() => void run()} disabled={busy} className="!px-2.5 !py-1 !text-[11.5px]">
+        {busy ? "…" : "Test"}
+      </Btn>
+      {res && (
+        <span className={`max-w-[14rem] truncate text-[11px] ${res.ok ? "text-moss" : "text-blood"}`} title={`${res.ok ? res.message : plainError(res.message, "Check what you pasted, then test again.")}${res.detail ? ` — ${res.detail}` : ""}`}>
+          {res.ok ? "✓" : "✗"} {res.message}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -126,23 +186,29 @@ function KeyPoolEditor({
   const [poolBusy, setPoolBusy] = useState("");
   const [poolNote, setPoolNote] = useState("");
   const [poolResults, setPoolResults] = useState<{ id: string; label: string; result: TestResult }[]>([]);
+  // A paste bumps this key's counter, which KeyCheck answers by testing.
+  const [pasted, setPasted] = useState<Record<string, number>>({});
+  const poolName: "geminiKeys" | "geminiPaidKeys" | "openaiKeys" | null =
+    test === "gemini-free" ? "geminiKeys" : test === "gemini-paid" ? "geminiPaidKeys" : test === "openai" ? "openaiKeys" : null;
   return (
     <div className="rounded-xl border border-line bg-panel/50 p-4">
-      <p className="font-display text-[15px] tracking-wide text-cream">{title}</p>
-      <p className="mt-1 text-[12px] text-dust">{hint}</p>
+      <p data-tip="The name of this group of keys." className="font-display text-[15px] tracking-wide text-cream">{title}</p>
+      <p data-tip="What this group of keys is for." className="mt-1 text-[12px] text-dust">{hint}</p>
       <div className="mt-3 space-y-2">
         {pool.map((k, i) => {
           const benched = k.exhaustedUntil > Date.now();
           return (
             <div key={k.id} className="flex items-center gap-2">
               <span className={`h-2 w-2 shrink-0 rounded-full ${benched ? "bg-blood" : k.key.trim() ? "bg-moss" : "bg-dust/40"}`} />
-              <input
+              <input data-tip="Paste one key here. It stays on this computer and the forge uses it to ask for pictures."
                 value={k.key}
                 type="password"
                 placeholder="paste key…"
                 onChange={(e) => onChange(pool.map((x) => (x.id === k.id ? { ...x, key: e.target.value } : x)))}
+                onPaste={() => window.setTimeout(() => setPasted((p) => ({ ...p, [k.id]: (p[k.id] ?? 0) + 1 })), 400)}
                 className={`${field} font-mono !text-[12px]`}
               />
+              {test && settings && poolName && k.key.trim() && <KeyCheck target={test} settings={settings} pool={poolName} keyId={k.id} auto={pasted[k.id] ?? 0} />}
               {benched ? (
                 <span className="shrink-0 rounded-md border border-blood/40 bg-blood/10 px-2 py-1 font-mono text-[9.5px] whitespace-nowrap text-blood" title="click to un-bench early">
                   resting {formatCountdown(k.exhaustedUntil)}
@@ -151,7 +217,7 @@ function KeyPoolEditor({
                   </button>
                 </span>
               ) : (
-                <button
+                <button data-tip="Takes this key out of the list. The last key can't be removed."
                   onClick={() => onChange(pool.filter((x) => x.id !== k.id))}
                   disabled={pool.length === 1}
                   className="btn-press shrink-0 rounded-md p-1.5 text-dust hover:bg-blood/15 hover:text-blood disabled:opacity-30"
@@ -165,8 +231,8 @@ function KeyPoolEditor({
         })}
       </div>
       <div className="mt-3 flex gap-2">
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} type="password" placeholder="add another key — more keys, more daily allowance" className={`${field} font-mono !text-[12px]`} />
-        <Btn
+        <input data-tip="Paste another key here, then press Add key. More keys means more pictures a day, because the forge moves to the next key when one runs out." value={draft} onChange={(e) => setDraft(e.target.value)} type="password" placeholder="add another key — more keys, more daily allowance" className={`${field} font-mono !text-[12px]`} />
+        <Btn data-tip="Puts the key you pasted into the list so the forge can use it."
           variant="primary"
           disabled={!draft.trim()}
           onClick={() => {
@@ -180,7 +246,7 @@ function KeyPoolEditor({
       </div>
       {credits && (
         <div className="mt-3 space-y-2 rounded-lg border border-line bg-[var(--color-field)] p-3">
-          <p className="font-mono text-[10px] tracking-[0.2em] text-dust uppercase">when does each credit run out?</p>
+          <p data-tip="You can type the date each free credit ends, so the forge can warn you before it does." className="font-mono text-[10px] tracking-[0.2em] text-dust uppercase">when does each credit run out?</p>
           {pool
             .filter((k) => k.key.trim())
             .map((k, i) => {
@@ -188,13 +254,13 @@ function KeyPoolEditor({
               return (
                 <div key={k.id} className="flex flex-wrap items-center gap-2">
                   <span className="w-14 shrink-0 font-mono text-[10px] text-dust">#{i + 1}</span>
-                  <input
+                  <input data-tip="A short note so you remember what this credit is, like Free trial."
                     value={k.creditLabel ?? ""}
                     onChange={(e) => onChange(pool.map((x) => (x.id === k.id ? { ...x, creditLabel: e.target.value } : x)))}
                     placeholder="what is this credit?"
                     className={`${field} !w-auto min-w-[9rem] flex-1 !py-1.5 !text-[12px]`}
                   />
-                  <input
+                  <input data-tip="The day this credit stops working. The forge warns you as it gets close."
                     type="date"
                     value={k.creditEndsOn ?? ""}
                     onChange={(e) => onChange(pool.map((x) => (x.id === k.id ? { ...x, creditEndsOn: e.target.value } : x)))}
@@ -212,14 +278,14 @@ function KeyPoolEditor({
                 </div>
               );
             })}
-          <p className="text-[11px] leading-snug text-dust">{WHY_MANUAL_DATE}</p>
+          <p data-tip="Why you have to type the credit end date yourself." className="text-[11px] leading-snug text-dust">{WHY_MANUAL_DATE}</p>
         </div>
       )}
       {test && settings && (
         <div className="mt-2 flex flex-wrap items-start gap-2">
-          <TestButton target={test} settings={settings} label="Check the first key" />
+          <TestButton data-tip="Checks that the first key in the list works." target={test} settings={settings} label="Check the first key" />
           {(test === "gemini-free" || test === "gemini-paid" || test === "openai") && pool.filter((k) => k.key.trim()).length > 1 && (
-            <Btn
+            <Btn data-tip="Tries every key in the list one by one and tells you which ones work."
               onClick={async () => {
                 setPoolBusy("checking…");
                 setPoolResults([]);
@@ -248,7 +314,7 @@ function KeyPoolEditor({
       )}
 
       {poolNote && (
-        <p className="mt-2 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[11.5px] text-parch">{poolNote}</p>
+        <p data-tip="The result of testing your keys." className="mt-2 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[11.5px] text-parch">{poolNote}</p>
       )}
       {poolResults.length > 0 && (
         <div className="mt-2 space-y-1">
@@ -256,14 +322,14 @@ function KeyPoolEditor({
             <div key={r.id} className="flex items-start gap-2 text-[11.5px]">
               <span className="w-10 shrink-0 font-mono text-[10px] text-dust">#{i + 1}</span>
               <span className={r.result.ok ? "text-moss" : "text-blood"}>
-                {r.result.ok ? "✓" : "✗"} {r.result.message}
+                {r.result.ok ? "✓" : "✗"} {r.result.ok ? r.result.message : plainError(r.result.message, "Check that key, then test again.")}
               </span>
             </div>
           ))}
         </div>
       )}
       <p className="mt-2 text-[11px] text-dust">
-        On a 429 the current key rests and the next one retries the same row immediately. A row parks only when every key is resting.
+        When a painter says "too many requests", the current key rests and the next one retries the same row immediately. A picture waits only when every key is resting.
       </p>
     </div>
   );
@@ -303,7 +369,7 @@ function HealthCheck({
 
   return (
     <div className="rounded-xl border border-line bg-panel/50 p-4">
-      <p className="font-display text-[15px] tracking-wide text-cream">Check the forge over</p>
+      <p data-tip="A health check: Image Forge looks for problems in your settings and your list and says how to fix them." className="font-display text-[15px] tracking-wide text-cream">Check the forge over</p>
       <p className="mt-1 text-[12.5px] leading-relaxed text-dust">
         Looks for the things that go quietly wrong and cost you later: the same key pasted into two slots, an engine you
         paused and forgot, rows aimed at a model the provider switched off, no free engine to fall back on. It only
@@ -311,11 +377,11 @@ function HealthCheck({
       </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Btn variant="primary" onClick={() => setFindings(checkForge(settings, rows))}>
+        <Btn data-tip="Looks over your setup for quiet problems, like a key pasted twice. It only looks and changes nothing." variant="primary" onClick={() => setFindings(checkForge(settings, rows))}>
           Check the forge
         </Btn>
         {findings && fixable.length > 0 && (
-          <Btn
+          <Btn data-tip="Fixes the problems from the check that are safe to fix automatically."
             disabled={busy}
             onClick={async () => {
               setBusy(true);
@@ -334,16 +400,16 @@ function HealthCheck({
 
       {findings && (
         <div className="mt-3 space-y-2">
-          <p className="font-mono text-[11.5px] text-parch">{summarise(findings)}</p>
+          <p data-tip="A one-line summary of what the health check found." className="font-mono text-[11.5px] text-parch">{summarise(findings)}</p>
           <Stagger className="space-y-2">
             {findings.map((f) => (
               <Spotlight key={f.id} className={`rounded-lg border p-3 ${tone[f.severity]}`}>
-                <p className="text-[13px] text-cream">
+                <p data-tip="One thing the health check found." className="text-[13px] text-cream">
                   {f.title}
-                  <span className="ml-2 font-mono text-[10px] text-dust uppercase">{word[f.severity]}</span>
-                  {f.fixable && <span className="ml-2 font-mono text-[10px] text-moss">fixable</span>}
+                  <span data-tip="How serious this finding is." className="ml-2 font-mono text-[10px] text-dust uppercase">{word[f.severity]}</span>
+                  {f.fixable && <span data-tip="Image Forge can fix this one for you with the button." className="ml-2 font-mono text-[10px] text-moss">fixable</span>}
                 </p>
-                <p className="mt-1 text-[12px] leading-relaxed text-dust">{f.detail}</p>
+                <p data-tip="Details about this finding and what to do." className="mt-1 text-[12px] leading-relaxed text-dust">{f.detail}</p>
               </Spotlight>
             ))}
           </Stagger>
@@ -386,11 +452,11 @@ function PauseSwitch({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="font-display text-[15px] tracking-wide text-cream">
-            {label} {paused && <span className="ml-1 font-mono text-[10px] text-rust">PAUSED</span>}
+            {label} {paused && <span data-tip="This painter is paused. The forge will not use it until you switch it back on." className="ml-1 font-mono text-[10px] text-rust">PAUSED</span>}
           </p>
-          <p className="mt-1 max-w-2xl text-[12px] text-dust">{note}</p>
+          <p data-tip="What this painter is and what it costs." className="mt-1 max-w-2xl text-[12px] text-dust">{note}</p>
         </div>
-        <Btn variant={paused ? "primary" : undefined} onClick={toggle}>
+        <Btn data-tip={`${paused ? `Turns ${label} back on so the forge uses it again.` : `Stops the forge using ${label} for now. Your keys stay saved.`}`} variant={paused ? "primary" : undefined} onClick={toggle}>
           {paused ? `Switch ${label} back on` : `Pause ${label}`}
         </Btn>
       </div>
@@ -440,10 +506,10 @@ function SaveBar({
           {good ? <ICheck size={14} /> : <IAlert size={14} />}
           {good ? (at ? `Saved and checked at ${at}` : "Saved automatically") : "NOT saved"}
         </span>
-        <span className="font-mono text-[10.5px] text-dust">{describeCensus(census)}</span>
+        <span data-tip="What is saved on this computer right now: how many pictures, settings and so on." className="font-mono text-[10.5px] text-dust">{describeCensus(census)}</span>
         <span className="ml-auto flex flex-wrap gap-2">
-          <Btn onClick={() => onSaveNow?.()}>Save now</Btn>
-          <Btn
+          <Btn data-tip="Saves your settings again right now. They already save by themselves as you type." onClick={() => onSaveNow?.()}>Save now</Btn>
+          <Btn data-tip="Saves a file with all your settings and keys. The keys are in plain text, so keep it somewhere private."
             onClick={() => {
               // The file holds the keys in plain text, so it is never written
               // without a deliberate click and never written anywhere on its own.
@@ -453,7 +519,7 @@ function SaveBar({
           >
             <IDownload size={13} /> Back up to a file
           </Btn>
-          <Btn onClick={() => fileRef.current?.click()}>
+          <Btn data-tip="Loads your settings back from a backup file you saved earlier." onClick={() => fileRef.current?.click()}>
             <IUpload size={13} /> Restore
           </Btn>
           <input
@@ -476,7 +542,7 @@ function SaveBar({
           />
         </span>
       </div>
-      {saveProof?.problem && <p className="mt-2 text-[12px] leading-relaxed text-blood">{saveProof.problem}</p>}
+      {saveProof?.problem && <p data-tip="Your settings could not be saved. Follow the advice in the message." className="mt-2 text-[12px] leading-relaxed text-blood">{plainError(saveProof.problem, "Press Save now to try again, and make a backup copy in Advanced.")}</p>}
     </div>
   );
 }
@@ -561,10 +627,10 @@ export default function SettingsView({
     <div className="mx-auto flex w-full max-w-6xl gap-8 px-6 py-10">
       {/* rail */}
       <nav className="hidden w-52 shrink-0 md:block">
-        <p className="mb-3 font-mono text-[10px] tracking-[0.28em] text-dust uppercase">settings</p>
+        <p data-tip="A small label: you are in Settings." className="mb-3 font-mono text-[10px] tracking-[0.28em] text-dust uppercase">settings</p>
         <div className="space-y-1">
           {SECTIONS.map((s) => (
-            <button
+            <button data-tip={`${`Jumps to the ${s.label} settings (${s.hint}).`}`}
               key={s.id}
               onClick={() => onSection(s.id)}
               className={`btn-press flex w-full items-baseline justify-between rounded-lg px-3 py-2 text-left ${
@@ -590,7 +656,7 @@ export default function SettingsView({
         {/* mobile rail */}
         <div className="flex gap-1.5 overflow-x-auto pb-1 md:hidden">
           {SECTIONS.map((s) => (
-            <button
+            <button data-tip={`${`Jumps to the ${s.label} settings (${s.hint}).`}`}
               key={s.id}
               onClick={() => onSection(s.id)}
               className={`shrink-0 rounded-lg border px-3 py-1.5 font-mono text-[10.5px] uppercase ${
@@ -607,7 +673,7 @@ export default function SettingsView({
             <div>
               <H>Image engines</H>
               <P className="mt-1">
-                The default engine paints rows whose <span className="font-mono text-cream">model</span> column is empty. Rows with a model of their own always win.
+                The default engine paints rows whose <span data-tip="The column in your list that can name its own painter." className="font-mono text-cream">model</span> column is empty. Rows with a model of their own always win.
               </P>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -616,14 +682,14 @@ export default function SettingsView({
                 const active = settings.provider === id;
                 return (
                   <BorderGlow key={id} radius={14} glow={active ? "rgba(242,163,60,0.65)" : "color-mix(in srgb, var(--color-ember) 40%, transparent)"} idle={active ? "rgba(242,163,60,0.55)" : "#3e2f21"} innerClassName={active ? "bg-[var(--color-panel2)]" : "bg-[var(--color-panel)]"}>
-                    <button onClick={() => patchSettings({ provider: id })} className="btn-press w-full p-4 text-left">
+                    <button data-tip={`${`Makes ${m.name} the default painter for rows that don't name their own model.`}`} onClick={() => patchSettings({ provider: id })} className="btn-press w-full p-4 text-left">
                       <span className="flex items-center gap-2.5">
                         <span className="h-2.5 w-2.5 rounded-full" style={{ background: m.dot }} />
-                        <span className="font-display text-[15px] tracking-wide text-cream">{m.name}</span>
-                        {active && <span className="ml-auto font-mono text-[9px] tracking-widest text-ember uppercase">active</span>}
+                        <span data-tip="The name of this painter." className="font-display text-[15px] tracking-wide text-cream">{m.name}</span>
+                        {active && <span data-tip="This is the painter used right now." className="ml-auto font-mono text-[9px] tracking-widest text-ember uppercase">active</span>}
                       </span>
-                      <span className="mt-2 block text-[12px] leading-relaxed text-parch">{m.note}</span>
-                      <span className="mt-2 block font-mono text-[10.5px] text-ember">{m.free}</span>
+                      <span data-tip="What this painter is like." className="mt-2 block text-[12px] leading-relaxed text-parch">{m.note}</span>
+                      <span data-tip="What this painter costs or how many free pictures you get." className="mt-2 block font-mono text-[10.5px] text-ember">{m.free}</span>
                     </button>
                   </BorderGlow>
                 );
@@ -631,8 +697,8 @@ export default function SettingsView({
             </div>
             {/* ---- your own machine ---- */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">
-                Your own machine <span className="ml-1 font-mono text-[10px] text-moss">free · unlimited · private</span>
+              <p data-tip="Run a painter on your own computer." className="font-display text-[15px] tracking-wide text-cream">
+                Your own machine <span data-tip="Free, no limit, and nothing leaves your computer." className="ml-1 font-mono text-[10px] text-moss">free · unlimited · private</span>
               </p>
               <p className="mt-1 text-[12px] text-dust">
                 If you run LocalAI, ComfyUI, LM Studio or an SD WebUI, point the forge at it. No key, no limit, nothing
@@ -640,8 +706,8 @@ export default function SettingsView({
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">server address</label>
-                  <input
+                  <label data-tip="The web address of the painter program on your computer." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">server address</label>
+                  <input data-tip="The web address of the picture program running on your own computer."
                     value={settings.localBase}
                     onChange={(e) => patchSettings({ localBase: e.target.value.trim() })}
                     placeholder="http://localhost:8080/v1"
@@ -649,9 +715,9 @@ export default function SettingsView({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">model</label>
+                  <label data-tip="Which model on your computer paints the pictures." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">model</label>
                   {localModels.length > 0 ? (
-                    <select
+                    <select data-tip="Pick the model your own server has ready. Press Find my models to fill this list."
                       value={settings.localModel}
                       onChange={(e) => patchSettings({ localModel: e.target.value })}
                       className={field}
@@ -666,7 +732,7 @@ export default function SettingsView({
                       ))}
                     </select>
                   ) : (
-                    <input
+                    <input data-tip="Type the model's name exactly the way your own server calls it."
                       value={settings.localModel}
                       onChange={(e) => patchSettings({ localModel: e.target.value.trim() })}
                       placeholder="flux.2-klein-4b"
@@ -676,7 +742,7 @@ export default function SettingsView({
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Btn
+                <Btn data-tip="Asks your own server which models it has so you can pick one."
                   onClick={async () => {
                     setLocalBusy(true);
                     setLocalNote("");
@@ -704,20 +770,20 @@ export default function SettingsView({
                 >
                   {localBusy ? "Looking…" : "Find my models"}
                 </Btn>
-                {localNote && <span className="text-[11.5px] text-dust">{localNote}</span>}
+                {localNote && <span data-tip="The result of the last check of your computer's painter." className="text-[11.5px] text-dust">{localNote}</span>}
               </div>
-              <TestButton target="local" settings={settings} label="Check the connection" />
+              <TestButton data-tip="Checks that the forge can reach your own server." target="local" settings={settings} label="Check the connection" />
               <p className="mt-2 text-[11px] text-dust">
                 Leave the key blank unless your server asks for one. Local pictures are slow — the forge waits up to
-                fifteen minutes before giving up on one. A row's own <span className="font-mono text-cream">model</span>{" "}
+                fifteen minutes before giving up on one. A row's own <span data-tip="The column in your list that can name its own painter." className="font-mono text-cream">model</span>{" "}
                 column still wins, so you can mix models within one batch (at the cost of a reload between them).
               </p>
             </div>
 
             {/* ---- Cloudflare: the free one ---- */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">
-                Cloudflare — the free option <span className="ml-1 font-mono text-[10px] text-moss">recommended</span>
+              <p data-tip="Cloudflare: a painter with a free allowance." className="font-display text-[15px] tracking-wide text-cream">
+                Cloudflare — the free option <span data-tip="The free option we suggest first." className="ml-1 font-mono text-[10px] text-moss">recommended</span>
               </p>
               <p className="mt-1 text-[12px] text-dust">
                 About 690 pictures a day, free, resetting at midnight UTC. No card needed. Get both of these from your
@@ -726,8 +792,8 @@ export default function SettingsView({
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">account id</label>
-                  <input
+                  <label data-tip="Your Cloudflare account number." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">account number</label>
+                  <input data-tip="Your Cloudflare account number. You can see it in the address bar when you are logged in to Cloudflare."
                     value={settings.cloudflare.accountId}
                     onChange={(e) => patchSettings({ cloudflare: { ...settings.cloudflare, accountId: e.target.value.trim() } })}
                     placeholder="a1b2c3d4e5f6…"
@@ -735,8 +801,8 @@ export default function SettingsView({
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">api token</label>
-                  <input
+                  <label data-tip="Your Cloudflare key. It works like a password." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">key (API token)</label>
+                  <input data-tip="Your Cloudflare key. It lets the app use Cloudflare's free picture engine."
                     type="password"
                     value={settings.cloudflare.token}
                     onChange={(e) => patchSettings({ cloudflare: { ...settings.cloudflare, token: e.target.value.trim() } })}
@@ -746,10 +812,10 @@ export default function SettingsView({
                 </div>
               </div>
               <div className="mt-3">
-                <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
+                <label data-tip={`Higher quality takes longer. Now: ${settings.cloudflareSteps} steps.`} className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
                   quality · {settings.cloudflareSteps} steps
                 </label>
-                <input
+                <input data-tip="More steps gives a better picture but fewer pictures a day. Four is the usual setting."
                   type="range"
                   min={1}
                   max={8}
@@ -763,19 +829,19 @@ export default function SettingsView({
                   At 4 steps you get roughly 690 a day; at 8 steps roughly 380. Four is the model's intended setting.
                 </p>
               </div>
-              <TestButton target="cloudflare" settings={settings} label="Check the account and token" />
+              <TestButton data-tip="Checks that your Cloudflare account number and key work." target="cloudflare" settings={settings} label="Check the account and token" watch={settings.cloudflare.token} />
             </div>
 
             {/* ---- Pollinations: free, but needs a token now ---- */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">Pollinations token</p>
+              <p data-tip="A free sign-in key for Pollinations that removes its watermark and its robot check." className="font-display text-[15px] tracking-wide text-cream">Pollinations token</p>
               <p className="mt-1 text-[12px] text-dust">
                 Pollinations stopped serving anonymous requests — without a token every picture fails with “Missing
-                Turnstile token”. A free token at <span className="font-mono text-cream">auth.pollinations.ai</span> fixes
+                Turnstile token”. A free token at <span data-tip="The website where you get a free Pollinations key." className="font-mono text-cream">auth.pollinations.ai</span> fixes
                 it and removes the watermark. Unlimited in total, but paced to one picture every few seconds.
               </p>
               <div className="mt-3">
-                <input
+                <input data-tip="Your free Pollinations key. Without it, Pollinations refuses every picture."
                   type="password"
                   value={settings.pollinationsToken}
                   onChange={(e) => patchSettings({ pollinationsToken: e.target.value.trim() })}
@@ -783,19 +849,19 @@ export default function SettingsView({
                   className={field}
                 />
               </div>
-              <TestButton target="pollinations" settings={settings} label="Check the token" />
+              <TestButton data-tip="Checks that your Pollinations key works." target="pollinations" settings={settings} label="Check the token" watch={settings.pollinationsToken} />
             </div>
 
             {/* ---- OVHcloud: free, nothing to set up ---- */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">OVHcloud SDXL</p>
+              <p data-tip="OVHcloud: a free painter that needs no key." className="font-display text-[15px] tracking-wide text-cream">OVHcloud SDXL</p>
               <p className="mt-1 text-[12px] text-dust">
                 Stable Diffusion XL, hosted free by OVHcloud. No key, no signup, nothing to fill in. Paced to two
                 pictures a minute, so the queue waits its turn rather than failing. Always 1024×1024, and it takes no
                 seed — the same prompt twice gives two different pictures. Put{" "}
-                <span className="font-mono text-cream">ovh-sdxl</span> in a row's model column, or pick it as the engine.
+                <span data-tip="The short name to type to use this painter." className="font-mono text-cream">ovh-sdxl</span> in a row's model column, or pick it as the engine.
               </p>
-              <TestButton target="ovh" settings={settings} label="Check it is up" />
+              <TestButton data-tip="Checks that the OVHcloud picture engine is up and answering." target="ovh" settings={settings} label="Check it is up" />
             </div>
 
             <PauseSwitch
@@ -836,10 +902,10 @@ export default function SettingsView({
             <div className="rounded-xl border border-line bg-panel/50 p-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
+                  <label data-tip="The Google painter used when a row does not name one." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
                     default Google model
                   </label>
-                  <select
+                  <select data-tip="The Google model used for rows that don't name one. The price per picture is shown next to each name."
                     value={settings.geminiModel}
                     onChange={(e) => patchSettings({ geminiModel: e.target.value })}
                     className={field}
@@ -852,8 +918,8 @@ export default function SettingsView({
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">picture size</label>
-                  <select
+                  <label data-tip="How big Google paints each picture. Bigger pictures cost more." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">picture size</label>
+                  <select data-tip="How big Google paints each picture. Bigger pictures cost more."
                     value={settings.geminiImageSize}
                     onChange={(e) => patchSettings({ geminiImageSize: e.target.value })}
                     className={field}
@@ -878,18 +944,18 @@ export default function SettingsView({
             <div className="rounded-xl border border-line bg-panel/50 p-4">
               <div className="grid gap-3 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">endpoint base URL</label>
-                  <input value={settings.openaiBase} onChange={(e) => patchSettings({ openaiBase: e.target.value })} className={field} />
+                  <label data-tip="The web address of the OpenAI-style painting service." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">service web address</label>
+                  <input data-tip="The web address of the OpenAI-style service the forge sends picture requests to." value={settings.openaiBase} onChange={(e) => patchSettings({ openaiBase: e.target.value })} className={field} />
                 </div>
                 <div>
-                  <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">default model id</label>
-                  <input value={settings.openaiModel} onChange={(e) => patchSettings({ openaiModel: e.target.value })} className={field} />
+                  <label data-tip="The model name used when a row does not name one." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">default model name</label>
+                  <input data-tip="The model name used when a row doesn't name one." value={settings.openaiModel} onChange={(e) => patchSettings({ openaiModel: e.target.value })} className={field} />
                 </div>
               </div>
             </div>
             {/* ---- what each picture costs ---- */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">What each picture costs</p>
+              <p data-tip="What each painter charges per picture. Paid ones always ask before spending." className="font-display text-[15px] tracking-wide text-cream">What each picture costs</p>
               <p className="mt-1 text-[12px] text-dust">
                 Checked against the providers on 2 September 2026. “Batch” is Google's half price for pictures you are
                 happy to wait for.
@@ -898,27 +964,27 @@ export default function SettingsView({
                 <table className="w-full text-left text-[12px]">
                   <thead>
                     <tr className="font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">
-                      <th className="py-1.5 pr-3">model</th>
-                      <th className="py-1.5 pr-3">each</th>
-                      <th className="py-1.5 pr-3">batch</th>
-                      <th className="py-1.5">free allowance</th>
+                      <th data-tip="The painter's name." className="py-1.5 pr-3">model</th>
+                      <th data-tip="The price of one picture made on its own." className="py-1.5 pr-3">each</th>
+                      <th data-tip="The price of one picture when made in a big batch, which is often cheaper." className="py-1.5 pr-3">batch</th>
+                      <th data-tip="How many pictures you get free." className="py-1.5">free allowance</th>
                     </tr>
                   </thead>
                   <tbody>
                     {MODELS.map((m) => (
                       <tr key={m.id} className="border-t border-line/60">
                         <td className="py-1.5 pr-3">
-                          <span className="block font-mono text-[11.5px] text-cream">{m.id}</span>
-                          <span className="block text-[10.5px] text-dust">{m.label}</span>
+                          <span data-tip="The painter's name as the forge knows it." className="block font-mono text-[11.5px] text-cream">{m.id}</span>
+                          <span data-tip="A friendly name for this painter." className="block text-[10.5px] text-dust">{m.label}</span>
                           {m.retiresOn && (
-                            <span className="block font-mono text-[9.5px] text-rust">switched off {m.retiresOn}</span>
+                            <span data-tip="The date this painter stops working." className="block font-mono text-[9.5px] text-rust">switched off {m.retiresOn}</span>
                           )}
                         </td>
-                        <td className="py-1.5 pr-3 font-mono text-[11.5px] text-cream">{formatUsd(m.priceUsd)}</td>
-                        <td className="py-1.5 pr-3 font-mono text-[11.5px] text-moss">
+                        <td data-tip={`Price per picture: ${formatUsd(m.priceUsd)}.`} className="py-1.5 pr-3 font-mono text-[11.5px] text-cream">{formatUsd(m.priceUsd)}</td>
+                        <td data-tip="Price per picture in a big batch. A dash means there is no batch price." className="py-1.5 pr-3 font-mono text-[11.5px] text-moss">
                           {m.batchPriceUsd === null ? "—" : formatUsd(m.batchPriceUsd)}
                         </td>
-                        <td className="py-1.5 text-[11px] text-parch">{m.allowance}</td>
+                        <td data-tip="How many pictures you can make free with this painter." className="py-1.5 text-[11px] text-parch">{m.allowance}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -928,13 +994,13 @@ export default function SettingsView({
 
             {/* ---- writing inside pictures ---- */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">Writing inside pictures</p>
+              <p data-tip="Most painters cannot spell. This shows which ones can write real words." className="font-display text-[15px] tracking-wide text-cream">Writing inside pictures</p>
               <p className="mt-1 text-[12px] text-dust">
                 Most models cannot spell. Ask a small model for a shop sign and you get convincing gibberish. Only
                 Google's models and DALL·E write real words reliably.
               </p>
               <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5">
-                <input
+                <input data-tip="When on, the forge tells models that can't spell not to draw words, so you don't get gibberish text. Your list is not changed."
                   type="checkbox"
                   checked={settings.suppressTextOnWeakModels}
                   onChange={(e) => patchSettings({ suppressTextOnWeakModels: e.target.checked })}
@@ -946,7 +1012,7 @@ export default function SettingsView({
                   </span>
                   <span className="block text-[11.5px] text-dust">
                     Quietly adds “no text, letters, words, watermark” to the negatives whenever the chosen model is bad
-                    at spelling. Your manifest is not changed. Models that write well are left alone.
+                    at spelling. Your list is not changed. Models that write well are left alone.
                   </span>
                 </span>
                 {settings.suppressTextOnWeakModels && <ICheck size={15} className="ml-auto shrink-0 text-moss" />}
@@ -955,7 +1021,7 @@ export default function SettingsView({
                 <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
                   how good is YOUR local model at writing?
                 </label>
-                <select
+                <select data-tip="Tells the forge how well your own model writes words, so it knows when to keep words out of pictures."
                   value={settings.localTextQuality}
                   onChange={(e) => patchSettings({ localTextQuality: e.target.value as typeof settings.localTextQuality })}
                   className={field}
@@ -969,8 +1035,8 @@ export default function SettingsView({
                 <table className="w-full text-left text-[11.5px]">
                   <thead>
                     <tr className="font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">
-                      <th className="py-1 pr-3">model</th>
-                      <th className="py-1">can it write?</th>
+                      <th data-tip="The painter's name." className="py-1 pr-3">model</th>
+                      <th data-tip="Whether this painter can write real words inside a picture." className="py-1">can it write?</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -979,8 +1045,8 @@ export default function SettingsView({
                       const tone = q === "good" ? "text-moss" : q === "fair" ? "text-ember" : "text-rust";
                       return (
                         <tr key={m.id} className="border-t border-line/60">
-                          <td className="py-1 pr-3 font-mono text-cream">{m.id}</td>
-                          <td className={`py-1 font-mono ${tone}`}>{q}</td>
+                          <td data-tip="The painter's name." className="py-1 pr-3 font-mono text-cream">{m.id}</td>
+                          <td data-tip="How well this painter writes words." className={`py-1 font-mono ${tone}`}>{q}</td>
                         </tr>
                       );
                     })}
@@ -991,24 +1057,24 @@ export default function SettingsView({
 
             {/* ---- prompt tailor ---- */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">
-                Tailor prompts to the model <span className="ml-1 font-mono text-[10px] text-dust">off by default</span>
+              <p data-tip="Rewrites each picture description to suit the painter. It uses your text helper." className="font-display text-[15px] tracking-wide text-cream">
+                Tailor prompts to the model <span data-tip="This is switched off until you turn it on." className="ml-1 font-mono text-[10px] text-dust">off by default</span>
               </p>
               <p className="mt-1 text-[12px] text-dust">
                 Different painters want different instructions. Google reads long flowing sentences; a small model on
                 your own machine wants one short concrete line. Switch this on and your text model (Settings → Text
                 engines) rewrites each prompt to suit whoever is drawing it — just before sending, never in your
-                manifest. If the text model is unreachable the original prompt is used and the forge says so.
+                list. If the text model is unreachable the original prompt is used and the forge says so.
               </p>
               <label className="mt-3 flex cursor-pointer items-center gap-3 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5">
-                <input
+                <input data-tip="When on, your text model rewrites each prompt to suit the picture engine just before it is sent. Your list is not changed."
                   type="checkbox"
                   checked={settings.tailorPrompts}
                   onChange={(e) => patchSettings({ tailorPrompts: e.target.checked })}
                   className="h-4 w-4 accent-[var(--color-ember)]"
                 />
                 <span>
-                  <span className="block text-[13px] font-semibold text-cream">Rewrite each prompt for its model</span>
+                  <span data-tip="Switch on to let your text helper rewrite each description for the painter. It costs one small text request per picture." className="block text-[13px] font-semibold text-cream">Rewrite each prompt for its model</span>
                   <span className="block text-[11.5px] text-dust">
                     Costs one small text request per picture. Repeated prompts are remembered, so a re-run is free.
                   </span>
@@ -1024,14 +1090,14 @@ export default function SettingsView({
 
             {/* ---- speed dial ---- */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">Speed — how many at once</p>
+              <p data-tip="How many pictures are made at the same time." className="font-display text-[15px] tracking-wide text-cream">Speed — how many at once</p>
               <p className="mt-1 text-[12px] text-dust">
                 1 means one picture at a time, exactly as the forge has always worked. Turning it up finishes big batches
                 faster, at the cost of hitting rate limits sooner — the forge already handles that by resting the key and
                 moving on, so the risk is a slower run, not lost work.
               </p>
               <div className="mt-3 flex items-center gap-4">
-                <input
+                <input data-tip="How many pictures are made at the same time. Higher is faster but hits rate limits sooner."
                   type="range"
                   min={1}
                   max={6}
@@ -1046,38 +1112,59 @@ export default function SettingsView({
               </div>
             </div>
 
+            {/* ---- puppet spending limit ---- */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">Cooldowns — you choose the wait</p>
+              <p data-tip="The most the puppet maker may spend on one puppet." className="font-display text-[15px] tracking-wide text-cream">Puppet maker — spending limit</p>
+              <p className="mt-1 text-[12px] text-dust">
+                The most one puppet may spend on paid pictures, in dollars. 0 means the puppet maker uses free engines only.
+                A puppet that needs fix rounds can use several times the first estimate, so the limit counts every try.
+              </p>
+              <div className="mt-3 flex items-center gap-3">
+                <span className="font-mono text-[12px] text-dust">$</span>
+                <input data-tip="The most one puppet may spend on paid pictures. 0 = paid engines are switched off for puppets."
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={settings.puppetSpendCapUsd}
+                  onChange={(e) => patchSettings({ puppetSpendCapUsd: Math.max(Number(e.target.value) || 0, 0) })}
+                  className="w-24 rounded-lg border border-line bg-[var(--color-field)] px-2.5 py-1.5 font-mono text-[12px] text-cream"
+                />
+                <span data-tip={settings.puppetSpendCapUsd > 0 ? "A paid painter may be used, up to this amount for each puppet." : "Zero: only free painters are used and nothing costs money."} className="font-mono text-[11px] text-dust">{settings.puppetSpendCapUsd > 0 ? "per puppet" : "free engines only"}</span>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-line bg-panel/50 p-4">
+              <p data-tip="How long a picture waits when all your keys for a painter are tired." className="font-display text-[15px] tracking-wide text-cream">Cooldowns — you choose the wait</p>
               <p className="mt-1 text-[12px] text-dust">hours a row rests after its whole key pool is rate-limited. 24h suits daily quotas; 0 retries at once.</p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 {MODELS.map((m) => (
                   <div key={m.id} className="flex items-center gap-2.5 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2">
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-mono text-[11.5px] text-cream">{m.id}</span>
-                      <span className="block font-mono text-[9px] text-dust">{m.free} · used {usedToday(settings.usage, m.id)}/day</span>
+                      <span data-tip="The painter's name as the forge knows it." className="block truncate font-mono text-[11.5px] text-cream">{m.id}</span>
+                      <span data-tip="How many free pictures it allows, and how many you used today." className="block font-mono text-[9px] text-dust">{m.free} · used {usedToday(settings.usage, m.id)}/day</span>
                     </span>
-                    <input
+                    <input data-tip={`${`Hours ${m.id} rests after all its keys are rate-limited. 0 means try again straight away.`}`}
                       type="number"
                       min={0}
                       value={settings.cooldowns[m.id] ?? m.defaultCooldownH}
                       onChange={(e) => patchSettings({ cooldowns: { ...settings.cooldowns, [m.id]: Math.max(0, parseFloat(e.target.value) || 0) } })}
                       className="w-16 rounded-md border border-line bg-panel2 px-2 py-1 text-right font-mono text-[12px] text-cream"
                     />
-                    <span className="font-mono text-[10px] text-dust">h</span>
+                    <span data-tip="Hours." className="font-mono text-[10px] text-dust">h</span>
                   </div>
                 ))}
               </div>
             </div>
 
             <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-line bg-panel/50 px-4 py-3">
-              <input
+              <input data-tip="When on, a row that was waiting out a pause goes back in the queue by itself once the pause ends."
                 type="checkbox"
                 checked={settings.autoRetry}
                 onChange={(e) => patchSettings({ autoRetry: e.target.checked })}
                 className="h-4 w-4 accent-[var(--color-ember)]"
               />
               <span>
-                <span className="block text-[13.5px] font-semibold text-cream">Automatic retry</span>
+                <span data-tip="When a picture's wait ends, the forge puts it back in the line by itself." className="block text-[13.5px] font-semibold text-cream">Automatic retry</span>
                 <span className="block text-[11.5px] text-dust">
                   when a parked row's cooldown expires, the forge quietly puts it back in the queue
                 </span>
@@ -1091,10 +1178,10 @@ export default function SettingsView({
           <>
             <H>Image styles</H>
             <P>Styles live in the library now — lock them, add your own languages, keep every batch consistent.</P>
-            <Btn variant="primary" onClick={onGoStyles}>Open the style library →</Btn>
+            <Btn data-tip="Opens the style library, where you pick, lock and add looks." variant="primary" onClick={onGoStyles}>Open the style library →</Btn>
             <P className="mt-1">
               {STYLE_CATALOGUE.length} looks, grouped. Each one knows which models suit it and which of those you have
-              set up. The <span className="text-moss">green</span> model is what it will use if you change nothing — always
+              set up. The <span data-tip="The green painter is the one used if you change nothing." className="text-moss">green</span> model is what it will use if you change nothing — always
               the best free option you have, except where the look needs readable words.
             </P>
 
@@ -1103,7 +1190,7 @@ export default function SettingsView({
               if (!inGroup.length) return null;
               return (
                 <div key={group.id} className="rounded-xl border border-line bg-panel/50 p-4">
-                  <p className="font-display text-[15px] tracking-wide text-cream">
+                  <p data-tip="The name of this group of looks." className="font-display text-[15px] tracking-wide text-cream">
                     {group.label} <span className="ml-1 font-mono text-[10px] text-dust">{group.hint}</span>
                   </p>
                   <div className="mt-3 grid gap-2.5 lg:grid-cols-2">
@@ -1126,14 +1213,14 @@ export default function SettingsView({
                               <p className="text-[13px] font-semibold text-cream">
                                 {st.name}
                                 {st.needsText && (
-                                  <span className="ml-1.5 font-mono text-[9px] tracking-wider text-ember uppercase">
+                                  <span data-tip="This look needs real words in the picture, so it needs a painter that can spell." className="ml-1.5 font-mono text-[9px] tracking-wider text-ember uppercase">
                                     needs words
                                   </span>
                                 )}
                               </p>
-                              <p className="mt-0.5 text-[11.5px] leading-snug text-dust">{st.blurb}</p>
+                              <p data-tip="A short description of this look." className="mt-0.5 text-[11.5px] leading-snug text-dust">{st.blurb}</p>
                             </div>
-                            <button
+                            <button data-tip={`${locked ? `${st.name} is added to every prompt now. Click to turn it off.` : `Adds the ${st.name} look to every prompt so the whole batch matches.`}`}
                               onClick={() => onLockStyle?.(st.id)}
                               className={`btn-press shrink-0 rounded-md px-2 py-1 font-mono text-[9.5px] tracking-wider uppercase ${
                                 locked ? "bg-ember text-[var(--color-on-accent)]" : "border border-line text-dust hover:text-cream"
@@ -1189,7 +1276,7 @@ export default function SettingsView({
               <H>Text engines</H>
               <P className="mt-1">
                 Three jobs — writing, code and vision — drawing on the accounts you set up once. Anything that speaks{" "}
-                <span className="font-mono text-cream">/chat/completions</span> works.
+                <span data-tip="The part of the web address the service must answer on." className="font-mono text-cream">/chat/completions</span> works.
               </P>
             </div>
             <TextEngines settings={settings} patchSettings={patchSettings} />
@@ -1216,15 +1303,15 @@ export default function SettingsView({
             ).map(([key, label, hint]) => (
               <div key={key} className="rounded-xl border border-line bg-panel/50 p-4">
                 <div className="flex items-center justify-between">
-                  <p className="font-display text-[14px] tracking-wide text-cream">{label}</p>
+                  <p data-tip="The name of this helper job." className="font-display text-[14px] tracking-wide text-cream">{label}</p>
                   {settings.metaPrompts[key] && (
-                    <button onClick={() => patchSettings({ metaPrompts: { ...settings.metaPrompts, [key]: "" } })} className="btn-press font-mono text-[10px] text-dust underline hover:text-blood">
+                    <button data-tip="Throws away your changes and goes back to the built-in instructions." onClick={() => patchSettings({ metaPrompts: { ...settings.metaPrompts, [key]: "" } })} className="btn-press font-mono text-[10px] text-dust underline hover:text-blood">
                       reset to built-in
                     </button>
                   )}
                 </div>
-                <p className="mt-0.5 text-[11.5px] text-dust">{hint}</p>
-                <textarea
+                <p data-tip="What this helper job does." className="mt-0.5 text-[11.5px] text-dust">{hint}</p>
+                <textarea data-tip={`${`Your own instructions for ${label}. Leave it empty to use the built-in ones.`}`}
                   value={settings.metaPrompts[key]}
                   onChange={(e) => patchSettings({ metaPrompts: { ...settings.metaPrompts, [key]: e.target.value } })}
                   rows={3}
@@ -1253,15 +1340,15 @@ export default function SettingsView({
                       on ? "border-line bg-panel/50" : "border-line/50 bg-panel/20"
                     }`}
                   >
-                    <span className={`font-display text-[15px] ${on ? "text-ember" : "text-dust/50"}`}>{i + 1}</span>
+                    <span data-tip="The number of this rule." className={`font-display text-[15px] ${on ? "text-ember" : "text-dust/50"}`}>{i + 1}</span>
                     <span className="min-w-0 flex-1">
-                      <span className={`block text-[13px] ${on ? "text-parch" : "text-dust/60 line-through"}`}>
+                      <span data-tip="The name of this rule." className={`block text-[13px] ${on ? "text-parch" : "text-dust/60 line-through"}`}>
                         {rule.label}
                       </span>
-                      <span className="mt-0.5 block text-[11.5px] leading-snug text-dust">{rule.why}</span>
+                      <span data-tip="Why this rule exists." className="mt-0.5 block text-[11.5px] leading-snug text-dust">{rule.why}</span>
                     </span>
                     {rule.optional ? (
-                      <button
+                      <button data-tip={`${`Turns the rule "${rule.label}" on or off.`}`}
                         onClick={() =>
                           patchSettings({
                             filenameRules: { ...settings.filenameRules, [rule.id]: !on },
@@ -1299,7 +1386,7 @@ export default function SettingsView({
           <>
             <H>Folders</H>
             <P className="max-w-2xl">
-              Link one folder and every finished picture saves itself into <span className="font-mono text-cream">{SUBFOLDERS.join(" / ")}</span>. Your
+              Link one folder and every finished picture saves itself into <span data-tip="The folders pictures are sorted into inside your linked folder." className="font-mono text-cream">{SUBFOLDERS.join(" / ")}</span>. Your
               pre-created subfolders are used as-is; missing ones are created. Point it at your Google Drive sync folder and files float to the cloud.
             </P>
             <div className={`rounded-xl border p-4 ${folder.linked ? "border-moss/50 bg-moss/8" : "border-line bg-panel/50"}`}>
@@ -1307,16 +1394,16 @@ export default function SettingsView({
                 <IFolder size={20} className={folder.linked ? "text-moss" : "text-dust"} />
                 <div className="flex-1">
                   <p className="font-display text-[15px] tracking-wide text-cream">{folder.linked ? folder.name : folder.pendingName ? `${folder.pendingName} (needs one click)` : "No folder linked"}</p>
-                  <p className="text-[12px] text-parch">
+                  <p data-tip="Whether pictures save to your folder by themselves." className="text-[12px] text-parch">
                     {folder.linked ? "auto-save is on · the CSV refreshes after every run" : folder.pendingName ? "the browser wants you to re-confirm permission once" : "needs Chrome or Edge · the ZIP door always works"}
                   </p>
                 </div>
                 <div className="flex gap-2">
-                  {fsSupported() && <Btn variant="primary" onClick={onLinkFolder}>{folder.linked ? "Change" : folder.pendingName ? "Re-link" : "Link folder…"}</Btn>}
+                  {fsSupported() && <Btn data-tip={`${folder.linked ? `Pick a different folder for your finished pictures.` : `Pick the folder on your computer where finished pictures are saved automatically.`}`} variant="primary" onClick={onLinkFolder}>{folder.linked ? "Change" : folder.pendingName ? "Re-link" : "Link folder…"}</Btn>}
                   {folder.linked && (
                     <>
-                      <Btn onClick={onSyncAll}>Sync all now</Btn>
-                      <Btn variant="danger" onClick={onUnlinkFolder}>
+                      <Btn data-tip="Saves everything that is finished into the linked folder again." onClick={onSyncAll}>Sync all now</Btn>
+                      <Btn data-tip="Stops saving into this folder. The files already in it stay where they are." variant="danger" onClick={onUnlinkFolder}>
                         <IX size={12} /> Unlink
                       </Btn>
                     </>
@@ -1325,12 +1412,12 @@ export default function SettingsView({
               </div>
               {folder.error && (
                 <p className="mt-3 flex items-start gap-2 rounded-lg border border-blood/30 bg-blood/8 px-3 py-2 text-[12px] text-blood">
-                  <IAlert size={13} className="mt-0.5 shrink-0" /> {folder.error}
+                  <IAlert size={13} className="mt-0.5 shrink-0" /> {plainError(folder.error, "Press the link button to pick the folder again.")}
                 </p>
               )}
             </div>
             <label className="flex cursor-pointer items-center gap-2.5 text-[13px] text-parch">
-              <input type="checkbox" checked={settings.writeCsvOnSync} onChange={(e) => patchSettings({ writeCsvOnSync: e.target.checked })} className="accent-[var(--color-ember)]" />
+              <input data-tip="When on, the forge updates the list file (a CSV) inside your folder after each run." type="checkbox" checked={settings.writeCsvOnSync} onChange={(e) => patchSettings({ writeCsvOnSync: e.target.checked })} className="accent-[var(--color-ember)]" />
               refresh marketplace-images.csv inside the folder after each run
             </label>
           </>
@@ -1342,31 +1429,31 @@ export default function SettingsView({
               <H>WP connections</H>
               <P className="mt-1">
                 The forge can upload finished plates straight into a WordPress Media Library using an{" "}
-                <span className="font-mono text-cream">application password</span> (Users → Profile → Application Passwords in WP admin). Imagify
-                then optimizes whatever lands there, and attachment IDs are written back into the manifest.
+                <span data-tip="A special password WordPress makes for apps like this one. It is not your normal password." className="font-mono text-cream">application password</span> (Users → Profile → Application Passwords in WP admin). Imagify
+                then optimizes whatever lands there, and attachment IDs are written back into the list.
               </P>
             </div>
             <div className="grid gap-3 sm:grid-cols-3">
               <div>
-                <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">site URL</label>
-                <input value={settings.wp.url} onChange={(e) => patchSettings({ wp: { ...settings.wp, url: e.target.value } })} placeholder="https://example.com" className={field} />
+                <label data-tip="The web address of your WordPress site." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">site URL</label>
+                <input data-tip="The web address of your WordPress site." value={settings.wp.url} onChange={(e) => patchSettings({ wp: { ...settings.wp, url: e.target.value } })} placeholder="https://example.com" className={field} />
               </div>
               <div>
-                <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">username</label>
-                <input value={settings.wp.user} onChange={(e) => patchSettings({ wp: { ...settings.wp, user: e.target.value } })} className={field} />
+                <label data-tip="Your WordPress login name." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">username</label>
+                <input data-tip="Your WordPress login name." value={settings.wp.user} onChange={(e) => patchSettings({ wp: { ...settings.wp, user: e.target.value } })} className={field} />
               </div>
               <div>
-                <label className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">application password</label>
-                <input type="password" value={settings.wp.appPassword} onChange={(e) => patchSettings({ wp: { ...settings.wp, appPassword: e.target.value } })} placeholder="xxxx xxxx xxxx xxxx" className={field} />
+                <label data-tip="The special app password from WordPress, not your normal one." className="mb-1.5 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">application password</label>
+                <input data-tip="A special password WordPress makes for apps like this one. It is not your normal login password." type="password" value={settings.wp.appPassword} onChange={(e) => patchSettings({ wp: { ...settings.wp, appPassword: e.target.value } })} placeholder="xxxx xxxx xxxx xxxx" className={field} />
               </div>
             </div>
             <p className="text-[12px] text-dust">
-              CORS note: many hosts allow browser requests to <span className="font-mono">/wp-json/wp/v2/media</span>; if yours doesn't, the Agents &amp; API page in Docs has the n8n-friendly recipe.
+              CORS note: many hosts allow browser requests to <span data-tip="The part of your site's address that takes picture uploads." className="font-mono">/wp-json/wp/v2/media</span>; if yours doesn't, the Agents &amp; API page in Docs has the n8n-friendly recipe.
             </p>
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-mono text-[10px] tracking-[0.22em] text-dust uppercase">what an upload writes back</p>
-              <p className="mt-1.5 font-mono text-[11.5px] text-parch">
-                status → <span className="text-lagoon">imported</span> · imported_attachment_id → <span className="text-lagoon">{"{the id WordPress returns}"}</span>
+              <p data-tip="What Image Forge writes into your list after sending a picture to WordPress." className="font-mono text-[10px] tracking-[0.22em] text-dust uppercase">what an upload writes back</p>
+              <p data-tip="The status becomes imported and the number WordPress gives the picture is saved." className="mt-1.5 font-mono text-[11.5px] text-parch">
+                status → <span data-tip="The status a picture gets once WordPress has it." className="text-lagoon">imported</span> · imported_attachment_id → <span className="text-lagoon">{"{the id WordPress returns}"}</span>
               </p>
             </div>
           </>
@@ -1374,179 +1461,35 @@ export default function SettingsView({
 
         {section === "appearance" && (
           <>
-            <H>Appearance</H>
-            <P>The forge's weather. Everything here updates live — pick what feels good, turn off what doesn't.</P>
-
-            <p className="font-mono text-[10px] tracking-[0.22em] text-dust uppercase">main color</p>
-            <div className="flex flex-wrap gap-2.5">
-              {ACCENTS.map((a) => {
-                const active = settings.ambient.accent === a.id;
-                return (
-                  <button
-                    key={a.id}
-                    onClick={() => patchSettings({ ambient: { ...settings.ambient, accent: a.id } })}
-                    className={`btn-press flex items-center gap-2.5 rounded-xl border px-3.5 py-2.5 ${active ? "border-line2 bg-raise" : "border-line bg-panel/50 hover:border-line2"}`}
-                  >
-                    <span className="h-6 w-6 rounded-full border border-black/30" style={{ background: a.hex, boxShadow: active ? `0 0 14px ${a.hex}88` : "none" }} />
-                    <span className="text-left">
-                      <span className={`block text-[12.5px] font-semibold ${active ? "text-cream" : "text-parch"}`}>{a.name}</span>
-                      <span className="block font-mono text-[9.5px] text-dust">{a.hex}</span>
-                    </span>
-                    {active && <ICheck size={13} className="text-moss" />}
-                  </button>
-                );
-              })}
-            </div>
-            <P>The main color paints the run button, highlights, card glows and the cursor light. Status colors stay fixed so done/failed always read the same.</P>
-
-            <p className="font-mono text-[10px] tracking-[0.22em] text-dust uppercase">background</p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {(
-                [
-                  { id: "none", name: "Quiet", hint: "plain dark canvas — also turns off the corner lights" },
-                  { id: "dots", name: "Dot field", hint: "dots that part around your cursor" },
-                  { id: "embers", name: "Rising embers", hint: "sparks drifting up from the forge" },
-                  { id: "stars", name: "Night sky", hint: "twinkling stars, the odd shooting star" },
-                ] as { id: ForgeSettings["ambient"]["background"]; name: string; hint: string }[]
-              ).map((b) => (
-                <button
-                  key={b.id}
-                  onClick={() => patchSettings({ ambient: { ...settings.ambient, background: b.id } })}
-                  className={`btn-press rounded-xl border px-3.5 py-3 text-left ${settings.ambient.background === b.id ? "border-ember/60 bg-ember/8" : "border-line bg-panel/50 hover:border-line2"}`}
+            <H>Language</H>
+            <p className="mt-1 max-w-xl text-[13px] text-parch">
+              The language the app's own words are in. More are coming once the app has settled — they will come in the simple,
+              explain-it-like-I'm-five voice. Your pictures and prompts can be in any language today.
+            </p>
+            <div className="mt-4 grid max-w-xl grid-cols-2 gap-2 sm:grid-cols-3">
+              {[
+                ["English", "English", true],
+                ["Ελληνικά", "Greek", false],
+                ["Français", "French", false],
+                ["Deutsch", "German", false],
+                ["Español", "Spanish", false],
+                ["Português", "Portuguese", false],
+              ].map(([own, en, ready]) => (
+                <div
+                  key={String(en)}
+                  title={ready ? "The language the app is in now." : `${en}: coming soon.`}
+                  className={`rounded-xl border px-4 py-3 ${ready ? "border-ember/60 bg-ember/10 text-cream" : "border-line text-dust"}`}
                 >
-                  <span className={`block text-[13px] font-semibold ${settings.ambient.background === b.id ? "text-ember" : "text-cream"}`}>{b.name}</span>
-                  <span className="block text-[10.5px] text-dust">{b.hint}</span>
-                </button>
-              ))}
-            </div>
-            {settings.ambient.background !== "none" && (
-              <div className="rounded-xl border border-line bg-panel/40 p-4">
-                <label className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
-                  density
-                  <span className="text-cream">{settings.ambient.density}</span>
-                </label>
-                <input
-                  type="range"
-                  min={20}
-                  max={140}
-                  value={settings.ambient.density}
-                  onChange={(e) => patchSettings({ ambient: { ...settings.ambient, density: Number(e.target.value) } })}
-                  className="mt-2 w-full accent-[var(--color-ember)]"
-                />
-                {settings.ambient.background === "dots" && (
-                  <div className="mt-3 flex flex-wrap gap-4">
-                    <label className="flex cursor-pointer items-center gap-2 text-[12px] text-parch">
-                      <input type="checkbox" checked={settings.ambient.wave} onChange={(e) => patchSettings({ ambient: { ...settings.ambient, wave: e.target.checked } })} className="accent-[var(--color-ember)]" />
-                      gentle wave
-                    </label>
-                    <label className="flex cursor-pointer items-center gap-2 text-[12px] text-parch">
-                      <input type="checkbox" checked={settings.ambient.sparkle} onChange={(e) => patchSettings({ ambient: { ...settings.ambient, sparkle: e.target.checked } })} className="accent-[var(--color-ember)]" />
-                      sparkling dots
-                    </label>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <p className="font-mono text-[10px] tracking-[0.22em] text-dust uppercase">card glow</p>
-            <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  { id: "off", name: "Off", hint: "plain hairline borders" },
-                  { id: "accent", name: "Accent glow", hint: "borders light up in the main color where you hover" },
-                  { id: "prismatic", name: "Prismatic", hint: "the glow slowly cycles through every hue" },
-                ] as { id: ForgeSettings["ambient"]["glow"]; name: string; hint: string }[]
-              ).map((g) => (
-                <button
-                  key={g.id}
-                  onClick={() => patchSettings({ ambient: { ...settings.ambient, glow: g.id } })}
-                  className={`btn-press rounded-xl border px-3.5 py-3 text-left ${settings.ambient.glow === g.id ? "border-ember/60 bg-ember/8" : "border-line bg-panel/50 hover:border-line2"}`}
-                >
-                  <span className={`block text-[13px] font-semibold ${settings.ambient.glow === g.id ? "text-ember" : "text-cream"}`}>{g.name}</span>
-                  <span className="block text-[10.5px] text-dust">{g.hint}</span>
-                </button>
+                  <div className="text-[14px]">{own}</div>
+                  <div className="mt-0.5 text-[11px]">{ready ? "in use" : "coming soon"}</div>
+                </div>
               ))}
             </div>
 
-            <p className="font-mono text-[10px] tracking-[0.22em] text-dust uppercase">cursor</p>
-            <div className="grid grid-cols-3 gap-2">
-              {(
-                [
-                  { id: "none", name: "Plain", hint: "the usual pointer, nothing extra" },
-                  { id: "lantern", name: "Lantern", hint: "a soft light follows your cursor with a lazy sway" },
-                  { id: "sparks", name: "Sparkle trail", hint: "tiny sparks drip off the cursor as you move" },
-                ] as { id: ForgeSettings["ambient"]["cursor"]; name: string; hint: string }[]
-              ).map((c) => (
-                <button
-                  key={c.id}
-                  onClick={() => patchSettings({ ambient: { ...settings.ambient, cursor: c.id } })}
-                  className={`btn-press rounded-xl border px-3.5 py-3 text-left ${settings.ambient.cursor === c.id ? "border-ember/60 bg-ember/8" : "border-line bg-panel/50 hover:border-line2"}`}
-                >
-                  <span className={`block text-[13px] font-semibold ${settings.ambient.cursor === c.id ? "text-ember" : "text-cream"}`}>{c.name}</span>
-                  <span className="block text-[10.5px] text-dust">{c.hint}</span>
-                </button>
-              ))}
-            </div>
-            {settings.ambient.cursor !== "none" && (
-              <div className="rounded-xl border border-line bg-panel/40 p-4">
-                <label className="flex items-center justify-between font-mono text-[10px] tracking-[0.2em] text-dust uppercase">
-                  {settings.ambient.cursor === "lantern" ? "lantern size" : "sparkle spread"}
-                  <span className="text-cream">{settings.ambient.cursorSize}px</span>
-                </label>
-                <input
-                  type="range"
-                  min={120}
-                  max={420}
-                  step={20}
-                  value={settings.ambient.cursorSize}
-                  onChange={(e) => patchSettings({ ambient: { ...settings.ambient, cursorSize: Number(e.target.value) } })}
-                  className="mt-2 w-full accent-[var(--color-ember)]"
-                />
-              </div>
-            )}
-            {/* motion — the master switch over everything above */}
-            <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">Movement</p>
-              <p className="mt-1 text-[12.5px] leading-relaxed text-dust">
-                How much things move. This governs everything on this page.
-              </p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {(
-                  [
-                    ["system", "Follow my system", "Whatever your operating system's “reduce motion” setting says. The right choice for almost everyone."],
-                    ["full", "Everything moves", "All of it, regardless of the system setting."],
-                    ["reduced", "Only what matters", "Things that tell you something happened still move. Endless drifting, flickering and scrolling stops."],
-                    ["off", "Still", "Nothing animates at all."],
-                  ] as const
-                ).map(([id, label, why]) => {
-                  const active = (settings.ambient.motion ?? "system") === id;
-                  return (
-                    <button
-                      key={id}
-                      onClick={() => patchSettings({ ambient: { ...settings.ambient, motion: id } })}
-                      title={why}
-                      className={`rounded-lg border px-3 py-1.5 text-[12.5px] transition ${
-                        active ? "border-ember bg-ember/15 text-cream" : "border-line text-dust hover:text-cream"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 text-[11.5px] text-dust">
-                {
-                  {
-                    system: "Following your operating system. If you have turned reduce-motion on there, the forge is already calm.",
-                    full: "Everything moves, even if your system asks for less.",
-                    reduced: "A row finishing still catches your eye. Nothing drifts, flickers or scrolls forever.",
-                    off: "Completely still.",
-                  }[settings.ambient.motion ?? "system"]
-                }
-              </p>
-            </div>
           </>
         )}
+
+        {section === "canva" && <CanvaCard settings={settings} patchSettings={patchSettings} />}
 
         {section === "advanced" && (
           <>
@@ -1555,7 +1498,7 @@ export default function SettingsView({
                 <H>Advanced</H>
                 <P className="mt-1">Care, recovery and updates for the forge itself.</P>
               </div>
-              <span className="shrink-0 rounded-lg border border-line bg-panel/60 px-3 py-1.5 font-mono text-[11px] text-parch">
+              <span data-tip="The version of Image Forge you are running." className="shrink-0 rounded-lg border border-line bg-panel/60 px-3 py-1.5 font-mono text-[11px] text-parch">
                 v{appVersion}
               </span>
             </div>
@@ -1564,13 +1507,13 @@ export default function SettingsView({
 
             {/* repair */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">Repair</p>
+              <p data-tip="Fixes a messy list: pictures stuck as busy go back to waiting, copied names get a suffix." className="font-display text-[15px] tracking-wide text-cream">Repair</p>
               <p className="mt-1 text-[12.5px] leading-relaxed text-dust">
                 If the forge is acting strange, this fixes the usual suspects in one pass: rows stuck mid-strike go back
-                to <span className="font-mono text-parch">pending</span>, duplicate filenames get a suffix, the
+                to <span data-tip="The status of a picture that is waiting to be made." className="font-mono text-parch">pending</span>, duplicate filenames get a suffix, the
                 shops/items/events/npcs structure in your linked folder is re-created, and a fresh CSV is written there.
               </p>
-              <Btn
+              <Btn data-tip="Fixes the usual problems in one go: stuck rows go back to waiting and duplicate filenames get a number added."
                 variant="primary"
                 className="mt-3"
                 disabled={repairBusy}
@@ -1589,33 +1532,33 @@ export default function SettingsView({
 
             {/* update from github */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">Sync &amp; update from GitHub</p>
+              <p data-tip="Pull your list from GitHub and check for a new version of Image Forge." className="font-display text-[15px] tracking-wide text-cream">Sync &amp; update from GitHub</p>
               <p className="mt-1 text-[12.5px] leading-relaxed text-dust">
-                Point the forge at its repository. Then you can pull the manifest straight from the repo (great when an
+                Point the forge at its repository. Then you can pull the list straight from the repo (great when an
                 agent or a teammate edits the CSV there), and check whether a newer installer has been published.
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">repo owner</label>
-                  <input value={settings.github.owner} onChange={(e) => patchSettings({ github: { ...settings.github, owner: e.target.value } })} placeholder="your-github-name" className={`${field} font-mono !text-[12px]`} />
+                  <label data-tip="The GitHub account or group that owns the repository." className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">repo owner</label>
+                  <input data-tip="The GitHub account or group that owns the repository." value={settings.github.owner} onChange={(e) => patchSettings({ github: { ...settings.github, owner: e.target.value } })} placeholder="your-github-name" className={`${field} font-mono !text-[12px]`} />
                 </div>
                 <div>
-                  <label className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">repo name</label>
-                  <input value={settings.github.repo} onChange={(e) => patchSettings({ github: { ...settings.github, repo: e.target.value } })} placeholder="image-forge" className={`${field} font-mono !text-[12px]`} />
+                  <label data-tip="The name of the repository on GitHub." className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">repo name</label>
+                  <input data-tip="The name of the repository on GitHub." value={settings.github.repo} onChange={(e) => patchSettings({ github: { ...settings.github, repo: e.target.value } })} placeholder="image-forge" className={`${field} font-mono !text-[12px]`} />
                 </div>
                 <div>
-                  <label className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">branch</label>
-                  <input value={settings.github.branch} onChange={(e) => patchSettings({ github: { ...settings.github, branch: e.target.value } })} placeholder="main" className={`${field} font-mono !text-[12px]`} />
+                  <label data-tip="The branch to read from, like main." className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">branch</label>
+                  <input data-tip="The branch to read from, like main." value={settings.github.branch} onChange={(e) => patchSettings({ github: { ...settings.github, branch: e.target.value } })} placeholder="main" className={`${field} font-mono !text-[12px]`} />
                 </div>
                 <div>
-                  <label className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">manifest path in repo</label>
-                  <input value={settings.github.csvPath} onChange={(e) => patchSettings({ github: { ...settings.github, csvPath: e.target.value } })} placeholder="marketplace-images.csv" className={`${field} font-mono !text-[12px]`} />
+                  <label data-tip="Where your list file sits inside the repository." className="mb-1 block font-mono text-[9.5px] tracking-[0.2em] text-dust uppercase">list file path in repo</label>
+                  <input data-tip="Where the list file (a CSV) sits inside the repository." value={settings.github.csvPath} onChange={(e) => patchSettings({ github: { ...settings.github, csvPath: e.target.value } })} placeholder="marketplace-images.csv" className={`${field} font-mono !text-[12px]`} />
                 </div>
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <div className="flex overflow-hidden rounded-lg border border-line">
                   {(["merge", "replace"] as const).map((m) => (
-                    <button
+                    <button data-tip={`${m === "merge" ? `Adds the pulled rows to the ones you already have.` : `Swaps your rows for the pulled ones.`}`}
                       key={m}
                       onClick={() => setPullMode(m)}
                       className={`btn-press px-3 py-2 font-mono text-[10.5px] uppercase ${pullMode === m ? "bg-ember/15 text-ember" : "text-dust hover:text-cream"}`}
@@ -1624,7 +1567,7 @@ export default function SettingsView({
                     </button>
                   ))}
                 </div>
-                <Btn
+                <Btn data-tip="Downloads the list from the repository and loads it into the forge."
                   onClick={async () => {
                     setPullBusy(true);
                     try {
@@ -1637,7 +1580,7 @@ export default function SettingsView({
                 >
                   <IDownload size={13} /> {pullBusy ? "Pulling…" : "Pull manifest"}
                 </Btn>
-                <Btn
+                <Btn data-tip="Checks whether a newer version of the app has been published."
                   variant="moss"
                   onClick={async () => {
                     setUpdateBusy(true);
@@ -1652,9 +1595,9 @@ export default function SettingsView({
                   <ISparkle size={13} /> {updateBusy ? "Checking…" : "Check for app update"}
                 </Btn>
               </div>
-              <p className="mt-2 text-[11px] text-dust">
-                Pull reads <span className="font-mono text-parch">raw.githubusercontent.com</span> — the repo must be public (or use a gist).
-                The update check reads the repo's latest release. In the desktop app, <span className="text-parch">Update now</span> downloads its <span className="font-mono text-parch">Setup.exe</span>, installs it and reopens Image Forge — your settings and pictures are not touched.
+              <p data-tip="How pulling and updating work." className="mt-2 text-[11px] text-dust">
+                Pull reads <span data-tip="The GitHub web address that your list is read from." className="font-mono text-parch">raw.githubusercontent.com</span> — the repo must be public (or use a gist).
+                The update check reads the repo's latest release. In the desktop app, <span data-tip="Downloads the newest installer and starts it." className="text-parch">Update now</span> downloads its <span data-tip="The installer file for Windows." className="font-mono text-parch">Setup.exe</span>, installs it and reopens Image Forge — your settings and pictures are not touched.
               </p>
             </div>
 
@@ -1662,9 +1605,9 @@ export default function SettingsView({
 
             {/* reset */}
             <div className="rounded-xl border border-blood/25 bg-blood/4 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">Reset — start from a clean slate</p>
-              <p className="mt-1 text-[12.5px] leading-relaxed text-dust">
-                Wipes local app data <em>only</em> — images already written to your folders on disk are never touched.
+              <p data-tip="Wipes Image Forge's saved data on this computer so you can start fresh. It asks twice." className="font-display text-[15px] tracking-wide text-cream">Reset — start from a clean slate</p>
+              <p data-tip="Only app data is wiped. Pictures already saved in your folders stay." className="mt-1 text-[12.5px] leading-relaxed text-dust">
+                Wipes local app data <em data-tip="Pictures saved in your folders are never touched.">only</em> — images already written to your folders on disk are never touched.
                 Tick exactly what should go, then confirm twice.
               </p>
               <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -1672,12 +1615,12 @@ export default function SettingsView({
                   [
                     { key: "rows", label: "Manifest & generated previews", desc: "every row, status, cooldown and note" },
                     { key: "recipes", label: "Recipes & previous batches", desc: "saved wizard setups and batch history" },
-                    { key: "settings", label: "Settings, styles & API keys", desc: "engines, keys, cooldowns, appearance" },
+                    { key: "settings", label: "Settings, styles & API keys", desc: "engines, keys, cooldowns" },
                     { key: "market", label: "Marketplace progress", desc: "Emberfair purse, satchel, standing" },
                   ] as const
                 ).map((o) => (
                   <label key={o.key} className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5">
-                    <input
+                    <input data-tip={`${`Tick to erase: ${o.label}.`}`}
                       type="checkbox"
                       checked={resetChecks[o.key]}
                       onChange={(e) => {
@@ -1687,17 +1630,17 @@ export default function SettingsView({
                       className="mt-0.5 accent-[#e2593f]"
                     />
                     <span>
-                      <span className="block text-[12.5px] font-semibold text-parch">{o.label}</span>
-                      <span className="block text-[10.5px] text-dust">{o.desc}</span>
+                      <span data-tip="The name of this item you can wipe." className="block text-[12.5px] font-semibold text-parch">{o.label}</span>
+                      <span data-tip="What wiping this removes." className="block text-[10.5px] text-dust">{o.desc}</span>
                     </span>
                   </label>
                 ))}
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <Btn onClick={onBackup}>
+                <Btn data-tip="Saves a backup file first so you can get things back after a reset." onClick={onBackup}>
                   <IDownload size={13} /> Download backup first
                 </Btn>
-                <Btn
+                <Btn data-tip="Erases the things you ticked. It asks you to click twice because it can't be undone."
                   variant="danger"
                   disabled={!resetChecks.rows && !resetChecks.recipes && !resetChecks.settings && !resetChecks.market}
                   onClick={() => {
@@ -1716,15 +1659,15 @@ export default function SettingsView({
 
             {/* uninstall */}
             <div className="rounded-xl border border-line bg-panel/50 p-4">
-              <p className="font-display text-[15px] tracking-wide text-cream">Uninstall the desktop app</p>
+              <p data-tip="How to remove the Image Forge app from this computer." className="font-display text-[15px] tracking-wide text-cream">Uninstall the desktop app</p>
               <p className="mt-1 text-[12.5px] leading-relaxed text-dust">
                 The installer registered a proper Windows uninstaller. Use the Start Menu entry or Windows Settings —
                 on the way out it asks whether to also remove your forge data from{" "}
-                <span className="font-mono text-parch">%APPDATA%\Image Forge</span>. Say no if you plan to reinstall;
+                <span data-tip="The folder where Image Forge keeps your data on this computer." className="font-mono text-parch">%APPDATA%\Image Forge</span>. Say no if you plan to reinstall;
                 your data survives either way until you opt in.
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <a
+                <a data-tip="Opens the Windows list of installed apps, where you can uninstall Image Forge."
                   href="ms-settings:appsfeatures"
                   target="_blank"
                   rel="noreferrer"
@@ -1732,7 +1675,7 @@ export default function SettingsView({
                 >
                   <IFolder size={14} /> Open Windows “Installed apps”
                 </a>
-                <span className="font-mono text-[10.5px] text-dust">…then find “Image Forge” → Uninstall</span>
+                <span data-tip="After this, find Image Forge in the list and press Uninstall." className="font-mono text-[10.5px] text-dust">…then find “Image Forge” → Uninstall</span>
               </div>
               <p className="mt-2.5 text-[11px] text-dust">
                 Prefer to keep the app but lose the data? The reset above does exactly that without uninstalling anything.
@@ -1744,3 +1687,4 @@ export default function SettingsView({
     </div>
   );
 }
+

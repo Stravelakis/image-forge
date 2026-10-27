@@ -110,6 +110,36 @@ export const MODELS = [
     defaultCooldownH: 6,
   },
   {
+    id: "cloudflare-flux2-dev",
+    label: "Cloudflare FLUX.2 dev",
+    engine: "cloudflare",
+    apiId: "@cf/black-forest-labs/flux-2-dev",
+    priceUsd: 0,
+    batchPriceUsd: null,
+    needsKey: true,
+    free: "free · daily allowance",
+    allowance: "10,000 neurons/day shared with the other Cloudflare models, resets 00:00 UTC",
+    note: "Works FROM a picture: change one thing and keep the rest. What the puppet maker and reference sheets use. ~15 s a picture.",
+    retiresOn: null,
+    defaultCooldownH: 6,
+    refs: true,
+  },
+  {
+    id: "cloudflare-flux2-klein",
+    label: "Cloudflare FLUX.2 klein",
+    engine: "cloudflare",
+    apiId: "@cf/black-forest-labs/flux-2-klein-9b",
+    priceUsd: 0,
+    batchPriceUsd: null,
+    needsKey: true,
+    free: "free · daily allowance",
+    allowance: "10,000 neurons/day shared with the other Cloudflare models, resets 00:00 UTC",
+    note: "The smaller FLUX.2: faster and lighter on the allowance, rougher. Also works from a picture.",
+    retiresOn: null,
+    defaultCooldownH: 6,
+    refs: true,
+  },
+  {
     id: "flux",
     label: "Pollinations FLUX",
     engine: "pollinations",
@@ -213,6 +243,15 @@ export const MODEL_TRAITS = {
     promptStyle:
       "A single descriptive sentence, then a few style words. It runs in only four steps, so keep it short and concrete — long prompts get half-read.",
   },
+  "cloudflare-flux2-dev": {
+    textQuality: "fair",
+    promptStyle:
+      "Plain descriptive sentences. When working from a picture, say exactly what to change and list what must stay the same.",
+  },
+  "cloudflare-flux2-klein": {
+    textQuality: "fair",
+    promptStyle: "Short, concrete sentences. When working from a picture, name the one change and say everything else stays.",
+  },
   flux: {
     textQuality: "fair",
     promptStyle: "One clear descriptive sentence followed by style words. Avoid very long prompts.",
@@ -239,7 +278,10 @@ export function textQualityFor(row, s) {
   const { def, engine } = resolveRoute(row, s);
   if (def) return MODEL_TRAITS[def.id]?.textQuality ?? "fair";
   // A model on your own machine — you tell us, because we cannot know.
-  if (engine === "local") return s.localTextQuality || "poor";
+  // Z-Image is known for readable lettering (signs, labels, posters), so it is
+  // never told to avoid text — the setting defaults to "poor" for the unknown
+  // models people run, which wrongly muzzled it (Ak, 13 Oct 2026).
+  if (engine === "local") return /z-?image/i.test(s.localModel || "") ? "good" : s.localTextQuality || "poor";
   return "fair";
 }
 
@@ -293,6 +335,8 @@ export function estimateCost(rows, settings, { batch = false } = {}) {
     const { def, engine } = resolveRoute(row, settings);
     // A model running on your own machine costs nothing, whatever it is called.
     if (!def && FREE_ENGINES.has(engine)) continue;
+    // A paused or switched-off engine fails at once and never bills anything.
+    if (engine === "paused" || engine === "retired") continue;
     const p = def ? priceFor(def.id, { batch }) : null;
     if (p === null) unknown++;
     else total += p;
@@ -331,6 +375,42 @@ export class RetiredModelError extends Error {
 
 /** Engines that cost nothing, whoever the model turns out to be. */
 const FREE_ENGINES = new Set(["local", "simulated", "cloudflare", "pollinations", "ovh"]);
+
+/**
+ * Google image models the owner has banned: anything called "Pro" (Nano
+ * Banana Pro, Gemini 3 Pro Image). Matches the word on its own, so a model
+ * called "prompt-something" is not caught by accident.
+ */
+const BANNED_WORD = /(^|[^a-z0-9])pro($|[^a-z0-9])/i;
+export function isBannedImageModel(engine, ...names) {
+  return engine === "gemini" && names.some((n) => BANNED_WORD.test(String(n ?? "")));
+}
+
+/** Is this row's route a banned Google "Pro" image model? */
+export function rowUsesBannedModel(row, settings) {
+  const { engine, apiModel, def } = resolveRoute(row, settings);
+  return isBannedImageModel(engine, apiModel, def?.id, row?.model);
+}
+
+/**
+ * What a row would do to the wallet: free, paid at a known price, or paid at a
+ * price nobody knows. For callers with no dialog to ask (the agent server).
+ */
+export function rowSpend(row, settings, { batch = false } = {}) {
+  const route = resolveRoute(row, settings);
+  if (FREE_ENGINES.has(route.engine) || route.engine === "paused" || route.engine === "retired") {
+    return { paid: false, price: 0, banned: false, engine: route.engine };
+  }
+  return {
+    paid: true,
+    price: route.def ? priceFor(route.def.id, { batch }) : null,
+    banned: rowUsesBannedModel(row, settings),
+    engine: route.engine,
+  };
+}
+
+export const BANNED_MODEL_MESSAGE =
+  "Pro image models are switched off in this forge (they cost too much). Pick Nano Banana 2 or Nano Banana 2 Lite instead.";
 
 /** Which engine + API model id a row should be struck with. */
 /**
@@ -702,14 +782,24 @@ export function readGeminiImage(json) {
 }
 
 /** Body for one Gemini image request — shared by the live call and batch jobs. */
-export function geminiRequestBody(row, apiModel, { imageSize = "1K" } = {}) {
+/** The type of a base64 picture, read from its first bytes. */
+export const b64Mime = (b64) =>
+  String(b64).startsWith("/9j/") ? "image/jpeg" : String(b64).startsWith("UklG") ? "image/webp" : "image/png";
+
+export function geminiRequestBody(row, apiModel, { imageSize = "1K", refImages = [] } = {}) {
   const aspect = GEMINI_ASPECTS.includes(row.aspect_ratio) ? row.aspect_ratio : "1:1";
   const prompt = row.negative_prompt
     ? `${row.prompt}\n\nAvoid: ${row.negative_prompt}`
     : row.prompt;
   return {
     model: apiModel,
-    input: [{ type: "text", text: prompt }],
+    // The reference pictures go first. Until 12 Oct 2026 they were accepted
+    // by the caller and silently dropped here, so "from a reference" on Google
+    // was really "from nothing" — every frame a new character.
+    input: [
+      ...(refImages ?? []).map((b64) => ({ type: "image", data: b64, mime_type: b64Mime(b64) })),
+      { type: "text", text: prompt },
+    ],
     // JPEG, not PNG. Google's own examples show "image/png", but the
     // Interactions API rejects it: "The value 'image/png' is not supported for
     // 'response_format.mime_type'. Supported values: 'image/jpeg'." Confirmed
@@ -779,12 +869,53 @@ async function gemini(row, apiModel, s, signal, exhaust, cooldownMs, refImages) 
   throw lastErr instanceof Error ? lastErr : new Error("Every Google key failed.");
 }
 
-async function cloudflare(row, apiModel, s, signal, exhaust, cooldownMs) {
+/** FLUX.2 on Cloudflare takes a form, not JSON, and can work from pictures. */
+export const isFlux2 = (apiModel) => /flux-2/.test(String(apiModel));
+
+async function cloudflare(row, apiModel, s, signal, exhaust, cooldownMs, refImages, size) {
   const cf = s.cloudflare || {};
   const account = (cf.accountId || "").trim();
   const token = (cf.token || "").trim();
   if (!account || !token) {
     throw new Error("Cloudflare needs an account id and a token — add both in Settings → Engines.");
+  }
+  if (isFlux2(apiModel)) {
+    // Up to four pictures to work from (input_image_0…3). Checked live on
+    // 12 Oct 2026: an owl's beak opened and nothing else moved.
+    const { w, h } = size ?? dimsFor(row.aspect_ratio);
+    const fd = new FormData();
+    const prompt = row.negative_prompt ? `${row.prompt}\n\nAvoid: ${row.negative_prompt}` : row.prompt;
+    fd.append("prompt", String(prompt).slice(0, 4000));
+    fd.append("width", String(w));
+    fd.append("height", String(h));
+    if (Number.isInteger(row.seed) && row.seed > 0) fd.append("seed", String(row.seed));
+    (refImages ?? []).slice(0, 4).forEach((b64, i) =>
+      fd.append(`input_image_${i}`, new Blob([b64ToBytes(b64)], { type: b64Mime(b64) }), `ref${i}.png`)
+    );
+    const res = await fetchWithTimeout(
+      cloudflareUrl(`/client/v4/accounts/${encodeURIComponent(account)}/ai/run/${apiModel}`),
+      { method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd },
+      180000,
+      signal
+    );
+    const text = await res.text().catch(() => "");
+    if (res.status === 429 || /neurons|daily (limit|allocation)/i.test(text)) {
+      throw new RateLimitError("Cloudflare's free daily allowance is used up. It resets at midnight UTC.", Date.now() + cooldownMs, "cloudflare");
+    }
+    let json = null;
+    try {
+      json = JSON.parse(text);
+    } catch {
+      /* not JSON */
+    }
+    const b64 = json?.result?.image ?? json?.image;
+    if (!res.ok || !b64) {
+      // "Your output has been flagged" (code 3030) is the safety filter. It
+      // misfired on a harmless owl portrait; other wording or seed passes.
+      const why = json?.errors?.[0]?.message || explainFailure(res.status, text, "cloudflare");
+      throw new Error(/flagged/i.test(why) ? "Cloudflare's safety filter blocked this picture — try other wording." : why);
+    }
+    return { bytes: b64ToBytes(b64), mime: "image/png" };
   }
   const res = await fetchWithTimeout(
     cloudflareUrl(`/client/v4/accounts/${encodeURIComponent(account)}/ai/run/${apiModel}`),
@@ -829,10 +960,26 @@ async function cloudflare(row, apiModel, s, signal, exhaust, cooldownMs) {
  * them wants a key, so this is the OpenAI path with the key made optional and
  * a much longer patience (a laptop GPU takes 20s–5min per picture).
  */
-async function local(row, apiModel, s, signal, refImages) {
-  const base = (s.localBase || "http://localhost:8080/v1").replace(/\/+$/, "");
-  const { w, h } = dimsFor(row.aspect_ratio);
-  const prompt = row.negative_prompt ? `${row.prompt}\n\nAvoid: ${row.negative_prompt}` : row.prompt;
+/**
+ * In the desktop app, a server on this computer is reached through the app's
+ * own /local-api proxy (electron/main.js proxyLocal): LocalAI refuses picture
+ * requests straight from a page. Elsewhere — Node, the MCP server, `npm run
+ * dev` — the address is used as it is.
+ */
+export function localRoute(base) {
+  const b = String(base || "http://localhost:8080/v1").replace(/\/+$/, "");
+  const m = /^https?:\/\/(localhost|127\.0\.0\.1)(?::(\d+))?(\/.*)?$/i.exec(b);
+  const desktop = inBrowser() && typeof location !== "undefined" && /^http:\/\/127\.0\.0\.1:\d+$/.test(location.origin);
+  if (!m || !desktop) return { base: b, headers: {} };
+  return { base: `/local-api/${m[2] || "80"}${m[3] || ""}`, headers: { "X-Forge-App": "1" } };
+}
+
+async function local(row, apiModel, s, signal, refImages, size) {
+  const route = localRoute(s.localBase);
+  const base = route.base;
+  const { w, h } = size ?? dimsFor(row.aspect_ratio);
+  // FLUX and Z-Image take no negative: added as words, "Avoid: a tongue" drew a tongue.
+  const prompt = row.negative_prompt && !/flux|klein|kontext|z-?image/i.test(apiModel) ? `${row.prompt}\n\nAvoid: ${row.negative_prompt}` : row.prompt;
   let res;
   try {
     res = await fetchWithTimeout(
@@ -841,6 +988,7 @@ async function local(row, apiModel, s, signal, refImages) {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          ...route.headers,
           ...(s.localKey?.trim() ? { Authorization: `Bearer ${s.localKey.trim()}` } : {}),
         },
         body: JSON.stringify({
@@ -940,20 +1088,22 @@ async function generateBytesRaw(rawRow, s, signal, exhaust, cooldownMs, opts = {
   const { engine, apiModel, pausedEngine } = resolveRoute(rawRow, s);
   if (engine === "retired") throw new RetiredModelError(apiModel, RETIRED_MODELS[apiModel]);
   if (engine === "paused") throw new PausedEngineError(PROVIDER_LABELS[pausedEngine] ?? pausedEngine ?? "That engine");
+  // The last line of defence: no caller can spend on a banned model, whatever it checked before.
+  if (rowUsesBannedModel(rawRow, s)) throw new Error(BANNED_MODEL_MESSAGE);
   // Models that cannot write get told not to try.
   const row = suppressTextIfWeak(rawRow, s);
   const refImages = opts.refImages ?? [];
-  if (refImages.length && !["local", "gemini"].includes(engine)) {
+  if (refImages.length && !["local", "gemini"].includes(engine) && !(engine === "cloudflare" && isFlux2(apiModel))) {
     throw new Error(
-      "Working from a reference picture needs either your own machine or a Google model. " +
-        "Cloudflare and Pollinations cannot do it."
+      "Working from a reference picture needs Cloudflare FLUX.2 (free), a Google model or your own machine. " +
+        "Pollinations and the other Cloudflare models cannot do it."
     );
   }
-  if (engine === "local") return local(row, apiModel, s, signal, refImages);
+  if (engine === "local") return local(row, apiModel, s, signal, refImages, opts.size);
   if (engine === "pollinations") return pollinations(row, apiModel, s, signal);
   if (engine === "ovh") return ovh(row, s, signal);
   if (engine === "gemini") return gemini(row, apiModel, s, signal, exhaust, cooldownMs, refImages);
-  if (engine === "cloudflare") return cloudflare(row, apiModel, s, signal, exhaust, cooldownMs);
+  if (engine === "cloudflare") return cloudflare(row, apiModel, s, signal, exhaust, cooldownMs, refImages, opts.size);
   if (engine === "openai") return openaiCompat(row, apiModel, s, signal, exhaust, cooldownMs);
   throw new Error("The practice forge draws its own pictures — it never goes online.");
 }

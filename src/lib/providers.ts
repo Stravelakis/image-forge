@@ -13,6 +13,8 @@ import {
   priceFor,
   estimateCost,
   formatUsd,
+  rowUsesBannedModel,
+  BANNED_MODEL_MESSAGE,
   MODEL_TRAITS,
   NO_TEXT_NEGATIVE,
   textQualityFor,
@@ -33,6 +35,8 @@ export {
   priceFor,
   estimateCost,
   formatUsd,
+  rowUsesBannedModel,
+  BANNED_MODEL_MESSAGE,
   MODEL_TRAITS,
   NO_TEXT_NEGATIVE,
   textQualityFor,
@@ -90,6 +94,8 @@ export interface ForgeSettings {
   tailorPrompts: boolean;
   /** ask before anything that costs money. On, and it should stay on. */
   confirmPaidRuns: boolean;
+  /** the most one puppet may spend on paid pictures, in dollars. 0 = free engines only. */
+  puppetSpendCapUsd: number;
   /** how many images to draw at once; 1 = one at a time, as it has always been */
   concurrency: number;
   /** batch jobs sent to Google that have not been collected yet */
@@ -134,8 +140,12 @@ export interface ForgeSettings {
   github: { owner: string; repo: string; branch: string; csvPath: string };
   metaPrompts: { promptWriter: string; filenameForger: string; stylePicker: string; wpMeta: string; factory: string };
   wp: { url: string; user: string; appPassword: string };
+  /** Your own Canva integration (electron/canva.mjs) — kept in the vault. */
+  canva: { clientId: string; clientSecret: string };
   ambient: {
     accent: string;
+    /** 2 = the Forge look was applied once (13 Oct 2026) */
+    lookVersion?: number;
     background: "none" | "dots" | "embers" | "stars";
     density: number;
     wave: boolean;
@@ -214,6 +224,7 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   suppressTextOnWeakModels: true,
   tailorPrompts: false,
   confirmPaidRuns: true,
+  puppetSpendCapUsd: 0,
   concurrency: 1,
   batchJobs: [],
   storageWarnAtPct: 70,
@@ -230,13 +241,15 @@ export const DEFAULT_SETTINGS: ForgeSettings = {
   github: { owner: "", repo: "image-forge", branch: "main", csvPath: "marketplace-images.csv" },
   metaPrompts: { promptWriter: "", filenameForger: "", stylePicker: "", wpMeta: "", factory: "" },
   wp: { url: "", user: "", appPassword: "" },
+  canva: { clientId: "", clientSecret: "" },
   ambient: {
-    accent: "ember",
-    background: "dots",
+    accent: "forge",
+    lookVersion: 2,
+    background: "none",
     density: 55,
     wave: true,
-    sparkle: true,
-    glow: "accent",
+    sparkle: false,
+    glow: "off",
     cursor: "lantern",
     cursorSize: 240,
     motion: "system",
@@ -258,6 +271,7 @@ export function normalizeSettings(s: Partial<ForgeSettings>): ForgeSettings {
     cloudflare: { ...DEFAULT_SETTINGS.cloudflare, ...(s.cloudflare ?? {}) },
     batchJobs: Array.isArray(s.batchJobs) ? s.batchJobs : [],
     concurrency: Math.min(Math.max(Number(s.concurrency) || 1, 1), 8),
+    puppetSpendCapUsd: Math.max(Number(s.puppetSpendCapUsd) || 0, 0),
     scribe: { ...DEFAULT_SETTINGS.scribe, ...(s.scribe ?? {}) },
     coder: { ...DEFAULT_SETTINGS.coder, ...(s.coder ?? {}) },
     vision: { ...DEFAULT_SETTINGS.vision, ...(s.vision ?? {}) },
@@ -270,6 +284,7 @@ export function normalizeSettings(s: Partial<ForgeSettings>): ForgeSettings {
     metaPrompts: { ...DEFAULT_SETTINGS.metaPrompts, ...(s.metaPrompts ?? {}) },
     github: { ...DEFAULT_SETTINGS.github, ...(s.github ?? {}) },
     wp: { ...DEFAULT_SETTINGS.wp, ...(s.wp ?? {}) },
+    canva: { ...DEFAULT_SETTINGS.canva, ...(s.canva ?? {}) },
     ambient: (() => {
       const a = (s.ambient ?? {}) as Partial<ForgeSettings["ambient"]> & { dots?: boolean; glow?: boolean };
       const migrated: Partial<ForgeSettings["ambient"]> = { ...a };
@@ -278,6 +293,9 @@ export function normalizeSettings(s: Partial<ForgeSettings>): ForgeSettings {
       if (typeof a.glow !== "string" && typeof (a as { glow?: boolean }).glow === "boolean")
         migrated.glow = (a as { glow?: boolean }).glow ? "accent" : "off";
       delete (migrated as { dots?: boolean }).dots;
+      // Once, for everyone: the Forge look — violet, black, no corner glow,
+      // no dot grid. Anyone may pick another colour afterwards and keep it.
+      if ((a.lookVersion ?? 1) < 2) Object.assign(migrated, { accent: "forge", glow: "off", background: "none", sparkle: false, lookVersion: 2 });
       return { ...DEFAULT_SETTINGS.ambient, ...migrated };
     })(),
     customStyles: s.customStyles ?? [],
@@ -470,7 +488,106 @@ export async function generateReal(
 
 /* ---------------- the scribe & factory (OpenAI-compatible chat) ---------------- */
 
+/** A sensible free model per text provider, by its address's host. */
+export const FREE_TEXT_MODEL: Record<string, string> = {
+  "api.mistral.ai": "mistral-small-latest",
+  // Checked 13 Oct 2026 — free models come and go (NVIDIA retired Llama 3.3
+  // in Aug 2026), so a model that is gone is replaced by pickTextModel.
+  "openrouter.ai": "google/gemma-4-31b-it:free",
+  "integrate.api.nvidia.com": "google/gemma-4-31b-it",
+  "api.groq.com": "llama-3.3-70b-versatile", // gitleaks:allow — a model name, not a key
+};
+
+/**
+ * THE OTHER TEXT ENGINES you have keys for (13 Oct 2026). Free tiers say "too
+ * many requests" (429) or wobble (5xx) — Mistral did, mid-test — and the Chat
+ * then just failed. Now the next provider with a key answers instead. Kept
+ * here, set by the app whenever settings change, so every caller of
+ * scribeChat gets it without passing anything new.
+ */
+let FALLBACKS: { base: string; key: string; model: string }[] = [];
+export function setTextFallbacks(providers: ForgeSettings["textProviders"]): void {
+  FALLBACKS = providers
+    .filter((p) => p.key.trim())
+    .map((p) => {
+      let host = "";
+      try {
+        host = new URL(p.base).host;
+      } catch {
+        /* not an address */
+      }
+      return { base: p.base, key: p.key, model: FREE_TEXT_MODEL[host] ?? "" };
+    })
+    .filter((p) => p.model);
+}
+
+/** Free models change; when the one asked for is gone, find a working one. */
+const PREFER = [/gemma-4-31b/i, /mistral-large/i, /nemotron-3-super/i, /mistral-small/i, /gemma/i, /llama.*instruct/i, /qwen.*instruct/i];
+const picked = new Map<string, string>();
+async function pickTextModel(base: string, key: string): Promise<string | null> {
+  if (picked.has(base)) return picked.get(base)!;
+  try {
+    const r = await fetchWithTimeout(`${routeBase(base)}/models`, { headers: { Authorization: `Bearer ${key.trim()}` } }, 20000);
+    const ids = ((await r.json()) as { data?: { id: string }[] }).data?.map((m) => m.id) ?? [];
+    const pool = /openrouter/.test(base) ? ids.filter((id) => id.endsWith(":free")) : ids.filter((id) => !/embed|guard|safety|reward|retriever|vision|coder|code/i.test(id));
+    for (const re of PREFER) {
+      const hit = pool.find((id) => re.test(id));
+      if (hit) {
+        picked.set(base, hit);
+        return hit;
+      }
+    }
+  } catch {
+    /* no list — no fallback */
+  }
+  return null;
+}
+
 export async function scribeChat(
+  scribe: ForgeSettings["scribe"],
+  system: string,
+  user: string,
+  signal?: AbortSignal
+): Promise<string> {
+  const hostOf = (u: string) => {
+    try {
+      return new URL(u).host.replace(/^(api|integrate\.api)\./, "");
+    } catch {
+      return u;
+    }
+  };
+  try {
+    return await scribeOnce(scribe, system, user, signal);
+  } catch (e) {
+    const first = String((e as Error)?.message ?? e);
+    const busy = /text engine (429|5\d\d)|timed out|Failed to fetch|no text-engine key|could not reach/i.test(first);
+    if (!busy || signal?.aborted) throw e;
+    const tried = [`${hostOf(scribe.base)}: ${first.slice(0, 60)}`];
+    for (const f of FALLBACKS.filter((x) => x.base !== scribe.base || x.key !== scribe.key)) {
+      try {
+        return await scribeOnce({ ...f, model: picked.get(f.base) ?? f.model }, system, user, signal);
+      } catch (err) {
+        let why = String((err as Error)?.message ?? err);
+        // The model itself is gone (404/410): find the one that replaced it.
+        if (/text engine (404|410)/.test(why)) {
+          const m = await pickTextModel(f.base, f.key);
+          if (m) {
+            try {
+              return await scribeOnce({ ...f, model: m }, system, user, signal);
+            } catch (err2) {
+              why = String((err2 as Error)?.message ?? err2);
+            }
+          }
+        }
+        tried.push(`${hostOf(f.base)}: ${why.slice(0, 60)}`);
+      }
+    }
+    // Every engine with a key was asked; say what each one answered.
+    throw new Error(tried.length > 1 ? `every text engine was busy or failed — ${tried.join(" · ")}` : first);
+  }
+}
+
+async function scribeOnce(
   scribe: ForgeSettings["scribe"],
   system: string,
   user: string,

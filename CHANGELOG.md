@@ -9,6 +9,89 @@ helps nobody decide whether to update.
 
 ## [Unreleased]
 
+Tests: 715 across 39 files.
+
+### Added
+
+- **Made** (it was the Forge tab, and the Gallery's Images page): statistics
+  (made, today, waiting, failed, spent, a count by engine), then every picture,
+  sheet, GIF and puppet with its exact date, engine and status; **Redo** on each,
+  **Redo N marked or failed**, a heart and a cross, **GIF**, click to zoom, and
+  **Edit as a table** for the spreadsheet. Thumbnails are kept between restarts
+  (they lived only in memory before), and **Find them in my folder** brings back
+  the ones made earlier from your linked folder.
+- **Start** is simpler: describe it once, say how many, pick a **Style** (the
+  word links to Styles), a shape, and an **engine** from a drop-down of the
+  engines that are set up, ending in **Add more engines…**. It keeps the run in
+  progress and the last run, with **See everything in Made →**.
+- A single **Make the N waiting** button in the header (not shown on Made).
+- **Wizards are four makers:** Make pictures (three steps), Make a puppet,
+  Animate a character, and Prompt factory (copy for Google Sheets, Excel, CSV).
+  Uploading to WordPress moved to **Download**. **Gallery** is Everything made,
+  Styles and **Templates** (picture setups and puppet templates).
+- **Make a puppet:** describe a character (or add up to three inspiration
+  photos), pick head, waist-up (default) or full body, and get a puppet for
+  Video Forge that talks, blinks, raises its brows, nods and, from the waist up,
+  waves, points and shrugs. Four faces are drawn and a picture checker marks
+  each; the parts are edits of the chosen face with at most three tries each.
+  Two engines (faces, parts), including Z-Image and FLUX.2 klein on your own
+  machine through LocalAI, and Cloudflare FLUX.2. The mouth is with lips or
+  without (guessed from the description); the background colour is chosen per
+  character (magenta, else green, else blue) and the colour spill is cleaned;
+  half-open mouths; arm poses are whole-body pictures; an optional side-facing
+  view for two characters talking and a sitting view for full body. **Send to
+  Video Forge**, **Save zip**, **Save as template**, and **Delete this puppet**
+  (asks twice; moved to `%APPDATA%\Forge\puppets-deleted`, not erased). Video
+  Forge can order a puppet and Image Forge opens the maker filled in. Method:
+  `docs/puppet-recipe.md`; in plain words: `docs/puppets-eli5.md`.
+- **Cloudflare FLUX.2** (dev and klein) as engines that work from a picture —
+  free reference sheets on Cloudflare.
+- **Keys shared with Video Forge.** When both apps are installed, a key typed
+  into either works in both: Google (Gemini), OpenRouter, NVIDIA, Mistral,
+  Cloudflare, Pollinations, OpenAI, Groq, ElevenLabs and Fish. They are kept in
+  `%APPDATA%\Forge\shared-keys.bin`, locked by Windows so only your Windows user
+  can read it. A shared key only fills an empty box; it never replaces one you
+  typed. Windows only.
+- **The twin switch.** The header shows both Forge marks; clicking Video
+  Forge's opens it. Hidden when Video Forge is not installed.
+- **Hover help on every control:** one bubble over everything (two short
+  sentences, optionally a link to the docs), and a test that fails on any
+  control without one.
+- **Cursor chasers:** Animate a character → Cursor chaser makes a little creature
+  that runs after the mouse on a website (run, sit, sleep); Try it here, then
+  Download for a website (strip, script, demo, how-to).
+- **Settings → Language** (was Appearance): English now; Greek, French,
+  German, Spanish and Portuguese are coming, in simple words.
+- A **Test** beside every key, run on paste.
+- The **Forge ground:** a black ground, the violet "forge" accent, Sora type and
+  pill buttons.
+
+### Changed
+
+- New icon: the camera-on-anvil mark on a transparent background.
+- **Settings → Appearance removed**; its colour and movement choices are gone.
+- Chat and the other writing jobs: a job with no key takes a provider that has
+  one, and a busy (429) or retired model falls back to the next engine with a
+  key.
+- The MCP server and `CONNECT-AGENTS.md` now say what is true: with no keys it
+  uses OVHcloud (not Pollinations). The in-app Docs and Agents pages were
+  rewritten; the Agents page lists the real eight `forge_*` tools.
+
+### Fixed
+
+- **Empty settings when another copy held the port.** The page's storage
+  belongs to its address, port included, so a second copy opened on 47822 with
+  no keys, no settings and an empty list. Everything the page keeps is now also
+  saved in a file the app owns (`electron/vault.mjs`, locked with Windows'
+  per-user encryption), loaded first, with what other ports held merged in once.
+  Reset clears it too. Test copies name their own ports with `IMAGEFORGE_PORTS`.
+- Halt now aborts requests that are already in flight.
+- The NVIDIA and Cloudflare relay now sends request bodies with a length, over
+  IPv4: the Chat's fallback to NVIDIA used to hang and end in "read ECONNRESET"
+  after 37 seconds.
+- Google models were sent your reference picture's request without the
+  picture: "from a reference" sheets on Google were really from nothing.
+
 ## [1.0.4] - 2026-09-26
 
 ### Changed

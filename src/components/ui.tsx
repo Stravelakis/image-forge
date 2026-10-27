@@ -210,7 +210,7 @@ export const StatusChip = ({ status, pulse }: { status: Status; pulse?: boolean 
 export const CatChip = ({ category }: { category: Category }) => {
   const meta = CATEGORY_META[category] ?? CATEGORY_META.image;
   return (
-    <span className={`inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[10.5px] ${meta.chip}`}>
+    <span data-tip={`The kind of picture this is: ${category || "image"}.`} className={`inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[10.5px] ${meta.chip}`}>
       {category || "image"}
     </span>
   );
@@ -227,8 +227,8 @@ export function Btn({
   ...rest
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: BtnVariant }) {
   const styles: Record<BtnVariant, string> = {
-    primary: "bg-ember text-[var(--color-on-accent)] hover:bg-[var(--color-accent-lift)] shadow-[0_2px_0_var(--color-accent-deep),0_10px_24px_color-mix(in_srgb,var(--color-ember)_22%,transparent)] font-semibold",
-    ghost: "border border-line2 bg-panel2/60 text-parch hover:text-cream hover:border-ember/50 hover:bg-raise/70",
+    primary: "forge-primary font-semibold text-[var(--color-on-accent)]",
+    ghost: "forge-ghost text-parch hover:text-cream",
     danger: "border border-blood/40 bg-blood/10 text-blood hover:bg-blood/20",
     subtle: "text-dust hover:text-cream hover:bg-raise/60",
     moss: "bg-moss text-[#15230c] hover:bg-[#9cc47f] shadow-[0_2px_0_color-mix(in_srgb,var(--color-moss)_60%,black)] font-semibold",
@@ -261,11 +261,11 @@ export function Modal({
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/65 backdrop-blur-[3px]" onClick={onClose} />
+      <div data-tip="Click outside the window to close it." className="absolute inset-0 bg-black/65 backdrop-blur-[3px]" onClick={onClose} />
       <div className={`pop-in relative w-full ${width} max-h-[88vh] overflow-y-auto rounded-2xl border border-line2 bg-panel shadow-[0_30px_80px_rgba(0,0,0,0.55)]`}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-panel/95 px-5 py-3.5 backdrop-blur">
-          <h3 className="font-display text-[15px] tracking-wide text-cream">{title}</h3>
-          <button onClick={onClose} className="btn-press rounded-lg p-1.5 text-dust hover:bg-raise hover:text-cream">
+          <h3 data-tip="The title of this window." className="font-display text-[15px] tracking-wide text-cream">{title}</h3>
+          <button data-tip="Closes this window." onClick={onClose} className="btn-press rounded-lg p-1.5 text-dust hover:bg-raise hover:text-cream">
             <IX size={15} />
           </button>
         </div>
@@ -285,10 +285,10 @@ export function CodeBlock({ code }: { code: string }) {
   );
 }
 
-export function CopyBtn({ text, label = "copy" }: { text: string; label?: string }) {
+export function CopyBtn({ text, label = "copy", "data-tip": tip }: { text: string; label?: string; "data-tip"?: string }) {
   const [ok, setOk] = useState(false);
   return (
-    <button
+    <button data-tip={tip ?? "Copies this text so you can paste it somewhere else."}
       onClick={async () => {
         try {
           await navigator.clipboard.writeText(text);
@@ -318,7 +318,7 @@ export function ToastHost({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: 
   return (
     <div className="pointer-events-none fixed right-4 bottom-4 z-[70] flex w-[340px] flex-col gap-2">
       {toasts.map((t) => (
-        <div
+        <div data-tip="Click to dismiss this message."
           key={t.id}
           role="status"
           onClick={() => dismiss(t.id)}
@@ -326,7 +326,7 @@ export function ToastHost({ toasts, dismiss }: { toasts: Toast[]; dismiss: (id: 
         >
           <span className="text-[12.5px] leading-snug text-cream">{t.msg}</span>
           {t.action && (
-            <button
+            <button data-tip={`${t.action.label}, and then this message goes away.`}
               onClick={(e) => {
                 e.stopPropagation();
                 t.action?.run();
@@ -406,14 +406,14 @@ export function Lightbox({
   const isSvg = src.trimStart().startsWith("<svg");
 
   return (
-    <div
+    <div data-tip="Click anywhere outside the picture to close it."
       onClick={onClose}
       role="dialog"
       aria-label={alt}
       aria-modal="true"
       className="fixed inset-0 z-[100] flex cursor-zoom-out flex-col items-center justify-center gap-3 bg-black/85 p-6 backdrop-blur-sm"
     >
-      <div
+      <div data-tip="The picture, shown large. Click outside it to close."
         // Stops a click on the picture itself from closing, so the image can be
         // right-clicked and saved without the thing vanishing first.
         onClick={(e) => e.stopPropagation()}

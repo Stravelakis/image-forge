@@ -33,6 +33,7 @@ import {
 } from "../lib/chatStore";
 
 import type { StoredTurn as Turn } from "../lib/chatStore";
+import { ErrorLine } from "./ErrorLine";
 
 /**
  * The kinds of thing worth asking for, shown rather than hidden in a menu.
@@ -50,7 +51,7 @@ const STARTERS: { label: string; seed: string; hint: string }[] = [
   {
     label: "A whole set",
     seed: "I want a set of pictures, all matching: ",
-    hint: "Many pictures at once, written into the manifest for you to check before running",
+    hint: "Many pictures at once, written into the list for you to check before running",
   },
   {
     label: "Something animated",
@@ -59,7 +60,7 @@ const STARTERS: { label: string; seed: string; hint: string }[] = [
   },
   {
     label: "Fix what I have",
-    seed: "Look at my manifest and ",
+    seed: "Look at my list and ",
     hint: "Rewrite prompts, fix filenames, change styles on rows you already have",
   },
 ];
@@ -347,7 +348,7 @@ ${manifestDigest(rows)}`,
       try {
         const n = await onAddRows(plans);
         writeTurns((prev) => prev.map((t, i) => (i === turnIndex ? { ...t, addedCount: n } : t)));
-        pushToast("ok", `${n} row${n > 1 ? "s" : ""} added to the manifest. Press Run queue when you are ready.`);
+        pushToast("ok", `${n} row${n > 1 ? "s" : ""} added to the list. Press Run queue when you are ready.`);
       } catch (e) {
         pushToast("err", (e as { message?: string })?.message ?? "could not add those");
       } finally {
@@ -360,18 +361,18 @@ ${manifestDigest(rows)}`,
   if (!ready) {
     return (
       <div className="mx-auto max-w-2xl p-8">
-        <h1 className="font-display text-3xl text-cream">Chat</h1>
+        <h1 data-tip="The Chat page: describe a picture in your own words and it helps you make it." className="font-display text-3xl text-cream">Chat</h1>
         <p className="mt-2 text-[14px] leading-relaxed text-parch">
           Describe a picture in your own words and this will help you choose a look, write the prompt, pick an engine
           and make it — one at a time. It can also answer questions about the app.
         </p>
         <div className="mt-5 rounded-xl border border-ember/40 bg-ember/10 p-4">
-          <p className="text-[13px] text-cream">It needs a text model first.</p>
+          <p data-tip="Chat needs a text helper first. Add a free one in Settings, under Text engines." className="text-[13px] text-cream">It needs a text model first.</p>
           <p className="mt-1 text-[12.5px] leading-relaxed text-parch">
             One free Mistral key covers writing, code and vision: add it once under Your accounts in Text engines,
             then pick a model for each job. The Start screen works without one.
           </p>
-          <Btn variant="primary" className="mt-3" onClick={onOpenSettings}>
+          <Btn data-tip="Opens the screen where you add the free account that lets the chat answer." variant="primary" className="mt-3" onClick={onOpenSettings}>
             Open Text engines
           </Btn>
         </div>
@@ -394,7 +395,7 @@ ${manifestDigest(rows)}`,
             request in the box; it is not sent until you press Send, so you can
             still change it.
           */}
-          <Btn
+          <Btn data-tip="Starts a fresh, empty chat. Your old chats stay in the list."
             variant="primary"
             className="w-full justify-center"
             onClick={() => startFresh("")}
@@ -415,7 +416,7 @@ ${manifestDigest(rows)}`,
           </div>
           <div className="mt-2 flex gap-1">
             {(["date", "model"] as const).map((g) => (
-              <button
+              <button data-tip={`Sorts your old chats ${g === "date" ? "by the day you had them" : "by which AI model answered"}.`}
                 key={g}
                 onClick={() => setGroupBy(g)}
                 className={`flex-1 rounded-lg border px-2 py-1 font-mono text-[10px] tracking-wide uppercase transition ${
@@ -429,10 +430,10 @@ ${manifestDigest(rows)}`,
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
-          {groups.length === 0 && <p className="px-1 py-2 text-[11.5px] text-dust">Nothing yet.</p>}
+          {groups.length === 0 && <p data-tip="You have no chats yet. Start one and it will show up here." className="px-1 py-2 text-[11.5px] text-dust">Nothing yet.</p>}
           {groups.map((g) => (
             <div key={g.label} className="mb-3">
-              <p className="px-1.5 pb-1 font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">{g.label}</p>
+              <p data-tip={`Chats from ${g.label}.`} className="px-1.5 pb-1 font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">{g.label}</p>
               {g.items.map((c) => (
                 <div key={c.id} className="group relative">
                   <button
@@ -470,7 +471,7 @@ ${manifestDigest(rows)}`,
 
       <div ref={shellRef} className="mx-auto flex h-full min-w-0 max-w-3xl flex-1 flex-col p-6">
       <div className="mb-3">
-        <h1 className="font-display text-2xl text-cream">{active ? active.title : "Chat"}</h1>
+        <h1 data-tip="The name of the chat you have open." className="font-display text-2xl text-cream">{active ? active.title : "Chat"}</h1>
         <p className="mt-1 text-[12.5px] text-dust">
           One picture at a time. Ask about the app too — it answers from the manual, and says so when it does not know.
         </p>
@@ -480,7 +481,7 @@ ${manifestDigest(rows)}`,
         {turns.length === 0 && (
           <Stagger level={motion} className="space-y-2">
             {OPENERS.map((o) => (
-              <button
+              <button data-tip={`Sends "${o}" to the chat as your first message, as an example to try.`}
                 key={o}
                 onClick={() => void send(o)}
                 className="w-full rounded-xl border border-line bg-panel/50 p-3 text-left text-[13px] text-parch transition hover:border-ember/50 hover:text-cream"
@@ -544,7 +545,7 @@ ${manifestDigest(rows)}`,
           );
         })}
 
-        {busy && <p className="font-mono text-[11.5px] text-dust">thinking…</p>}
+        {busy && <p data-tip="The helper is still working on its answer. Wait a moment." className="font-mono text-[11.5px] text-dust">thinking…</p>}
         <div ref={endRef} />
       </div>
 
@@ -555,7 +556,7 @@ ${manifestDigest(rows)}`,
         }}
         className="mt-3 rounded-xl border border-line bg-[var(--color-field)] p-2"
       >
-        <textarea
+        <textarea data-tip="Type what picture you want, or ask about the app. Enter sends it; Shift+Enter starts a new line."
           ref={taRef}
           rows={3}
           value={draft}
@@ -618,7 +619,7 @@ ${manifestDigest(rows)}`,
           >
             {probing ? `${probing.done}/${probing.total}` : working ? `${working.length} work` : "check"}
           </button>
-          <Btn variant="primary" disabled={busy || !draft.trim()}>
+          <Btn data-tip="Sends your message to the chat." variant="primary" disabled={busy || !draft.trim()}>
             <ISparkle size={13} /> Send
           </Btn>
         </div>
@@ -650,7 +651,7 @@ function EditCard({
   const total = previews.reduce((n, p) => n + p.changes.length, 0);
   return (
     <div className="mt-2.5 rounded-xl border border-potion/40 bg-potion/5 p-3">
-      <p className="text-[12.5px] text-cream">
+      <p data-tip="How many things in your list would change, and in how many pictures." className="text-[12.5px] text-cream">
         {total} change{total === 1 ? "" : "s"} across {previews.length} row{previews.length === 1 ? "" : "s"}
       </p>
       <div className="mt-2 max-h-72 space-y-2 overflow-y-auto">
@@ -661,20 +662,20 @@ function EditCard({
             </p>
             {p.changes.map((c) => (
               <div key={c.field} className="mt-1">
-                <p className="font-mono text-[9.5px] tracking-wide text-dust uppercase">{c.field}</p>
-                <p className="text-[11.5px] leading-snug text-rust/90 line-through decoration-rust/40">
+                <p data-tip="The part of the picture's row that would change." className="font-mono text-[9.5px] tracking-wide text-dust uppercase">{c.field}</p>
+                <p data-tip="What it says now. It will be replaced." className="text-[11.5px] leading-snug text-rust/90 line-through decoration-rust/40">
                   {c.from || "(empty)"}
                 </p>
-                <p className="text-[11.5px] leading-snug text-moss">{c.to}</p>
+                <p data-tip="What it will say after you apply the change." className="text-[11.5px] leading-snug text-moss">{c.to}</p>
               </div>
             ))}
           </div>
         ))}
       </div>
       {applied ? (
-        <p className="mt-2 font-mono text-[10.5px] text-moss">✓ applied to the manifest</p>
+        <p data-tip="Done. The change has been saved to your list." className="mt-2 font-mono text-[10.5px] text-moss">✓ applied to the list</p>
       ) : (
-        <Btn className="mt-2.5" disabled={busy} onClick={onApply}>
+        <Btn data-tip="Makes the changes listed above to the rows in your list. Nothing is drawn yet." className="mt-2.5" disabled={busy} onClick={onApply}>
           {busy ? "changing…" : `Apply ${total === 1 ? "this change" : "these changes"}`}
         </Btn>
       )}
@@ -707,7 +708,7 @@ function BatchCard({
 
   return (
     <div className="mt-2.5 rounded-xl border border-line2 bg-[var(--color-field)]/70 p-3">
-      <p className="text-[12.5px] text-cream">
+      <p data-tip="How many pictures this plan makes, in which look and with which painter." className="text-[12.5px] text-cream">
         {rows.length} pictures{" "}
         <span className="text-dust">
           · {styleById(rows[0].style)?.name ?? rows[0].style} · {model?.label ?? rows[0].model}
@@ -717,22 +718,22 @@ function BatchCard({
         {total > 0 ? `About $${total.toFixed(2)} to make them all — you will be asked before anything is spent.` : "Free to make."}
       </p>
 
-      <button onClick={() => setOpen((o) => !o)} className="mt-1.5 text-[11.5px] text-ember underline">
+      <button data-tip="Shows or hides every picture description on this list, so you can read them before adding." onClick={() => setOpen((o) => !o)} className="mt-1.5 text-[11.5px] text-ember underline">
         {open ? "hide the list" : "read the list first"}
       </button>
       {open && (
         <ol className="mt-1.5 max-h-56 list-decimal overflow-y-auto pl-5 text-[11.5px] leading-relaxed text-dust">
           {rows.map((r, i) => (
-            <li key={i}>{r.prompt}</li>
+            <li data-tip="One picture to be made, described in words." key={i}>{r.prompt}</li>
           ))}
         </ol>
       )}
 
       {added !== undefined ? (
-        <p className="mt-2 font-mono text-[10.5px] text-moss">✓ {added} added to the manifest — press Run queue there</p>
+        <p className="mt-2 font-mono text-[10.5px] text-moss">✓ {added} added to the list — press Run queue there</p>
       ) : (
-        <Btn className="mt-2.5" disabled={busy} onClick={onAdd}>
-          {busy ? "adding…" : "Add all to the manifest"}
+        <Btn data-tip="Adds every picture on this list to your list as new rows. Press Run queue there to actually make them." className="mt-2.5" disabled={busy} onClick={onAdd}>
+          {busy ? "adding…" : "Add all to the list"}
         </Btn>
       )}
     </div>
@@ -758,8 +759,8 @@ function ProposalCard({
   return (
     <div className="mt-2.5 rounded-xl border border-line2 bg-[var(--color-field)]/70 p-3">
       <div className="flex flex-wrap items-center gap-2 text-[11px]">
-        <span className="rounded-full border border-line px-2 py-0.5 text-parch">{style?.name ?? plan.style}</span>
-        <span className="rounded-full border border-line px-2 py-0.5 text-parch">{plan.aspect}</span>
+        <span data-tip="The look the picture will have." className="rounded-full border border-line px-2 py-0.5 text-parch">{style?.name ?? plan.style}</span>
+        <span data-tip="The shape of the picture, wide or tall." className="rounded-full border border-line px-2 py-0.5 text-parch">{plan.aspect}</span>
         <span className={`rounded-full border px-2 py-0.5 ${free ? "border-moss/50 text-moss" : "border-ember/50 text-ember"}`}>
           {model?.label ?? plan.model} · {free ? "free" : `$${model?.priceUsd?.toFixed(3)}`}
         </span>
@@ -776,11 +777,11 @@ function ProposalCard({
           <p className="mt-1.5 font-mono text-[10.5px] text-moss">✓ made · it is row “{row.filename}” in the manifest</p>
         </div>
       ) : row?.status === "failed" ? (
-        <p className="mt-2 text-[12px] text-rust">✗ {row.error || "it did not work"}</p>
+        <div className="mt-2"><ErrorLine text={`✗ ${row.error || "it did not work"}`} next="Press the button to try again, or pick another painter." tip="This picture did not work. The message says why and what to try." className="text-[12px] text-rust" /></div>
       ) : row ? (
-        <p className="mt-2 font-mono text-[11.5px] text-ember">forging…</p>
+        <p data-tip="This picture is being made right now." className="mt-2 font-mono text-[11.5px] text-ember">forging…</p>
       ) : (
-        <Btn variant="primary" className="mt-2.5" disabled={busy} onClick={onForge}>
+        <Btn data-tip="Draws this picture now. If the engine is paid, you are asked before any money is spent." variant="primary" className="mt-2.5" disabled={busy} onClick={onForge}>
           <IPlay size={12} /> {busy ? "forging…" : free ? "Make it — free" : "Make it"}
         </Btn>
       )}

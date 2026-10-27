@@ -484,3 +484,125 @@ details summary::-webkit-details-marker {
   100% { box-shadow: 0 0 0 10px transparent; }
 }
 .struck { animation: struck 0.75s ease-out both; }
+
+/* ---------------------------------------------------------------------------
+ * The twin marks — the switch between the two Forges (12 Oct 2026). Same
+ * shape as Video Forge's header; the light here is this app's own accent.
+ * ------------------------------------------------------------------------- */
+.forge-twin { position: relative; display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 999px; }
+.forge-twin .slot-mark { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; position: relative; z-index: 1;
+  transition: filter .35s, opacity .35s, transform .35s; border: 0; background: none; padding: 0; cursor: pointer; overflow: hidden; }
+.forge-twin .slot-mark img { height: 40px; pointer-events: none; }
+.forge-twin .slot-mark.off { filter: grayscale(.85) brightness(.85); opacity: .85; transform: scale(.82); }
+.forge-twin .slot-mark.off:hover { filter: grayscale(.15) brightness(.95); opacity: 1; transform: scale(.9); }
+.forge-twin .slot-mark:focus-visible { outline: 2px solid var(--color-ember); outline-offset: 2px; }
+.forge-twin .lamp { position: absolute; top: 4px; left: 4px; width: 48px; height: 48px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--color-ember) 22%, transparent), transparent 70%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-ember) 45%, transparent);
+  transition: transform .45s cubic-bezier(.2, .8, .2, 1); }
+.forge-twin.going .lamp { transform: translateX(52px); }
+@media (prefers-reduced-motion: reduce) {
+  .forge-twin .lamp, .forge-twin .slot-mark { transition: none; }
+}
+
+/* ---------------------------------------------------------------------------
+ * The Forge look, first on the puppet maker (12 Oct 2026): what Video Forge
+ * wears — black, frosted glass, Sora, round everything, one glowing button
+ * and outline buttons — in Image Forge's own colour (--color-ember, which the
+ * accent setting moves). The rest of the app follows once Ak picks A/B/C on
+ * docs/design/forge-twins-look.html in Video Forge.
+ * ------------------------------------------------------------------------- */
+.forge-pop { font-family: "Sora", system-ui, sans-serif; color: #eef1f8; border-radius: 30px;
+  background: linear-gradient(160deg, rgb(255 255 255 / .06), rgb(255 255 255 / .015) 40%), rgb(3 5 10 / .86);
+  backdrop-filter: blur(26px) saturate(1.35); -webkit-backdrop-filter: blur(26px) saturate(1.35);
+  border: 1px solid rgb(255 255 255 / .10);
+  box-shadow: 0 30px 120px -40px color-mix(in srgb, var(--color-ember) 55%, transparent), inset 0 1px 0 rgb(255 255 255 / .12); }
+.forge-pop .forge-head { border-bottom: 1px solid rgb(255 255 255 / .07); }
+.forge-pop h2 { font-weight: 600; font-size: 19px; letter-spacing: -.01em; }
+.forge-pop .forge-sub { font-weight: 300; font-size: 11.5px; color: #8f98ab; }
+.forge-label { display: block; margin-bottom: 7px; font: 500 10px "Sora", sans-serif; letter-spacing: .18em; text-transform: uppercase; color: #8f98ab; }
+.forge-field { width: 100%; border-radius: 16px; padding: 10px 14px; font: 400 13px "Sora", sans-serif; color: #eef1f8;
+  background: rgb(0 0 0 / .45); border: 1px solid rgb(255 255 255 / .10); outline: none; transition: border-color .2s, box-shadow .2s; }
+.forge-field:focus { border-color: color-mix(in srgb, var(--color-ember) 70%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-ember) 18%, transparent); }
+.forge-field::placeholder { color: #6b7385; }
+select.forge-field option { background: #0b0e16; color: #eef1f8; }
+.forge-tile { position: relative; border-radius: 20px; padding: 12px; text-align: left; overflow: hidden;
+  background: linear-gradient(150deg, rgb(255 255 255 / .07), rgb(255 255 255 / .02) 45%, color-mix(in srgb, var(--color-ember) 4%, transparent));
+  border: 1px solid rgb(255 255 255 / .09); box-shadow: inset 0 1px 0 rgb(255 255 255 / .10); transition: border-color .2s, background .2s, transform .15s, box-shadow .2s; }
+button.forge-tile:hover { border-color: rgb(255 255 255 / .22); }
+button.forge-tile:active { transform: scale(.985); }
+.forge-tile.on { border-color: color-mix(in srgb, var(--color-ember) 65%, transparent); background: linear-gradient(150deg, color-mix(in srgb, var(--color-ember) 16%, transparent), rgb(255 255 255 / .02));
+  box-shadow: 0 0 26px -10px var(--color-ember), inset 0 1px 0 rgb(255 255 255 / .14); }
+.forge-tile b, .forge-tile .t { font-weight: 500; font-size: 13px; color: #eef1f8; }
+.forge-tile .d { font-weight: 300; font-size: 11.5px; color: #8f98ab; line-height: 1.4; }
+.forge-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 999px; padding: 10px 20px; cursor: pointer;
+  font: 500 13px "Sora", sans-serif; color: #eef1f8; background: transparent; border: 1px solid rgb(255 255 255 / .16); transition: border-color .2s, box-shadow .25s, transform .12s, opacity .2s; }
+.forge-btn:hover:not(:disabled) { border-color: var(--color-ember); }
+.forge-btn:active:not(:disabled) { transform: scale(.97); }
+.forge-btn:disabled { opacity: .4; cursor: default; }
+.forge-btn.primary { border-color: transparent; font-weight: 600; color: var(--color-on-accent);
+  background: linear-gradient(100deg, color-mix(in srgb, var(--color-ember) 35%, #1d2350), color-mix(in srgb, var(--color-ember) 75%, #3f4fa0) 45%, var(--color-ember));
+  box-shadow: 0 0 26px -8px var(--color-ember); }
+.forge-btn.primary:hover:not(:disabled) { box-shadow: 0 0 38px -6px var(--color-ember); }
+.forge-btn.danger { border-color: rgba(255,107,107,.55); color: #ffb4b4; }
+.forge-btn.danger:hover:not(:disabled) { border-color: #ff6b6b; background: rgba(255,107,107,.12); }
+.forge-steps li { border-radius: 999px; padding: 5px 12px; font: 500 11px "Sora", sans-serif; color: #6b7385; }
+.forge-steps li.at { color: var(--color-on-accent); background: var(--color-ember); }
+.forge-steps li.past { color: #c3c9d6; }
+.forge-note { border-radius: 16px; padding: 10px 14px; font-size: 12px; }
+.forge-zoom { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; cursor: zoom-out;
+  background: rgb(0 0 0 / .82); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); animation: forge-fade .18s ease-out; }
+.forge-zoom img, .forge-zoom canvas { max-width: min(92vw, 1024px); max-height: 88vh; border-radius: 22px; box-shadow: 0 30px 120px -30px color-mix(in srgb, var(--color-ember) 50%, transparent); }
+.forge-zoom p { margin-top: 12px; font: 300 12px "Sora", sans-serif; color: #8f98ab; text-align: center; }
+.zoomable { cursor: zoom-in; }
+@keyframes forge-fade { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .forge-zoom { animation: none; } }
+
+/* ---- the Forge look, app-wide (accent "forge") ---- */
+html[data-forge] { --font-body: "Sora", system-ui, sans-serif; --font-display: "Sora", system-ui, sans-serif; }
+html[data-forge] body { background: #000; }
+html[data-forge] .font-display { font-weight: 600; letter-spacing: -.005em; }
+/* Buttons everywhere: one glowing kind, one outline kind, both pills. */
+.forge-primary { border-radius: 999px !important;
+  background: linear-gradient(100deg, color-mix(in srgb, var(--color-ember) 35%, #1d2350), color-mix(in srgb, var(--color-ember) 75%, #3f4fa0) 45%, var(--color-ember));
+  box-shadow: 0 0 22px -8px var(--color-ember); transition: box-shadow .25s, transform .12s; }
+.forge-primary:hover:not(:disabled) { box-shadow: 0 0 34px -6px var(--color-ember); }
+.forge-ghost { border-radius: 999px !important; border: 1px solid rgb(255 255 255 / .14); background: transparent; transition: border-color .2s; }
+.forge-ghost:hover:not(:disabled) { border-color: var(--color-ember); }
+/* Glass: panels let a little of what is behind through, with a fine top edge.
+   The shine is a still highlight only — no sweeping sheen (Ak: "more discreet"). */
+html[data-forge] .bg-panel, html[data-forge] .bg-panel2, html[data-forge] [class*="bg-coal/"] {
+  backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); }
+html[data-forge] .rounded-xl.border, html[data-forge] .rounded-2xl.border { box-shadow: inset 0 1px 0 rgb(255 255 255 / .06); }
+/* Custom buttons across the app (not the shared Btn): pills, and the solid
+   accent ones glow instead of standing on a 3D lip. */
+html[data-forge] .btn-press.rounded-lg:not(.shrink-0):not([class*="h-"]):not(.text-left), html[data-forge] .btn-press.rounded-xl:not(.text-left) { border-radius: 999px; }
+/* Cards — a title and a few lines under it — are not pills: a pill's round
+   ends squeezed their words (Ak, 13 Oct 2026, the sheet page). */
+html[data-forge] .btn-press.text-left.rounded-lg, html[data-forge] .btn-press.text-left.rounded-xl { border-radius: 18px; padding: 14px 16px; }
+html[data-forge] .btn-press.bg-ember {
+  background: linear-gradient(100deg, color-mix(in srgb, var(--color-ember) 35%, #1d2350), color-mix(in srgb, var(--color-ember) 75%, #3f4fa0) 45%, var(--color-ember)) !important;
+  box-shadow: 0 0 22px -8px var(--color-ember) !important; }
+
+/* THE HOVER HELP (components/TipLayer.tsx — the same file as Video Forge's).
+   Violet glass to match the Forge look; drawn over everything. */
+.forge-tip { padding: 9px 12px; border-radius: 14px; background: rgba(14, 10, 28, .96); border: 1px solid rgba(168, 151, 255, .38);
+  color: #ece8ff; font: 400 12.5px/1.5 "Sora", system-ui, sans-serif; letter-spacing: 0; text-transform: none; white-space: normal;
+  box-shadow: 0 14px 34px -10px rgba(0, 0, 0, .9), 0 0 24px -12px rgba(168, 151, 255, .7); backdrop-filter: blur(10px);
+  animation: forge-tip-in .14s ease-out; }
+@keyframes forge-tip-in { from { opacity: 0; translate: 0 3px; } }
+.forge-tip-more { display: block; margin-top: 6px; color: #c9bdff; text-decoration: underline; text-underline-offset: 2px; font-weight: 500; }
+
+/* ---- the puppet review workbench (components/PuppetWorkbench.tsx) ---- */
+.wb { background: #02030a; }
+.wb-bg { position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(900px 420px at 18% -8%, color-mix(in srgb, var(--color-ember) 20%, transparent), transparent 70%),
+    radial-gradient(700px 380px at 92% 0%, rgb(120 110 255 / .14), transparent 70%),
+    linear-gradient(rgb(255 255 255 / .022) 1px, transparent 1px) 0 0 / 100% 36px;
+  animation: wb-drift 18s ease-in-out infinite alternate; }
+@keyframes wb-drift { to { background-position: 40px 20px, -30px 10px, 0 36px; } }
+.wb-card { animation: wb-rise .35s ease-out both; }
+@keyframes wb-rise { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .wb-bg, .wb-card { animation: none; } }
+:root[data-motion="reduced"] .wb-bg, :root[data-motion="off"] .wb-bg, :root[data-motion="reduced"] .wb-card, :root[data-motion="off"] .wb-card { animation: none; }

@@ -29,6 +29,9 @@ If you would rather just describe one picture in a sentence, there is a
 machine on your behalf. You get one from the company that runs the machine.
 Treat it like a password: anyone who has it can spend your allowance.
 
+**Puppet** — a cartoon character cut into parts (mouth shapes, blinking eyes,
+brows, arms) so a video app can make it talk. [Making one](puppets-eli5.md).
+
 **Engine** — the company or program that actually draws the picture.
 OVHcloud, Cloudflare, Google and Pollinations are engines. So is your own
 computer.
@@ -47,17 +50,20 @@ seed gives you the same picture again, on engines that accept a seed.
 
 ## Make a picture with nothing set up
 
-1. In the toolbar at the top, click the **engine** button.
-2. Choose **OVHcloud · SDXL**. It needs no key and no account.
-3. Click **Add a picture**, type a description in **prompt**, and press
-   **Run queue**.
+1. Open **Start** (the app opens there).
+2. Type what you want: *"a warm village bakery at dawn"*. Say how many.
+3. Look at the **engine** drop-down. With nothing set up, **OVHcloud** is
+   there; it needs no key and no account.
+4. Press the button.
 
 It makes two pictures a minute and they are always square. That is enough to
-learn the app and to make real pictures.
+learn the app and to make real pictures. Your pictures appear under the box and
+in **Made**, where you can **Redo** any of them.
 
-Just want to see where the buttons are? Choose **Simulated Forge** instead. It
-draws simple scenes on your own computer, instantly — not AI pictures, but
-everything else behaves exactly as it will with a real engine.
+Just want to see where the buttons are? Choose **Simulated Forge** in the
+engine button at the top. It draws simple scenes on your own computer,
+instantly — not AI pictures, but everything else behaves exactly as it will with
+a real engine.
 
 ---
 
@@ -103,11 +109,15 @@ make another; nothing bad happens.
 box and the token into the second, then press **Check the account and token**.
 If it does not work, the message tells you which of the two is wrong.
 
-Then pick **Cloudflare · FLUX** in the toolbar's engine button.
+Then pick **Cloudflare FLUX** in Start's engine drop-down. It appears there as
+soon as the account and token are saved.
 
 ---
 
-## Your first real batch
+## Your first real batch, as a table
+
+Start is quickest, but you can also write the list yourself. In **Made**, press
+**Edit as a table**.
 
 1. Click **Add a picture**.
 2. In **filename**, type something like `image_bakery.png`
@@ -121,8 +131,8 @@ Then pick **Cloudflare · FLUX** in the toolbar's engine button.
    bread in the window, soft morning light"*
 4. Press **Run queue**.
 
-The row shows a thumbnail when it is done. Click the row, then the picture, to
-see it full size.
+The row shows a thumbnail when it is done. Click the picture to see it full
+size. Back on **Made**, the same picture sits with the rest, with a **Redo**.
 
 > The file may end in `.jpg` rather than `.png`. Some engines send JPEG, and
 > the app names the file for what it really is.
@@ -140,15 +150,22 @@ written there as it finishes, sorted into `images/`, `vectors/`, `lottie/`,
 > **Free cloud backup:** point it at your OneDrive or Google Drive folder.
 > Everything syncs itself with no extra work.
 
-**Download** — a ZIP with all the pictures, the folders and the CSV inside.
+**Download** (top bar) — a ZIP with all the pictures, the folders and the CSV
+inside; the list alone as CSV or a spreadsheet; or an upload straight to
+WordPress.
 
-**Save** — one picture at a time, from the row.
+**Save** — one picture at a time, from Made.
 
 ## Keeping your keys
 
-**Settings** shows *Saved and checked at…* and how many keys are stored. Press
-**Back up to a file** once your keys are in, and keep that file somewhere
-private — it holds them in plain text. **Restore** reads it back.
+**Settings** shows *Saved and checked at…* and how many keys are stored. On the
+desktop app your keys, settings and list are also kept in a file the app owns,
+locked so only your Windows user can read it, so restarting or updating cannot
+empty them. Press **Back up to a file** once your keys are in anyway, and keep
+that file somewhere private — it holds them in plain text. **Restore** reads it
+back.
+
+If you also use **Video Forge**, a key typed into either app works in both.
 
 ---
 
@@ -180,9 +197,11 @@ shortly.
 account behind it has no picture balance. This is very common and
 counter-intuitive. [The full explanation is here](troubleshooting.md).
 
-**A picture came out wrong** — open the row, write what was wrong in the
+**A picture came out wrong** — press **Redo** on it in **Made** to make it
+again, or mark the bad ones with ✕ and press **Redo N marked or failed** to
+remake them together. To say what was wrong, open the table, write it in the
 **Note** field in plain words — *"too dark, and she should be facing left"* —
-and press **Generate** again. Your note is folded into the prompt.
+and redo. Your note is folded into the prompt.
 
 **Text in the picture is gibberish** — most image models cannot spell. Use a
 Nano Banana model for anything with real words in it, or add the text yourself
@@ -192,6 +211,7 @@ afterwards with the **Letterer**, which uses actual fonts.
 
 ## Where to go next
 
+- [Make a talking puppet, in plain words](puppets-eli5.md)
 - [Make sprite sheets, GIFs and talking avatars](creators.md)
 - [Every column in the manifest, explained](manifest.md)
 - [When something is broken](troubleshooting.md)

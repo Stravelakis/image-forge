@@ -131,7 +131,8 @@ describe("the desktop app must keep the same origin every launch", () => {
 
   it("uses a fixed list of ports", async () => {
     const main = await readFile("electron/main.js", "utf8");
-    expect(main).toMatch(/const PORTS\s*=\s*\[\s*\d{4,5}/);
+    // A fixed default list; a test copy may name its own (IMAGEFORGE_PORTS).
+    expect(main).toMatch(/IMAGEFORGE_PORTS \|\| "\d{4,5}(,\d{4,5})+"/);
   });
 
   it("still falls back when a port is busy, rather than refusing to start", async () => {

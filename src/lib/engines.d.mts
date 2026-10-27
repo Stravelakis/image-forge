@@ -30,6 +30,8 @@ export interface ModelDef {
   /** ISO date the provider switches it off, or null */
   retiresOn: string | null;
   defaultCooldownH: number;
+  /** can work from reference pictures (edit one thing, keep the rest) */
+  refs?: boolean;
 }
 
 export type TextQuality = "poor" | "fair" | "good";
@@ -94,6 +96,9 @@ export declare function estimateCost(
   opts?: { batch?: boolean }
 ): { total: number; unknown: number; count: number };
 export declare function formatUsd(n: number): string;
+export declare function isBannedImageModel(engine: string, ...names: unknown[]): boolean;
+export declare function rowUsesBannedModel(row: EngineRow, settings: EngineSettings): boolean;
+export declare const BANNED_MODEL_MESSAGE: string;
 export declare function explainFailure(status: number, body: string, engine: string): string;
 
 export declare class RateLimitError extends Error {
@@ -134,7 +139,13 @@ export declare function geminiRequestBody(
 export interface GenerateOptions {
   /** base64 PNG data (no data: prefix) for the model to work from */
   refImages?: string[];
+  /** exact output size in pixels, where the engine allows it (Cloudflare FLUX.2) */
+  size?: { w: number; h: number };
 }
+
+export declare const isFlux2: (apiModel: string) => boolean;
+export declare function localRoute(base: string): { base: string; headers: Record<string, string> };
+export declare const b64Mime: (b64: string) => string;
 
 export declare function generateBytes(
   row: EngineRow,

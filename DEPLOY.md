@@ -22,7 +22,8 @@ list is in `.env.example`.
 |---|---|---|
 | `CLOUDFLARE_ACCOUNT_ID` / `CLOUDFLARE_API_TOKEN` | no | free Cloudflare engine for the agent server |
 | `POLLINATIONS_TOKEN` | no | free Pollinations engine |
-| `GEMINI_API_KEY(S)` / `OPENAI_API_KEY(S)` | no | paid engines — no spending guard over MCP |
+| `GEMINI_API_KEY(S)` / `OPENAI_API_KEY(S)` | no | paid engines — refused over MCP unless `FORGE_ALLOW_PAID=1`, then capped by `FORGE_MAX_USD` |
+| `FORGE_ALLOW_PAID` / `FORGE_MAX_USD` | no | let the agent server use paid engines (off by default) and the most it may spend in total (default 1) |
 | `FORGE_PROVIDER` | no | force an engine; with nothing set the server uses OVHcloud, which needs no key |
 
 ## Release

@@ -14,8 +14,14 @@ export default function PaidConfirm({
   onApprove,
   onUseFree,
   onCancel,
+  note,
+  approveLabel,
 }: {
   check: PaidRunCheck;
+  /** an extra paragraph under the price, e.g. what the worst case includes */
+  note?: string;
+  /** the words on the go-ahead button */
+  approveLabel?: string;
   onApprove: () => void;
   onUseFree: (engineId: string) => void;
   onCancel: () => void;
@@ -31,38 +37,40 @@ export default function PaidConfirm({
       <div className="w-full max-w-lg rounded-2xl border border-ember/40 bg-panel shadow-2xl">
         <div className="flex items-start justify-between border-b border-line px-5 py-3.5">
           <div>
-            <p className="font-display text-[17px] tracking-wide text-cream">This one costs money</p>
+            <p data-tip="Image Forge always asks before spending money. Nothing is charged unless you press the Spend button." className="font-display text-[17px] tracking-wide text-cream">This one costs money</p>
             <p className="font-mono text-[10.5px] text-dust">everything else in the forge is free</p>
           </div>
-          <button onClick={onCancel} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
+          <button data-tip="Closes this question. Nothing is spent." onClick={onCancel} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
             <IX size={16} />
           </button>
         </div>
 
         <div className="space-y-3.5 p-5">
-          <p className="text-[14px] leading-relaxed text-cream">{check.headline}</p>
+          <p data-tip="What will be charged, in plain words." className="text-[14px] leading-relaxed text-cream">{check.headline}</p>
+
+          {note && <p data-tip="An extra note about this charge." className="text-[12px] leading-relaxed text-parch">{note}</p>}
 
           {check.creditWarning && (
-            <p className={`rounded-lg border px-3 py-2.5 text-[12px] leading-relaxed ${tone}`}>{check.creditWarning}</p>
+            <p data-tip="A warning about your free credit running low or ending, so there is no surprise." className={`rounded-lg border px-3 py-2.5 text-[12px] leading-relaxed ${tone}`}>{check.creditWarning}</p>
           )}
 
           {!check.credit?.endsOn && (
-            <p className="text-[11px] leading-relaxed text-dust">{WHY_MANUAL_DATE}</p>
+            <p data-tip="Why Image Forge cannot show your credit end date for you." className="text-[11px] leading-relaxed text-dust">{WHY_MANUAL_DATE}</p>
           )}
 
           <div className="flex flex-wrap items-center gap-2 border-t border-line pt-3.5">
-            <Btn variant="primary" onClick={onApprove}>
-              Spend it — go ahead
+            <Btn data-tip="This spends real money from your account, the amount shown above. Press it only if you agree to pay." variant="primary" onClick={onApprove}>
+              {approveLabel ?? "Spend it — go ahead"}
             </Btn>
-            <Btn onClick={onCancel}>Cancel</Btn>
+            <Btn data-tip="Does not spend anything and does not make the pictures." onClick={onCancel}>Cancel</Btn>
           </div>
 
           {check.freeAlternatives.length > 0 && (
             <div className="rounded-lg border border-moss/30 bg-moss/5 p-3">
-              <p className="mb-2 font-mono text-[10px] tracking-[0.2em] text-moss uppercase">or use one of these, free</p>
+              <p data-tip="Free ways to get the same job done without spending anything." className="mb-2 font-mono text-[10px] tracking-[0.2em] text-moss uppercase">or use one of these, free</p>
               <div className="flex flex-wrap gap-2">
                 {check.freeAlternatives.map((a) => (
-                  <button
+                  <button data-tip={`Uses ${a.label} instead. It is free, so no money is spent.`}
                     key={a.id}
                     onClick={() => onUseFree(a.id)}
                     className="btn-press rounded-lg border border-line bg-[var(--color-field)] px-3 py-1.5 text-[12px] text-parch hover:border-moss/50 hover:text-moss"

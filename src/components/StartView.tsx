@@ -6,10 +6,12 @@
  * so that a first-time visitor can make a set of pictures before meeting any
  * of it (HANDOFF §14.1).
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { AspectKey, ManifestRow } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { PROVIDER_META, resolveRoute, scribeChat } from "../lib/providers";
+import { readyEngines, currentEngineValue } from "../lib/readyEngines";
+import { listLocalImageModels } from "../lib/puppet/pageIO";
 import { FREE_ENGINES } from "../lib/paidGuard";
 import { STYLE_CATALOGUE } from "../lib/styleCatalogue";
 import { MAX_START, countFromText, planStart } from "../lib/startPlan";
@@ -21,6 +23,27 @@ const SHAPES: { id: AspectKey; label: string }[] = [
   { id: "9:16", label: "Tall" },
 ];
 
+/**
+ * What you asked Start for, kept (Ak, 13 Oct 2026: "went to look at the rest
+ * of the app, went back to Start and it was empty — the creation was still
+ * running"). The newest two: the one running and the one before.
+ */
+interface StartRun {
+  id: string;
+  text: string;
+  at: string;
+  ids: number[];
+}
+const RUNS_KEY = "image-forge-start-runs-v1";
+function loadRuns(): StartRun[] {
+  try {
+    const v = JSON.parse(localStorage.getItem(RUNS_KEY) ?? "[]");
+    return Array.isArray(v) ? v.filter((r) => r && Array.isArray(r.ids)) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default function StartView({
   settings,
   rows,
@@ -28,6 +51,8 @@ export default function StartView({
   onMake,
   onOpenForge,
   onOpenSettings,
+  onOpenStyles,
+  onEngine,
 }: {
   settings: ForgeSettings;
   rows: ManifestRow[];
@@ -36,16 +61,31 @@ export default function StartView({
   onMake: (prompts: string[], style: string, aspect: AspectKey) => Promise<number[]>;
   onOpenForge: () => void;
   onOpenSettings: () => void;
+  /** the styles page — the word "Style" leads there */
+  onOpenStyles: () => void;
+  /** switch engine — a settings patch from readyEngines */
+  onEngine: (patch: Partial<ForgeSettings>) => void;
 }) {
+  const [localModels, setLocalModels] = useState<string[]>([]);
+  useEffect(() => void listLocalImageModels(settings).then(setLocalModels), [settings.localBase]);
+  const engines = useMemo(() => readyEngines(settings, localModels), [settings, localModels]);
   const [text, setText] = useState("");
-  const [count, setCount] = useState(6);
+  // Two to start (Ak, 13 Oct 2026): enough to compare, cheap to throw away.
+  const [count, setCount] = useState(2);
   const [countTouched, setCountTouched] = useState(false);
   const favourites = settings.favoriteStyles ?? [];
   const [style, setStyle] = useState<string>(favourites[0] ?? "");
   const [shape, setShape] = useState<AspectKey>("1:1");
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
-  const [made, setMade] = useState<number[]>([]);
+  const [runs, setRuns] = useState<StartRun[]>(loadRuns);
+  useEffect(() => {
+    try {
+      localStorage.setItem(RUNS_KEY, JSON.stringify(runs));
+    } catch {
+      /* full: Made still has everything */
+    }
+  }, [runs]);
   const [zoom, setZoom] = useState<ManifestRow | null>(null);
 
   // The engine a blank row will use, said plainly: which, and whether it costs.
@@ -60,9 +100,10 @@ export default function StartView({
     return { starred, rest };
   }, [favourites]);
 
-  const mine = made.map((id) => rows.find((r) => r.id === id)).filter(Boolean) as ManifestRow[];
-  const doneCount = mine.filter((r) => r.status === "done").length;
-  const failedCount = mine.filter((r) => r.status === "failed").length;
+  // Rows deleted since are simply left out; a run with none left disappears.
+  const shown = runs
+    .map((run) => ({ run, rows: run.ids.map((id) => rows.find((r) => r.id === id)).filter(Boolean) as ManifestRow[] }))
+    .filter((x) => x.rows.length > 0);
 
   const go = async () => {
     const t = text.trim();
@@ -78,17 +119,17 @@ export default function StartView({
           : ""
     );
     const ids = await onMake(plan.prompts, style, shape);
-    setMade(ids);
+    setRuns((prev) => [{ id: String(Date.now()), text: t, at: new Date().toISOString(), ids }, ...prev].slice(0, 2));
     setBusy(false);
   };
 
   return (
     <div className="mx-auto w-full max-w-3xl px-6 py-12">
-      <h1 className="font-display text-[34px] leading-tight text-cream">What do you need?</h1>
+      <h1 data-tip="The Start page: say what you need in your own words and Image Forge makes it." className="font-display text-[34px] leading-tight text-cream">What do you need?</h1>
       <p className="mt-2 text-[14px] text-parch">Describe it once. Say how many. Press the button.</p>
 
       <div className="mt-6 rounded-2xl border border-line bg-panel/60 p-5">
-        <textarea
+        <textarea data-tip="Say what you need in plain words, for example 12 potion bottle icons. Ctrl+Enter starts it."
           value={text}
           onChange={(e) => {
             setText(e.target.value);
@@ -107,9 +148,9 @@ export default function StartView({
         />
 
         <div className="mt-4 flex flex-wrap items-end gap-4">
-          <label className="flex flex-col gap-1 text-[12px] text-dust">
+          <label data-tip="How many pictures to make." className="flex flex-col gap-1 text-[12px] text-dust">
             How many
-            <input
+            <input data-tip="How many pictures to make. Typing a number in your sentence fills this in."
               type="number"
               min={1}
               max={MAX_START}
@@ -123,13 +164,20 @@ export default function StartView({
           </label>
 
           <label className="flex min-w-[200px] flex-col gap-1 text-[12px] text-dust">
-            Look
-            <select
+            <button
+              type="button"
+              onClick={onOpenStyles}
+              className="self-start text-left underline decoration-dotted underline-offset-2 hover:text-cream"
+              title="See every style, with examples, and make your own"
+            >
+              Style
+            </button>
+            <select data-tip="The look the pictures should have, for example watercolour or pixel art."
               value={style}
               onChange={(e) => setStyle(e.target.value)}
               className="rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[14px] text-cream"
             >
-              <option value="">No particular look</option>
+              <option value="">No particular style</option>
               {styles.starred.length > 0 && (
                 <optgroup label="★ Your favourites">
                   {styles.starred.map((s) => (
@@ -139,7 +187,7 @@ export default function StartView({
                   ))}
                 </optgroup>
               )}
-              <optgroup label="All looks">
+              <optgroup label="All styles">
                 {styles.rest.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -149,11 +197,11 @@ export default function StartView({
             </select>
           </label>
 
-          <div className="flex flex-col gap-1 text-[12px] text-dust">
+          <div data-tip="The shape of the pictures: square, wide or tall." className="flex flex-col gap-1 text-[12px] text-dust">
             Shape
             <div className="flex gap-1">
               {SHAPES.map((s) => (
-                <button
+                <button data-tip={`Makes the pictures ${s.label.toLowerCase()} (${s.id}).`}
                   key={s.id}
                   onClick={() => setShape(s.id)}
                   aria-pressed={shape === s.id}
@@ -169,54 +217,84 @@ export default function StartView({
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <Btn variant="primary" onClick={() => void go()} disabled={!text.trim() || busy} className="!px-6 !py-3 !text-[15px]">
+          <Btn data-tip="Plans the pictures from your description and puts them on the workbench, ready to make." variant="primary" onClick={() => void go()} disabled={!text.trim() || busy} className="!px-6 !py-3 !text-[15px]">
             <IHammer size={15} /> {busy ? "Planning…" : count === 1 ? "Make it" : `Make ${count}`}
           </Btn>
-          <span className="text-[12.5px] text-dust">
-            {free ? "free" : "costs money — you will be asked first"} · {engineName}
-            {" · "}
-            <button onClick={onOpenSettings} className="underline decoration-dust/40 underline-offset-2 hover:text-cream">
-              change
-            </button>
-          </span>
+          {/* The engine: only what is set up and working, and "Add more…"
+              to set up another (Ak, 13 Oct 2026). */}
+          <label className="flex items-center gap-2 text-[12.5px] text-dust" title="Which picture engine makes these. Only engines that are set up are listed.">
+            <select
+              value={engines.some((e) => e.value === currentEngineValue(settings)) ? currentEngineValue(settings) : ""}
+              onChange={(e) => {
+                if (e.target.value === "__add") return onOpenSettings();
+                const pickd = engines.find((x) => x.value === e.target.value);
+                if (pickd) onEngine(pickd.patch);
+              }}
+              className="rounded-full border border-line bg-[var(--color-field)] px-3 py-1.5 text-[12.5px] text-cream"
+            >
+              {!engines.some((e) => e.value === currentEngineValue(settings)) && <option value="">{engineName}</option>}
+              {engines.map((e) => (
+                <option key={e.value} value={e.value}>
+                  {e.label}
+                </option>
+              ))}
+              <option value="__add">Add more engines…</option>
+            </select>
+            <span>{free ? "free" : "costs money — you will be asked first"}</span>
+          </label>
         </div>
-        {note && <p className="mt-3 text-[12.5px] text-parch">{note}</p>}
+        {note && <p data-tip="A message from the forge about what it understood or what to fix." className="mt-3 text-[12.5px] text-parch">{note}</p>}
       </div>
 
-      {mine.length > 0 && (
-        <div className="mt-8">
-          <p className="text-[13px] text-parch">
-            {doneCount} of {mine.length} ready
-            {failedCount > 0 ? ` · ${failedCount} did not work` : ""}
-            {isRunning && doneCount + failedCount < mine.length ? " · working…" : ""}
-          </p>
-          <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
-            {mine.map((r) => (
-              <button
-                key={r.id}
-                onClick={() => r.preview && setZoom(r)}
-                title={r.error || r.filename}
-                className={`aspect-square overflow-hidden rounded-xl border ${
-                  r.status === "failed" ? "border-blood/50" : "border-line"
-                } bg-[var(--color-field)]`}
-              >
-                {r.preview && !r.preview.trimStart().startsWith("<svg") ? (
-                  <img src={r.preview} alt={r.filename} className="h-full w-full object-cover" />
-                ) : (
-                  <span className="flex h-full w-full items-center justify-center text-[11px] text-dust">
-                    {r.status === "failed" ? "did not work" : r.status === "generating" ? "making…" : "waiting"}
-                  </span>
-                )}
-              </button>
-            ))}
+      {shown.map(({ run, rows: mine }, i) => {
+        const doneCount = mine.filter((r) => r.status === "done").length;
+        const failedCount = mine.filter((r) => r.status === "failed").length;
+        const working = mine.some((r) => r.status === "pending" || r.status === "generating");
+        return (
+          <div key={run.id} className="mt-8">
+            <p className="text-[11px] uppercase tracking-[0.14em] text-dust">
+              {working ? "Making now" : i === 0 ? "Your last one" : "The one before"} ·{" "}
+              {new Date(run.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            </p>
+            <p className="mt-1 truncate text-[14px] text-cream" title={run.text}>
+              {run.text}
+            </p>
+            <p data-tip="How many of the pictures from this request are ready, and how many did not work." className="mt-0.5 text-[13px] text-parch">
+              {doneCount} of {mine.length} ready
+              {failedCount > 0 ? ` · ${failedCount} did not work` : ""}
+              {working && isRunning ? " · working…" : working ? " · waiting for the queue" : ""}
+            </p>
+            <div className="mt-3 grid grid-cols-3 gap-3 sm:grid-cols-4">
+              {mine.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => r.preview && setZoom(r)}
+                  title={r.error || `${r.filename} — click to see it big`}
+                  className={`aspect-square overflow-hidden rounded-xl border ${
+                    r.status === "failed" ? "border-blood/50" : "border-line"
+                  } bg-[var(--color-field)]`}
+                >
+                  {r.preview && !r.preview.trimStart().startsWith("<svg") ? (
+                    <img src={r.preview} alt={r.filename} className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center text-[11px] text-dust">
+                      {r.status === "failed" ? "did not work" : r.status === "generating" ? "making…" : "waiting"}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })}
 
-      <p className="mt-10 text-[12.5px] text-dust">
-        Want the full control — filenames, one row at a time, CSV?{" "}
-        <button onClick={onOpenForge} className="text-parch underline decoration-dust/40 underline-offset-2 hover:text-cream">
-          Open the spreadsheet →
+      <p className="mt-10 text-[13px] text-dust">
+        <button
+          onClick={onOpenForge}
+          className="text-parch underline decoration-dust/40 underline-offset-2 hover:text-cream"
+          title="Everything you have made — pictures, sheets, GIFs and puppets — with redo"
+        >
+          See everything in Made →
         </button>
       </p>
 

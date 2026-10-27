@@ -22,6 +22,8 @@
  *   OPENAI_API_KEY / OPENAI_API_KEYS, OPENAI_BASE_URL, OPENAI_IMAGE_MODEL
  *   CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, POLLINATIONS_TOKEN
  *   FORGE_PROVIDER (ovh | cloudflare | pollinations | gemini | openai | local)
+ *   FORGE_ALLOW_PAID=1  let rows run on paid engines (default: refused)
+ *   FORGE_MAX_USD       the most this server may spend in total (default 1 once paid is allowed)
  * With no keys at all the server uses OVHcloud SDXL, which needs none.
  *
  * Images land in images/ vectors/ lottie/ sheets/ gifs/ under --out
@@ -43,6 +45,7 @@ import {
   generateBytes,
   estimateCost,
   formatUsd,
+  rowSpend,
   RateLimitError,
   RetiredModelError,
 } from "../src/lib/engines.mjs";
@@ -57,6 +60,58 @@ const flag = (name, fallback) => {
 const CSV_PATH = path.resolve(flag("--csv", "marketplace-images.csv"));
 const OUT_DIR = path.resolve(flag("--out", "generated-images"));
 const SETTINGS_PATH = flag("--settings", "");
+
+/**
+ * Money. There is no human here to click "yes", so paid engines are OFF unless
+ * the operator turned them on in the environment that starts this server:
+ *   FORGE_ALLOW_PAID=1   let rows run on paid engines (default: refuse them)
+ *   FORGE_MAX_USD=2.5    the most this server process may spend in total
+ *                        (default 1 once paid is allowed; priced rows only)
+ * A row whose price is unknown is treated as paid, never as free.
+ */
+const ALLOW_PAID = /^(1|true|yes)$/i.test(String(process.env.FORGE_ALLOW_PAID || "").trim());
+const MAX_USD = (() => {
+  const n = Number(process.env.FORGE_MAX_USD);
+  return Number.isFinite(n) && n >= 0 && String(process.env.FORGE_MAX_USD).trim() !== "" ? n : 1;
+})();
+let spentUsd = 0;
+const spentSoFar = () => spentUsd;
+
+/** Raised when a row is not allowed to spend. The row stays as it was. */
+class PaidRefusal extends Error {
+  constructor(message, { stopRun = false } = {}) {
+    super(message);
+    this.name = "PaidRefusal";
+    this.stopRun = stopRun;
+  }
+}
+
+/**
+ * Count one picture against the limit, or refuse it. Free engines pass.
+ * Counted before the request goes out, because a request that fails half way
+ * can still be billed.
+ */
+function chargeOrRefuse(row, settings = SETTINGS) {
+  const s = rowSpend({ model: (row.model || "").trim() }, settings);
+  if (!s.paid) return;
+  if (s.banned) throw new PaidRefusal("refused: Pro image models are switched off in this forge.");
+  if (!ALLOW_PAID) {
+    throw new PaidRefusal(
+      `refused: ${row.filename} would run on a paid engine (${s.engine}) and FORGE_ALLOW_PAID is not set. ` +
+        "Use a free engine, or ask the operator to start the server with FORGE_ALLOW_PAID=1 and a FORGE_MAX_USD limit."
+    );
+  }
+  if (s.price === null) {
+    throw new PaidRefusal(`refused: the price of ${row.filename}'s model is unknown, so it cannot be kept under FORGE_MAX_USD.`);
+  }
+  if (spentUsd + s.price > MAX_USD + 1e-9) {
+    throw new PaidRefusal(
+      `refused: ${row.filename} would take this server past FORGE_MAX_USD (${formatUsd(MAX_USD)}; ${formatUsd(spentUsd)} spent so far).`,
+      { stopRun: true }
+    );
+  }
+  spentUsd += s.price;
+}
 
 const COLUMNS = [
   "id", "filename", "prompt", "negative_prompt", "category", "style",
@@ -262,9 +317,88 @@ function loadManifest() {
   if (!fs.existsSync(CSV_PATH)) return { headers: COLUMNS, records: [] };
   return parseCsv(fs.readFileSync(CSV_PATH, "utf8"));
 }
+/** Written to a temp file and renamed, so a crash never leaves half a manifest. */
 function saveManifest(m) {
-  fs.writeFileSync(CSV_PATH, toCsv(m.headers, m.records), "utf8");
+  const tmp = `${CSV_PATH}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, toCsv(m.headers, m.records), "utf8");
+  fs.renameSync(tmp, CSV_PATH);
 }
+
+/**
+ * Change ONE row on the file as it is right now.
+ *
+ * A long run used to hold the manifest it read at the start and save that old
+ * copy after every row, wiping out rows added meanwhile. This reads the file
+ * again, changes only the named row, and saves. Returns false when the row is
+ * not there any more.
+ */
+function updateRow(filename, fields) {
+  const fresh = loadManifest();
+  const rec = fresh.records.find((x) => get(fresh.headers, x, "filename") === filename);
+  if (!rec) return false;
+  for (const [k, v] of Object.entries(fields)) set(fresh.headers, rec, k, v);
+  saveManifest(fresh);
+  return true;
+}
+
+/**
+ * Only one generating run at a time, across every copy of this server.
+ *
+ * Two overlapping runs (an agent's call times out and it calls again) would
+ * generate the same pending rows twice: double cost, double files. The lock is
+ * a file next to the manifest holding the process that owns it; a lock whose
+ * process is gone, or that is very old, is stale and is taken over.
+ */
+const LOCK_PATH = `${CSV_PATH}.lock`;
+const LOCK_MAX_AGE_MS = 6 * 3600e3;
+let runActive = false;
+
+const processAlive = (pid) => {
+  try {
+    process.kill(pid, 0); // signal 0 only asks "is it there?" — it never stops anything
+    return true;
+  } catch (e) {
+    return e && e.code === "EPERM";
+  }
+};
+
+function acquireRunLock() {
+  if (runActive) return false;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      fs.writeFileSync(LOCK_PATH, JSON.stringify({ pid: process.pid, at: Date.now() }), { flag: "wx" });
+      runActive = true;
+      return true;
+    } catch (e) {
+      if (e.code !== "EEXIST") throw e;
+      let stale = false;
+      try {
+        const held = JSON.parse(fs.readFileSync(LOCK_PATH, "utf8"));
+        stale = !processAlive(Number(held.pid)) || Date.now() - Number(held.at) > LOCK_MAX_AGE_MS;
+      } catch {
+        stale = true; // unreadable lock: nobody can be relying on it
+      }
+      if (!stale) return false;
+      try {
+        fs.unlinkSync(LOCK_PATH);
+      } catch {
+        /* someone else took it over first — loop and see */
+      }
+    }
+  }
+  return false;
+}
+function releaseRunLock() {
+  if (!runActive) return;
+  runActive = false;
+  try {
+    fs.unlinkSync(LOCK_PATH);
+  } catch {
+    /* already gone */
+  }
+}
+const BUSY_MESSAGE =
+  "another generating run is already active on this manifest — wait for it to finish (check forge_status), then call again. Nothing was started.";
 const col = (headers, name) => headers.indexOf(name);
 const get = (headers, rec, name) => {
   const i = col(headers, name);
@@ -349,7 +483,10 @@ const describeEngine = () => {
     `${SETTINGS.geminiKeys.length} google key(s)`,
     `${SETTINGS.openaiKeys.length} endpoint key(s)`,
   ].join(" · ");
-  return `default engine: ${engine} (${apiModel}) · ${cost}\n${wired}`;
+  const money = ALLOW_PAID
+    ? `paid engines: allowed up to ${formatUsd(MAX_USD)} in total (${formatUsd(spentUsd)} spent so far)`
+    : "paid engines: refused (the operator has not set FORGE_ALLOW_PAID)";
+  return `default engine: ${engine} (${apiModel}) · ${cost}\n${wired}\n${money}`;
 };
 
 /** Rows still aimed at a model the provider switched off. */
@@ -359,7 +496,7 @@ const retiredRows = (rows) =>
 /* ---------------- MCP server ---------------- */
 
 const server = new Server(
-  { name: "image-forge", version: "1.0.4" },
+  { name: "image-forge", version: "1.1.1" },
   { capabilities: { tools: {} } }
 );
 
@@ -424,7 +561,7 @@ const TOOLS = [
   },
   {
     name: "forge_generate_pending",
-    description: "Generate images for all pending rows through the configured engine (keyless OVHcloud unless keys are supplied). Writes PNGs to disk and marks rows done.",
+    description: "Generate images for all pending rows through the configured engine (keyless OVHcloud unless keys are supplied). Writes PNGs to disk and marks rows done. Rows that would run on a paid engine are skipped unless the operator allowed it (FORGE_ALLOW_PAID, FORGE_MAX_USD). Only one run at a time.",
     inputSchema: obj({ limit: { type: "integer", minimum: 1, description: "max rows to generate" } }),
   },
   {
@@ -542,63 +679,99 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
         return text(`added ${filename} (id ${maxId + 1}) as pending`);
       }
       case "forge_generate_pending": {
-        let rows = toRows(m).filter((r) => (r.status || "pending") === "pending");
-        if (a.limit) rows = rows.slice(0, a.limit);
-        if (!rows.length) return text("nothing pending to generate");
-        const results = [];
-        for (const r of rows) {
-          const rec = m.records.find((x) => get(m.headers, x, "filename") === r.filename);
-          try {
-            set(m.headers, rec, "status", "generating");
-            const { dest, filename: savedAs } = await generateImage(
-              r,
-              new Set(toRows(m).map((x) => x.filename).filter((f) => f !== r.filename))
-            );
-            if (savedAs !== r.filename) set(m.headers, rec, "filename", savedAs);
-            set(m.headers, rec, "status", "done");
-            set(m.headers, rec, "generated_at", new Date().toISOString());
-            set(m.headers, rec, "error", "");
-            results.push(`✓ ${r.filename} → ${dest}`);
-          } catch (e) {
-            set(m.headers, rec, "status", "failed");
-            set(m.headers, rec, "error", String(e.message || e).slice(0, 120));
-            results.push(`✗ ${r.filename} — ${e.message || e}`);
-            if (e instanceof RateLimitError) {
-              results.push("· every key is benched — stopping this run early");
-              saveManifest(m);
-              break;
+        if (!acquireRunLock()) return text(BUSY_MESSAGE, true);
+        try {
+          // A row left "generating" by a run that died may or may not have been billed.
+          // Park it as failed, so only a deliberate forge_retry_failed makes it run again.
+          for (const r of toRows(loadManifest()).filter((x) => x.status === "generating")) {
+            updateRow(r.filename, { status: "failed", error: "interrupted by a crash — it may already have been billed; check before retrying" });
+          }
+          let rows = toRows(loadManifest()).filter((r) => (r.status || "pending") === "pending");
+          if (a.limit) rows = rows.slice(0, a.limit);
+          if (!rows.length) return text("nothing pending to generate");
+          const results = [];
+          for (const r of rows) {
+            // The file may have changed while an earlier picture was being made.
+            const cur = toRows(loadManifest()).find((x) => x.filename === r.filename);
+            if (!cur || (cur.status || "pending") !== "pending") {
+              results.push(`· ${r.filename} changed meanwhile — skipped`);
+              continue;
             }
-            if (e instanceof RetiredModelError) {
-              results.push("· stopping — run forge_fix_retired to move these rows onto a current model");
-              saveManifest(m);
-              break;
+            try {
+              // Spending is checked first (and counted once): a refused row stays exactly as it was.
+              chargeOrRefuse(cur);
+            } catch (e) {
+              if (e instanceof PaidRefusal) {
+                results.push(`· ${r.filename} — ${e.message}`);
+                if (e.stopRun) {
+                  results.push("· spending limit reached — stopping this run early");
+                  break;
+                }
+                continue;
+              }
+              throw e;
+            }
+            try {
+              // Saved BEFORE the request goes out, so a second call can never pick this row up again.
+              updateRow(r.filename, { status: "generating", error: "" });
+              const taken = new Set(toRows(loadManifest()).map((x) => x.filename).filter((f) => f !== r.filename));
+              const { dest, filename: savedAs } = await generateImage(cur, taken);
+              updateRow(r.filename, {
+                ...(savedAs !== r.filename ? { filename: savedAs } : {}),
+                status: "done",
+                generated_at: new Date().toISOString(),
+                error: "",
+              });
+              results.push(`✓ ${r.filename} → ${dest}`);
+            } catch (e) {
+              updateRow(r.filename, { status: "failed", error: String(e.message || e).slice(0, 120) });
+              results.push(`✗ ${r.filename} — ${e.message || e}`);
+              if (e instanceof RateLimitError) {
+                results.push("· every key is benched — stopping this run early");
+                break;
+              }
+              if (e instanceof RetiredModelError) {
+                results.push("· stopping — run forge_fix_retired to move these rows onto a current model");
+                break;
+              }
             }
           }
-          saveManifest(m);
+          return text(results.join("\n"));
+        } finally {
+          releaseRunLock();
         }
-        return text(results.join("\n"));
       }
       case "forge_generate_one": {
         const filename = safeFilename(a.filename);
         const rec = m.records.find((x) => get(m.headers, x, "filename") === filename);
         if (!rec) return text(`no row named ${filename}`, true);
-        const row = toRows(m).find((r) => r.filename === filename);
+        if (!acquireRunLock()) return text(BUSY_MESSAGE, true);
         try {
-          const { dest, filename: savedAs } = await generateImage(
-            row,
-            new Set(toRows(m).map((x) => x.filename).filter((f) => f !== row.filename))
-          );
-          if (savedAs !== row.filename) set(m.headers, rec, "filename", savedAs);
-          set(m.headers, rec, "status", "done");
-          set(m.headers, rec, "generated_at", new Date().toISOString());
-          set(m.headers, rec, "error", "");
-          saveManifest(m);
-          return text(`✓ ${filename} → ${dest}`);
-        } catch (e) {
-          set(m.headers, rec, "status", "failed");
-          set(m.headers, rec, "error", String(e.message || e).slice(0, 120));
-          saveManifest(m);
-          return text(`✗ ${filename} — ${e.message || e}`, true);
+          const row = toRows(loadManifest()).find((r) => r.filename === filename);
+          if (!row) return text(`no row named ${filename}`, true);
+          try {
+            chargeOrRefuse(row);
+          } catch (e) {
+            if (e instanceof PaidRefusal) return text(e.message, true);
+            throw e;
+          }
+          try {
+            updateRow(filename, { status: "generating", error: "" });
+            const taken = new Set(toRows(loadManifest()).map((x) => x.filename).filter((f) => f !== filename));
+            const { dest, filename: savedAs } = await generateImage(row, taken);
+            updateRow(filename, {
+              ...(savedAs !== filename ? { filename: savedAs } : {}),
+              status: "done",
+              generated_at: new Date().toISOString(),
+              error: "",
+            });
+            return text(`✓ ${filename} → ${dest}`);
+          } catch (e) {
+            updateRow(filename, { status: "failed", error: String(e.message || e).slice(0, 120) });
+            return text(`✗ ${filename} — ${e.message || e}`, true);
+          }
+        } finally {
+          releaseRunLock();
         }
       }
       case "forge_retry_failed": {
@@ -621,7 +794,26 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   }
 });
 
-export { parseCsv, toCsv, TOOLS, SCHEMAS, pickProvider, folderFor, unwrapSettingsFile };
+export {
+  parseCsv,
+  toCsv,
+  TOOLS,
+  SCHEMAS,
+  pickProvider,
+  folderFor,
+  unwrapSettingsFile,
+  // money, lock and manifest helpers — exported so tests can pin them
+  server,
+  PaidRefusal,
+  chargeOrRefuse,
+  acquireRunLock,
+  releaseRunLock,
+  updateRow,
+  loadManifest,
+  saveManifest,
+  LOCK_PATH,
+  spentSoFar,
+};
 
 /* Only speak MCP when run as a program — importing this file (tests) must not connect. */
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

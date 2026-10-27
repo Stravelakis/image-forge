@@ -23,6 +23,19 @@ failed to save; each launch looked somewhere different.
 ports and are not recovered, so enter them once more. Then press **Back up to
 a file** in Settings.
 
+### Image Forge opened empty after I had been using it (a second copy was open)
+
+**This was the app's fault and is fixed.** The page's saved data belongs to its
+address, and the address includes the port. When something else was holding
+port 47821, Image Forge opened on 47822 and looked in a different, empty box.
+Nothing was lost; it was looking in the wrong place.
+
+Now the desktop app keeps a full copy of everything (settings, keys, your list)
+in a file it owns, `vault.bin` inside `%APPDATA%\image-forge`, locked so only your
+Windows user can read it. That file is loaded first, so a port change, an update
+or a reinstall cannot empty it. What other ports had saved is merged in once.
+Test copies can name their own ports with `IMAGEFORGE_PORTS`.
+
 ### "Could not read your manifest" or "…your settings and keys"
 
 The app found stored data it could not read. It has **not** overwritten it:
@@ -100,6 +113,56 @@ a key that can do nothing else.
 On a live account, `gemini-1.5-flash`, `gemini-1.5-pro` and `gemini-2.5-flash`
 return `404 — This model is no longer available to new users.` Press **Load
 models** and use what your key actually lists.
+
+---
+
+## Video Forge and puppets
+
+### A key I typed in Video Forge is not here (or the other way round)
+
+Keys are shared through `%APPDATA%\Forge\shared-keys.bin`, locked by Windows, so
+this works on Windows only and for these names: Google, OpenRouter, NVIDIA,
+Mistral, Cloudflare, Pollinations, OpenAI, Groq, ElevenLabs and Fish. A shared
+key only **fills an empty box**; it never replaces one you typed. Removing a
+key in Image Forge is not shared; removing one in Video Forge is.
+
+### A puppet part is "unsure" or "missing"
+
+Each part gets at most three tries. *Unsure* means the checker said no but the
+cut was clean (it is kept, flagged); *missing* means no clean cut at all. The
+puppet works without a missing part. Press *Try the unsure/missing again* to redo
+only those. A checker that is too strict about hats "cut off at the top" is a
+known issue.
+
+### The puppet maker says LocalAI is not running (or "missing csrf token")
+
+LocalAI refuses picture requests from a web page. The desktop app sends them
+through its own `/local-api/<port>` relay, which only reaches `127.0.0.1`. So use
+the desktop app, not a plain browser tab, and start LocalAI first; its image
+models then appear by name in the engine pick-list.
+
+### The graphics card is hot, or the face model and the parts model do not fit
+
+On an 8 GB card the two local models do not fit together, and FLUX.2 klein takes
+minutes a picture. Local engines work at 768 with a 20-second rest between
+pictures, and the face model is asked to unload before parts start. Do not run a
+puppet and a long Video Forge render at the same time.
+
+### My puppet has holes or a pink fringe
+
+The background colour is chosen per character (magenta, else green, else blue)
+to be one the character does not wear, and only background joined to the
+picture's edge is removed. A pink or purple character used to bleed into magenta;
+if you still see it, say so in the description (for example "a purple dragon") so
+the maker picks green.
+
+### I deleted a puppet by mistake
+
+*Delete this puppet* asks twice and **moves** the puppet to
+`%APPDATA%\Forge\puppets-deleted`, in a folder named after the puppet plus the
+date and time; nothing is erased. To restore it, move that folder into
+`%APPDATA%\Forge\puppets` and rename it back to the puppet name (cut off the
+date at the end).
 
 ---
 
@@ -236,7 +299,14 @@ the **Letterer**, which uses real fonts.
 ### "Every key is resting"
 
 The whole pool hit its limit. Rows re-queue automatically when the cooldown
-expires. Or switch engines and run again.
+expires. Or switch engines (Start has a drop-down) and run again.
+
+### The Chat said its writing engine was busy
+
+Free text engines say "too many requests" (429) now and then. If you have more
+than one text account with a key, the next one answers instead, and a writing
+job with no key takes a provider that has one. If none has a key the Chat tells
+you to add one in Settings → Text engines.
 
 ---
 

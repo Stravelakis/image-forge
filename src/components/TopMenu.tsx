@@ -29,6 +29,7 @@ export type SettingsSection =
   | "filenames"
   | "folders"
   | "wp"
+  | "canva"
   | "appearance"
   | "advanced";
 
@@ -52,7 +53,7 @@ function Dropdown({
   }, []);
   return (
     <div ref={ref} className="relative">
-      <button
+      <button data-tip={`Opens the ${label} menu.`}
         onClick={() => setOpen((o) => !o)}
         className={`btn-press flex items-center gap-1 rounded-lg px-3 py-2 font-display text-[13px] tracking-wide transition-colors ${
           active || open ? "text-cream" : "text-dust hover:text-parch"
@@ -62,7 +63,7 @@ function Dropdown({
         <IChevron size={12} className={`transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div className="pop-in absolute left-0 top-full z-40 mt-1.5 w-60 overflow-hidden rounded-xl border border-line2 bg-panel shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
+        <div data-tip="The choices in this menu. Click one to use it, or click outside to close." className="pop-in absolute left-0 top-full z-40 mt-1.5 w-60 overflow-hidden rounded-xl border border-line2 bg-panel shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
           {children(() => setOpen(false))}
         </div>
       )}
@@ -83,7 +84,7 @@ const Item = ({
   hint?: string;
   badge?: string;
 }) => (
-  <button
+  <button data-tip={hint ? `${title}: ${hint}` : title}
     onClick={onClick}
     className="btn-press flex w-full items-center gap-3 border-b border-line/50 px-3.5 py-2.5 text-left transition-colors last:border-0 hover:bg-raise/60"
   >
@@ -179,13 +180,13 @@ function ModelSelector({
       </button>
       {open && (
         <div className="pop-in absolute right-0 top-full z-40 mt-1.5 w-72 overflow-hidden rounded-xl border border-line2 bg-panel shadow-[0_24px_60px_rgba(0,0,0,0.55)]">
-          <p className="border-b border-line bg-[var(--color-field)] px-3.5 py-2 font-mono text-[9px] tracking-[0.2em] text-dust uppercase">
+          <p data-tip="Only painters that are ready to use are listed. Pick one to switch." className="border-b border-line bg-[var(--color-field)] px-3.5 py-2 font-mono text-[9px] tracking-[0.2em] text-dust uppercase">
             active engine — unavailable ones are hidden
           </p>
           {options.map((o) => {
             if (!o.ok) return null;
             return (
-              <button
+              <button data-tip={`Makes pictures with ${o.label}. ${o.sub}`}
                 key={o.id}
                 onClick={() => {
                   onProvider(o.id);
@@ -204,7 +205,7 @@ function ModelSelector({
               </button>
             );
           })}
-          <p className="px-3.5 py-2 text-[10px] leading-relaxed text-dust">
+          <p data-tip="A row that names its own painter uses that one instead of the choice above." className="px-3.5 py-2 text-[10px] leading-relaxed text-dust">
             Row-level <span className="font-mono text-parch">model</span> column overrides this for any single row.
           </p>
         </div>
@@ -225,9 +226,13 @@ export default function TopMenu({
   doneCount,
   onRerunMarked,
   onWpImport,
+  onPuppet,
+  onAnimate,
+  onCanvaFill,
   onZip,
   onExportCsv,
   onExportXlsx,
+  onExportFlow,
   motion,
 }: {
   view: View;
@@ -241,9 +246,13 @@ export default function TopMenu({
   doneCount: number;
   onRerunMarked: () => void;
   onWpImport: () => void;
+  onPuppet: () => void;
+  onAnimate: () => void;
+  onCanvaFill: () => void;
   onZip: () => void;
   onExportCsv: () => void;
   onExportXlsx: () => void;
+  onExportFlow: () => void;
   motion: MotionLevel;
 }) {
   const [panel, setPanel] = useState<PanelId | null>(null);
@@ -264,18 +273,20 @@ export default function TopMenu({
               ? "settings"
               : "workbench";
 
+  // Four things you make (Ak, 13 Oct 2026: "the wizard menu needs help").
+  // Redo moved into Made; WordPress into Download, with the other ways out.
   const wizardCards: NavCard[] = [
-    { id: "wizard", title: "Start the wizard", hint: "a new batch, one easy choice at a time", icon: <IWand size={15} />, onPick: () => onNav("wizard") },
-    { id: "factory", title: "Prompt factory", hint: "write a huge list — AI or your own CSV", icon: <ISparkle size={15} />, onPick: () => onNav("factory") },
-    { id: "rerun", title: "Rerun marked & failed", hint: "notes become extra instructions", icon: <IRetry size={15} />, badge: markedCount > 0 ? String(markedCount) : undefined, onPick: onRerunMarked },
-    { id: "wp", title: "Import to WordPress", hint: "real upload with an app password", icon: <IUpload size={15} />, badge: doneCount > 0 ? String(doneCount) : undefined, onPick: onWpImport },
+    { id: "wizard", title: "Make pictures", hint: "describe what you need — three easy steps", icon: <IWand size={15} />, onPick: () => onNav("wizard") },
+    { id: "puppet", title: "Make a puppet", hint: "a character that talks, blinks and waves — for Video Forge", icon: <span className="text-[13px] leading-none">☺</span>, onPick: onPuppet },
+    { id: "sheet", title: "Animate a character", hint: "sprite sheets, turnarounds, mouth shapes, blinks", icon: <span className="text-[13px] leading-none">◈</span>, onPick: onAnimate },
+    { id: "canva", title: "Fill a Canva template", hint: "one finished design per row of your list, back here", icon: <span className="text-[13px] leading-none">▣</span>, onPick: onCanvaFill },
+    { id: "factory", title: "Prompt factory", hint: "a huge list of prompts — to Google Sheets, Excel or CSV", icon: <ISparkle size={15} />, onPick: () => onNav("factory") },
   ];
 
   const galleryCards: NavCard[] = [
-    { id: "lib-images", title: "Images", hint: "mark, note and redo any picture", icon: <IImage size={15} />, onPick: () => onNav("lib-images") },
+    { id: "lib-images", title: "Everything made", hint: "pictures, sheets, GIFs and puppets — with redo", icon: <IImage size={15} />, onPick: () => onNav("lib-images") },
     { id: "lib-styles", title: "Styles", hint: "the built-in languages, and your own", icon: <IFlask size={15} />, onPick: () => onNav("lib-styles") },
-    { id: "lib-templates", title: "Templates", hint: "saved setups, ready to reuse", icon: <IWand size={15} />, badge: templateCount > 0 ? String(templateCount) : undefined, onPick: () => onNav("lib-templates") },
-    { id: "lib-batches", title: "Previous batches", hint: "what you have run before", icon: <IFolder size={15} />, badge: batchCount > 0 ? String(batchCount) : undefined, onPick: () => onNav("lib-batches") },
+    { id: "lib-templates", title: "Templates", hint: "picture setups and puppets, ready to reuse", icon: <IWand size={15} />, badge: templateCount > 0 ? String(templateCount) : undefined, onPick: () => onNav("lib-templates") },
   ];
 
   const settingsCards: NavCard[] = [
@@ -286,7 +297,8 @@ export default function TopMenu({
     { id: "filenames", title: "Filenames", hint: "the seven naming rules", icon: <IBook size={15} />, onPick: () => onNav("settings", "filenames") },
     { id: "folders", title: "Folders", hint: "where pictures land on disk", icon: <IFolder size={15} />, onPick: () => onNav("settings", "folders") },
     { id: "wp", title: "WP connections", hint: "the WordPress hand-off", icon: <IUpload size={15} />, onPick: () => onNav("settings", "wp") },
-    { id: "appearance", title: "Appearance", hint: "colour, background and movement", icon: <IGear size={15} />, onPick: () => onNav("settings", "appearance") },
+    { id: "canva", title: "Canva", hint: "send pictures to Canva, fill your templates", icon: <IUpload size={15} />, onPick: () => onNav("settings", "canva") },
+    { id: "appearance", title: "Language", hint: "English now; Greek, French, German, Spanish, Portuguese coming", icon: <IGear size={15} />, onPick: () => onNav("settings", "appearance") },
     { id: "advanced", title: "Advanced", hint: "check the forge, repair, backup, update", icon: <IRetry size={15} />, onPick: () => onNav("settings", "advanced") },
   ];
 
@@ -315,7 +327,7 @@ export default function TopMenu({
           onPick={pick}
           items={[
             { id: "start", label: "Start" },
-            { id: "workbench", label: "Forge" },
+            { id: "workbench", label: "Made" },
             { id: "chat", label: "Chat" },
             { id: "wizards", label: "Wizards", badge: markedCount > 0 ? String(markedCount) : undefined, opens: true },
             { id: "gallery", label: "Gallery", badge: batchCount > 0 ? String(batchCount) : undefined, opens: true },
@@ -336,7 +348,7 @@ export default function TopMenu({
         <div className="relative hidden sm:block">
           <button
             onClick={() => setPanel((p) => (p === "download" ? null : "download"))}
-            title="Save your pictures or your manifest"
+            title="Save your pictures or your list"
             className={`btn-press flex items-center gap-1.5 rounded-lg border px-2.5 py-2 ${
               panel === "download" ? "border-ember/60 bg-ember/15 text-cream" : "border-line bg-panel/70 text-parch hover:border-line2"
             }`}
@@ -364,17 +376,32 @@ export default function TopMenu({
                 },
                 {
                   id: "csv",
-                  title: "The manifest, as CSV",
+                  title: "Your list, as a spreadsheet (CSV)",
                   hint: "the same format Import reads back",
                   icon: <IDownload size={15} />,
                   onPick: onExportCsv,
                 },
                 {
                   id: "xlsx",
-                  title: "The manifest, as a spreadsheet",
-                  hint: "for handing to someone who wants Excel",
+                  title: "Your list, for Excel",
+                  hint: "a CSV file Excel opens straight away",
                   icon: <IDownload size={15} />,
                   onPick: onExportXlsx,
+                },
+                {
+                  id: "flow",
+                  title: "Prompts for Google Flow",
+                  hint: "a list the Flow extension types in for you, to re-make pictures by hand",
+                  icon: <IDownload size={15} />,
+                  onPick: onExportFlow,
+                },
+                {
+                  id: "wp",
+                  title: "Upload to WordPress",
+                  hint: "straight into your site's media library",
+                  icon: <IUpload size={15} />,
+                  badge: doneCount > 0 ? String(doneCount) : undefined,
+                  onPick: onWpImport,
                 },
               ]}
             />

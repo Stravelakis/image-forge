@@ -8,7 +8,10 @@ nav_order: 4
 Sprite sheets, talking-avatar mouth shapes, GIFs from a single still, and text
 that sits *on* a surface instead of floating over it.
 
-All of it works on free engines. None of it needs a card.
+All of it works on free engines. None of it needs a card. Everything you make
+lands in **Made**, with a **Redo** on each. Sheets and GIFs live under
+**Wizards → Animate a character**; talking puppets under **Wizards → Make a
+puppet** ([in plain words](puppets-eli5.md)).
 
 ---
 
@@ -78,6 +81,21 @@ you.
 
 Mouths alone do not make a face look alive, which is what the eyes and brows
 sheets are for.
+
+---
+
+## Puppets and cursor chasers
+
+A **puppet** is a character cut into parts so Video Forge can make it talk,
+blink, raise its brows, nod and, from the waist up, wave and point. It is the
+newest kind of character art Image Forge makes; read
+[Making a puppet, in plain words](puppets-eli5.md).
+
+A **cursor chaser** is a little creature that runs after the mouse on a
+website, sits when it catches up and naps when the mouse rests. Make one in
+*Animate a character → Cursor chaser*, press *Try it here* to watch it chase
+your mouse, then *Download for a website*: a folder with the picture strip, one
+small script, a demo page and how to add it (WordPress too).
 
 ---
 
@@ -152,5 +170,6 @@ with a CSV of what happened.
 ## Where to go next
 
 - [Start from nothing](no-code.md)
+- [Make a puppet](puppets-eli5.md)
 - [Let an agent run it](vibe-coding.md)
 - [Every manifest column](manifest.md)

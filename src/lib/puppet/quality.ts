@@ -1,0 +1,284 @@
+/**
+ * THE PICTURE PANEL — two checkers, and the rules decide (Ak, 15 Oct 2026).
+ *
+ * One checker asked "is this ok?" said yes to a tongue sticking out that it
+ * had itself just described. So a checker here never judges: it only reports
+ * FACTS ("tongue past the teeth: yes", "arms: 1"), and the rules below decide.
+ *
+ * STRICTEST VOTE WINS (Ak, 26 Oct 2026, replacing "two clean votes"): every
+ * checker looks at every part; if any one finds a real fault the part is NO;
+ * if any one is unsure — a soft fault, or a question it could not answer — the
+ * part is MAYBE NO and goes to Ak; only when every checker that looked found
+ * nothing, and at least two looked, is it YES. Unanswered is never yes.
+ *
+ * Pure: no network here. pageIO.ts passes the function that asks a checker.
+ */
+import { eyesOf, pawWords, type PuppetLook, type PuppetPart } from "./recipe";
+
+export type Facts = Record<string, unknown>;
+
+/** One fact, asked on its own. "number" questions want a count, the rest yes or no. */
+export interface FactQuestion {
+  key: string;
+  ask: string;
+  number?: boolean;
+}
+
+/**
+ * PICK THE SHAPE, don't confirm it (26 Oct 2026). "Is the mouth this shape?"
+ * invites a yes; "which of these ten is it?" has to be looked at. Numbered,
+ * because a letter answer ("a") reads like an English word.
+ */
+export const MOUTH_SHAPES = [
+  "closed, no opening",
+  "a closed smile, the corners turned up",
+  "a little open, a small relaxed oval",
+  "wide open, a tall oval",
+  "a small tight round opening",
+  "a medium or big round opening",
+  "a little wider than at rest, slightly open, both rows of teeth close together",
+  "the upper teeth resting on the lower lip or lower edge of the mouth",
+  "slightly open, a small pink tongue tip just under the upper teeth",
+  "pushed forward and squared, the teeth close together",
+];
+/** Which picks count as the shape asked for (1-based, as the checker answers). */
+export const SHAPE_OK: Record<string, number[]> = {
+  mouth_AH: [3, 4],
+  mouth_halfAH: [3],
+  mouth_EE: [7],
+  mouth_halfEE: [7, 3],
+  mouth_OH: [6],
+  mouth_OO: [5],
+  mouth_halfOH: [5, 6],
+  mouth_FV: [8],
+  mouth_L: [9, 3, 7],
+  mouth_CHSH: [10, 7],
+  mouth_SMILE: [2],
+};
+const SHAPE_ASK =
+  "Look at the RIGHT picture only. Which of these is the mouth? " + MOUTH_SHAPES.map((s, i) => `${i + 1}: ${s}.`).join(" ") + " Answer with the number only.";
+const EYES_ASK = "Look at the RIGHT picture only. How many eyes does the character have? Answer with a number only.";
+const YN = " Answer only yes or no.";
+const COMMON: FactQuestion[] = [
+  { key: "beard_or_facial_hair_same_as_left", ask: "Compare the LEFT and RIGHT pictures. Is the facial hair (beard, moustache, stubble) the same on both? If neither has any, answer yes." + YN },
+  { key: "skin_marks_same_as_left", ask: "Compare the LEFT and RIGHT pictures. Are the freckles, moles, scars and wrinkles the same on both? If neither has any, answer yes." + YN },
+  { key: "eyes_look_same_direction_as_left", ask: "Compare the LEFT and RIGHT pictures. Do the eyes look in the same direction on both?" + YN },
+  { key: "right_looks_broken", ask: "Does the RIGHT picture look broken — doubled or extra features, smears, a visible seam or box edge, or letters drawn on it?" + YN },
+];
+
+/** The questions for one part: facts only — the rules below decide. */
+export function factsQuestions(part: PuppetPart, look?: PuppetLook): FactQuestion[] {
+  const qs = factsQuestionsRaw(part);
+  // an animal has paws: ask about paws (Ak, 16 Oct 2026)
+  return part.kind === "arms" && look?.animal ? qs.map((q) => ({ ...q, ask: pawWords(q.ask).replace(/arms/g, "front legs") })) : qs;
+}
+function factsQuestionsRaw(part: PuppetPart): FactQuestion[] {
+  if (part.kind === "mouth")
+    return [
+      { key: "right_mouth_is_the_wanted_shape", ask: `Look at the RIGHT picture only. Is the mouth this shape: ${part.expect}?` + YN },
+      ...(SHAPE_OK[part.id] ? [{ key: "mouth_shape_pick", ask: SHAPE_ASK, number: true }] : []),
+      { key: "tongue_visible", ask: "Look at the RIGHT picture only. Can you see the tongue?" + YN },
+      { key: "tongue_reaches_past_the_teeth_or_lips", ask: "Look at the RIGHT picture only. Does the tongue stick out of the mouth — past the teeth or past the lips, so part of it is outside the mouth?" + YN },
+      { key: "smiling_right", ask: "Look at the RIGHT picture only. Is the character smiling, with the corners of the mouth turned up?" + YN },
+      { key: "lips_drawn_left", ask: "Look at the LEFT picture only. Does the mouth have distinct drawn lips — a lip shape or a lip colour different from the skin?" + YN },
+      { key: "lips_drawn_right", ask: "Look at the RIGHT picture only. Does the mouth have distinct drawn lips — a lip shape or a lip colour different from the skin?" + YN },
+      ...COMMON,
+    ];
+  if (part.kind === "lid" || part.kind === "brow")
+    return [
+      { key: "wanted_change_visible", ask: `Compare the LEFT and RIGHT pictures. Does the RIGHT one show: ${part.expect}?` + YN },
+      { key: "mouth_changed", ask: "Compare the LEFT and RIGHT pictures. Is the mouth different between them?" + YN },
+      { key: "eyes_count_right", ask: EYES_ASK, number: true },
+      ...COMMON,
+    ];
+  return [
+    { key: "right_picture_shows_the_wanted_arm_pose", ask: `Look at the RIGHT picture only. Does it show: ${part.expect}?` + YN },
+    { key: "arms_count_right", ask: "Look at the RIGHT picture only. How many arms does the character have? Answer with a number only.", number: true },
+    { key: "hands_visible_right", ask: "Look at the RIGHT picture only. How many hands can you see? Answer with a number only.", number: true },
+    { key: "hand_covers_face_right", ask: "Look at the RIGHT picture only. Does a hand cover any part of the face?" + YN },
+    { key: "face_changed", ask: "Compare the LEFT and RIGHT pictures. Is the face different between them?" + YN },
+    { key: "eyes_count_right", ask: EYES_ASK, number: true },
+    ...COMMON,
+  ];
+}
+
+/** Each question in a few plain words, for the review screen (never the code name). */
+export const FACT_LABEL: Record<string, string> = {
+  beard_or_facial_hair_same_as_left: "is the facial hair the same?",
+  skin_marks_same_as_left: "are the skin marks the same?",
+  eyes_look_same_direction_as_left: "do the eyes look the same way?",
+  right_looks_broken: "does it look broken?",
+  right_mouth_is_the_wanted_shape: "is the mouth the shape asked for?",
+  mouth_shape_pick: "which mouth shape is it?",
+  tongue_visible: "is the tongue showing?",
+  tongue_reaches_past_the_teeth_or_lips: "does the tongue stick out?",
+  smiling_right: "is it smiling?",
+  lips_drawn_left: "lips on the original?",
+  lips_drawn_right: "lips on the new picture?",
+  wanted_change_visible: "can the change be seen?",
+  mouth_changed: "did the mouth change too?",
+  eyes_count_right: "how many eyes?",
+  right_picture_shows_the_wanted_arm_pose: "is the arm pose right?",
+  arms_count_right: "how many arms?",
+  hands_visible_right: "how many hands?",
+  hand_covers_face_right: "does a hand cover the face?",
+  face_changed: "did the face change?",
+};
+export const factLabel = (key: string) => FACT_LABEL[key] ?? key.replace(/_/g, " ");
+
+/** A checker's answer, read: yes / no / a number / not readable. */
+export function readAnswer(text: string | null, number?: boolean): boolean | number | undefined {
+  if (!text) return undefined;
+  const t = text.toLowerCase().replace(/<think>[\s\S]*?<\/think>/g, "");
+  if (number) {
+    const m = t.match(/\b(\d+)\b/g);
+    return m ? Number(m[m.length - 1]) : undefined;
+  }
+  const yes = /\byes\b/.test(t), no = /\bno\b/.test(t);
+  return yes && !no ? true : no && !yes ? false : undefined;
+}
+
+const SMILES_OK = new Set(["mouth_SMILE", "mouth_EE", "mouth_halfEE"]);
+const EYES_SHUT = new Set(["lid_closed", "lid_half"]);
+
+/**
+ * A soft fault: a checker's doubt, not a clear fault — "maybe no", for Ak to
+ * look at. Today only the shape pick, which disagrees with the yes/no shape
+ * question often enough that it can't be a veto on its own.
+ */
+export const SOFT_MARK = "unsure: ";
+export const isSoft = (reason: string) => reason.startsWith(SOFT_MARK);
+
+/** Ak's list of what is wrong, applied to one checker's facts. Empty = nothing wrong. */
+export function brokenRules(part: PuppetPart, look: PuppetLook, f: Facts): string[] {
+  const b: string[] = [];
+  if (f.beard_or_facial_hair_same_as_left === false) b.push("facial hair changed");
+  if (f.skin_marks_same_as_left === false) b.push("marks changed");
+  if (f.eyes_look_same_direction_as_left === false && !EYES_SHUT.has(part.id)) b.push("eyes changed direction");
+  if (f.right_looks_broken === true) b.push("picture broken");
+  if (typeof f.eyes_count_right === "number" && f.eyes_count_right !== eyesOf(look)) b.push(`${f.eyes_count_right} eyes, should be ${eyesOf(look)}`);
+  const shapeOk = SHAPE_OK[part.id.replace(/^(side|sit)_/, "")];
+  if (shapeOk && typeof f.mouth_shape_pick === "number" && !shapeOk.includes(f.mouth_shape_pick))
+    b.push(`${SOFT_MARK}mouth looks like "${MOUTH_SHAPES[f.mouth_shape_pick - 1] ?? "none of the shapes"}"`);
+  if (part.kind === "mouth") {
+    if (f.right_mouth_is_the_wanted_shape === false) b.push("wrong mouth shape");
+    if (f.tongue_reaches_past_the_teeth_or_lips === true) b.push("tongue sticking out");
+    else if (part.id.endsWith("_AH") && f.tongue_visible === true) b.push("tongue showing");
+    if (!look.lips && f.lips_drawn_right === true) b.push("lips on a lipless puppet");
+    else if (look.lips && typeof f.lips_drawn_left === "boolean" && typeof f.lips_drawn_right === "boolean" && f.lips_drawn_left !== f.lips_drawn_right) b.push("lips differ from the face");
+    if (f.smiling_right === true && !SMILES_OK.has(part.id.replace(/^(side|sit)_/, ""))) b.push("smile where none was asked");
+  } else if (part.kind === "lid" || part.kind === "brow") {
+    if (f.wanted_change_visible === false) b.push("change not visible");
+    if (f.mouth_changed === true) b.push("mouth changed too");
+  } else {
+    if (f.right_picture_shows_the_wanted_arm_pose === false) b.push("pose wrong");
+    if (typeof f.arms_count_right === "number" && f.arms_count_right !== 2) b.push(`${f.arms_count_right} arms`);
+    if (typeof f.hands_visible_right === "number" && f.hands_visible_right < 2) b.push("a hand missing");
+    if (f.hand_covers_face_right === true) b.push("hand over the face");
+    if (f.face_changed === true) b.push("face changed");
+  }
+  return b;
+}
+
+/** What to tell the picture engine next time, for each thing found wrong. */
+// Said as what we WANT — an engine draws whatever it is told about.
+const FIX: [RegExp, string][] = [
+  [/tongue sticking out/, "only the smallest tip inside the mouth, behind the teeth"],
+  [/tongue showing/, "the inside of the mouth plain, empty and dark"],
+  [/lips on a lipless/, "the edge of the mouth the same colour as the skin around it"],
+  [/lips differ/, "the lips exactly as on the original face"],
+  [/facial hair|marks changed/, "the face exactly as in the original, nothing added and nothing taken away"],
+  [/smile where none/, "the corners of the mouth level"],
+  [/mouth changed too/, "the mouth exactly as in the original"],
+  [/eyes changed/, "the eyes and where they look exactly as in the original"],
+  [/arms|hand missing/, "two arms, both hands fully visible"],
+  [/eyes, should be/, "exactly the eyes the original has, no more and no fewer"],
+  [/hand over the face/, "the hands beside the body, the face fully visible"],
+  [/face changed/, "the face exactly as in the original"],
+  [/picture broken/, "one clean, simple drawing"],
+];
+export function fixNote(reasons: string[], part: PuppetPart): string {
+  const out = new Set<string>();
+  for (const r of reasons) {
+    const hit = FIX.find(([re]) => re.test(r));
+    if (hit) out.add(hit[1]);
+    else if (/wrong mouth shape|mouth looks like|pose wrong|change not visible/.test(r)) out.add(`clearly: ${part.expect}`);
+  }
+  return [...out].join("; ");
+}
+
+/** yes = green; maybe = goes to Ak ("maybe no"); no = turned down. */
+export type PanelLevel = "yes" | "maybe" | "no";
+
+export interface PanelVerdict {
+  ok: boolean;
+  level: PanelLevel;
+  /** plain words for the review card */
+  why: string;
+  reasons: string[];
+  /** e.g. "C1 ✓ · C2 ? · TB ✗" — ✓ nothing wrong, ? unsure, ✗ a fault, – could not look */
+  votes: string;
+  /** each checker's own facts and findings, kept with the try (#11) */
+  detail: { name: string; facts: Facts | null; faults: string[]; unanswered: string[] }[];
+}
+
+/** A checker, as the panel needs it: a name, and a way to ask one question (null = could not answer). */
+export interface PanelChecker {
+  name: string;
+  answer(question: string): Promise<string | null>;
+}
+
+/** One checker's facts about one picture, and the questions it left unanswered. Null = it could not look at all. */
+async function factsFrom(c: PanelChecker, qs: FactQuestion[]): Promise<{ facts: Facts; unanswered: string[] } | null> {
+  const facts: Facts = {};
+  const unanswered: string[] = [];
+  // All questions at once (16 Oct 2026: one after another took 5–10 minutes a part);
+  // the per-minute limit in pageIO.ts still spaces them out for each provider.
+  const answers = await Promise.all(qs.map((q) => c.answer(q.ask).catch(() => null)));
+  qs.forEach((q, i) => {
+    const v = readAnswer(answers[i], q.number);
+    if (v === undefined) unanswered.push(q.key);
+    else facts[q.key] = v;
+  });
+  // Nothing answered at all = offline or out of allowance: it sits this one out.
+  return unanswered.length === qs.length ? null : { facts, unanswered };
+}
+
+/**
+ * Every checker looks; the strictest answer wins (Ak, 26 Oct 2026): any fault
+ * = no; any doubt or unanswered question = maybe; yes needs every checker that
+ * looked to be clean, and at least two to have looked. Null when nobody could.
+ */
+export async function panelVerdict(part: PuppetPart, look: PuppetLook, checkers: PanelChecker[], tieBreak?: PanelChecker): Promise<PanelVerdict | null> {
+  const qs = factsQuestions(part, look);
+  const all = tieBreak ? [...checkers, tieBreak] : checkers;
+  const detail = await Promise.all(
+    all.map(async (c) => {
+      const got = await factsFrom(c, qs);
+      return { name: c.name, facts: got?.facts ?? null, faults: got ? brokenRules(part, look, got.facts) : [], unanswered: got?.unanswered ?? [] };
+    })
+  );
+  const looked = detail.filter((d) => d.facts);
+  if (!looked.length) return null; // nobody could look
+  const hard = [...new Set(looked.flatMap((d) => d.faults.filter((r) => !isSoft(r))))];
+  const soft = [...new Set(looked.flatMap((d) => d.faults.filter(isSoft)))];
+  const unsure = looked.filter((d) => d.unanswered.length);
+  const level: PanelLevel = hard.length ? "no" : soft.length || unsure.length || looked.length < 2 ? "maybe" : "yes";
+  const reasons = [
+    ...hard,
+    ...soft,
+    ...unsure.map((d) => `${SOFT_MARK}${d.name} could not answer ${d.unanswered.length} question${d.unanswered.length > 1 ? "s" : ""}`),
+    ...(looked.length < 2 ? [`${SOFT_MARK}only ${looked.length} checker could look`] : []),
+  ];
+  const mark = (d: (typeof detail)[number]) => (!d.facts ? "–" : d.faults.some((r) => !isSoft(r)) ? "✗" : d.faults.length || d.unanswered.length ? "?" : "✓");
+  const votes = detail.map((d) => `${d.name} ${mark(d)}`).join(" · ");
+  const ok = level === "yes";
+  return {
+    ok,
+    level,
+    reasons: ok ? [] : reasons,
+    votes,
+    detail,
+    why: ok ? `green: all ${looked.length} checkers found nothing (${votes})` : `${level === "no" ? "no" : "maybe no"}: ${reasons.join(", ")} (${votes})`,
+  };
+}

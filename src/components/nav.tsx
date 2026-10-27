@@ -106,7 +106,7 @@ export function PillNav({
       {items.map((it) => {
         const active = it.id === activeId;
         return (
-          <button
+          <button data-tip={it.opens ? `Opens the ${it.label} menu.` : `Goes to ${it.label}.`}
             key={it.id}
             data-pill={it.id}
             onClick={() => onPick(it.id)}
@@ -193,7 +193,7 @@ export function CardPanel({
     >
       <div className="grid gap-1 sm:grid-cols-2">
         {cards.map((c, i) => (
-          <button
+          <button data-tip={c.hint ? `${c.title}: ${c.hint}` : `Opens ${c.title}.`}
             key={c.id}
             role="menuitem"
             onClick={() => {

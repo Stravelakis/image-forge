@@ -28,17 +28,19 @@ and the app asks before spending a penny.
 
 [![CI](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml/badge.svg)](https://github.com/Stravelakis/image-forge/actions/workflows/ci.yml)
 [![Latest release](https://img.shields.io/github/v/release/Stravelakis/image-forge?label=release&color=f2a33c)](https://github.com/Stravelakis/image-forge/releases/latest)
-[![Licence](https://img.shields.io/badge/licence-Apache--2.0-8cb56f)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-672-56b8a5)](tests/)
+[![Licence](https://img.shields.io/badge/licence-none%20(all%20rights%20reserved)-8cb56f)](#licence)
+[![Tests](https://img.shields.io/badge/tests-715-56b8a5)](tests/)
 
 </div>
 
 ---
 
-> **New in 1.0.3:** **Update now** installs a new version for you, and the
-> app can open in your own browser instead of a window.
-> **1.0.2** brought the **Start** screen — one box, one number, one button —
-> and hand-in-hand work with [BYOK Vid Creator](#i-make-videos-with-byok-vid-creator).
+> **Coming in the next release (13 Oct 2026):** a **Made** tab with every
+> picture, sheet, GIF and puppet and a Redo on each; a **puppet maker** for
+> [Video Forge](#i-make-videos-with-byok-vid-creator); keys and settings kept in
+> a file the app owns (no more empty settings); keys shared with Video Forge;
+> a hover-help bubble on every control; and cursor chasers for your website.
+> Already out: **1.0.3** Update now and browser mode; **1.0.2** the Start screen.
 > [Everything that changed](CHANGELOG.md).
 
 ---
@@ -55,6 +57,7 @@ ignore the rest.
 | **[Download and install](docs/download.md)** | Windows, double-click. Includes what to do about the blue "Windows protected your PC" box. |
 | **[Your first pictures](docs/no-code.md)** | What an API key is, which free engine to start with, and how to make your first batch. Nothing assumed. |
 | **[Sheets, GIFs and lettering](docs/creators.md)** | Sprite sheets, mouth shapes for talking avatars, GIFs from a single still, text with perspective warp. |
+| **[Making a puppet, in plain words](docs/puppets-eli5.md)** | A talking cartoon character for Video Forge, step by step, no jargon. |
 
 ### ✨ For vibe coders — let an agent do it
 
@@ -67,6 +70,7 @@ ignore the rest.
 | | |
 |---|---|
 | **[How it is built](docs/developers.md)** | Architecture, the engine registry, how to add a provider, the test suite, releasing. |
+| **[The puppet recipe](docs/puppet-recipe.md)** | The method behind the puppet maker and every lesson that shaped it. |
 | **[HANDOFF.md](HANDOFF.md)** | The full engineering map, every non-obvious decision, and the provider facts that contradict their own docs. |
 
 **[📖 Documentation site — docs.stravelakis.com/image-forge](https://docs.stravelakis.com/image-forge/)** · **[The full manual](GUIDE.md)** · **[Install](INSTALL.md)** · **[What changed](CHANGELOG.md)** · **[When something is wrong](docs/troubleshooting.md)**
@@ -124,7 +128,13 @@ quietly halves what you thought your allowance was.
 
 <br>
 
-If that was the 1.0.0 desktop app, it was the app, and it is fixed. 1.0.0
+On the desktop app, settings, keys and your list are now also copied into a
+file the app owns (the **vault**), so a busy port, an update or a reinstall can
+no longer open Image Forge empty. A second copy on another port was the cause
+of the latest case: the page's own storage belongs to its address, and the
+address includes the port.
+
+If it was the 1.0.0 desktop app, that was a different bug, and it is fixed. 1.0.0
 served itself on a different local port each launch, and the browser engine
 inside keeps saved data per port — so every restart opened an empty store.
 
@@ -164,10 +174,12 @@ and can also write a whole list of rows for you.
 
 <br>
 
-There is no backend. Keys live in your browser's local storage, or in
-`%APPDATA%\image-forge` on the desktop build. They are sent to exactly one
-place: the engine you chose. Nothing is phoned home, because there is nowhere
-to phone.
+There is no backend. Keys live in your browser's local storage, or on the
+desktop build in a file the app owns inside `%APPDATA%\image-forge`, locked so
+only your Windows user can read it. They are sent to exactly one place: the
+engine you chose. Nothing is phoned home, because there is nowhere to phone.
+(If you also run Video Forge, a key typed in either app works in both; that
+shared copy is locked the same way.)
 
 The desktop build serves itself over `127.0.0.1` on a fixed local port, with
 context isolation on and navigation locked to itself. Nothing listens on any
@@ -196,9 +208,12 @@ queue** button appears. Free-tier keys are always tried before paid ones.
 
 <br>
 
-`scripts/mcp-server.js` speaks MCP over stdio. Claude Code, Cursor, n8n and
-LangChain can list the manifest, add rows, and generate real images through
-the same engine code the app uses.
+`scripts/mcp-server.js` speaks MCP over stdio and offers eight tools
+(`forge_status`, `forge_models`, `forge_list`, `forge_add_row`,
+`forge_generate_pending`, `forge_generate_one`, `forge_retry_failed`,
+`forge_fix_retired`). Claude Code, Cursor, n8n and LangChain can list the
+manifest, add rows, and generate real images through the same engine code the
+app uses. [How to connect each one](CONNECT-AGENTS.md).
 
 ```bash
 claude mcp add image-forge node scripts/mcp-server.js
@@ -214,8 +229,13 @@ at all it uses OVHcloud, which needs none.
 
 <br>
 
-Install both on the same computer and they recognise each other. The vid
-creator can ask Image Forge for mouth-shape sheets, sprites or anything else:
+Install both on the same computer and they recognise each other. They share
+API keys (Google, OpenRouter, NVIDIA, Mistral, Cloudflare, Pollinations,
+OpenAI, Groq, ElevenLabs, Fish), and the Video Forge mark in Image Forge's
+header opens the video app. Video Forge can order a **puppet**, a character
+that talks, blinks and waves: Image Forge opens its puppet maker filled in, and
+the finished puppet appears in Video Forge. The vid creator can also ask for
+mouth-shape sheets, sprites or anything else:
 
 ```bash
 npm run ask-forge -- visemes kaiti --sheets viseme-sheets-v2
@@ -264,46 +284,72 @@ models, and pick one per job. One free Mistral key covers all three:
 
 ---
 
+## Showcase: from a photo to a talking puppet
+
+Two of the sample puppets started from photographs — the puppet maker borrows
+the look and draws a new character in a style of your choosing. *(Pictures of
+the finished puppets go here once they are approved.)*
+
+| Photo | Puppet |
+|---|---|
+| A black and tan dog, by [Jane Thomson](https://www.pexels.com/@jane-thomson-1710934398) on [Pexels](https://www.pexels.com/collections/dog-puppet-x5klyxw/) | **Lucky** — 3D animated style |
+| A man in a red sweater and cap, by [Andrea Piacquadio](https://www.pexels.com/@olly) on [Pexels](https://www.pexels.com/collections/guy-puppet-cn95tcb/) | **Alex** — claymation style |
+
+Photos used as inspiration under the [Pexels licence](https://www.pexels.com/license/);
+the puppets themselves carry no credit line.
+
 ## What it does
 
-**Start** — the front door. Describe it once, say how many, press the button.
-With a text engine it writes a genuinely different prompt for each picture;
-without one it varies the framing and says so.
+**Start** — the front door. Describe it once, say how many, pick a Style, a
+shape and an engine (a drop-down of the engines that are set up, with *Add more
+engines…* at the end), press the button. With a text engine it writes a
+genuinely different prompt for each picture; without one it varies the framing
+and says so. It keeps the run in progress and your last run.
+
+**Made** — everything you have made: statistics, then every picture, sheet,
+GIF and puppet with its exact date, engine and status, a Redo on each, ♥ and ✕
+marks, a GIF button and click-to-zoom. **Redo N marked or failed** remakes
+them together; **Edit as a table** opens the spreadsheet; thumbnails survive a
+restart. A **Make the N waiting** button in the header runs whatever is queued.
 
 **Chat** — describe one picture and get it, ask how the app works, or have it
 write or rewrite rows. Every change to existing rows is shown before it is
-applied. History on the left, grouped by date or model.
+applied. A writing job with no key takes a provider that has one, and a busy
+(429) or retired model falls back to the next engine with a key.
 
-**The Wizard** — nine steps, one decision each. Name the batch, pick a world,
-list the pictures (or let a text model write them), pick a look, a painter, a
-shape, a home. Saved setups become one-click recipes.
+**Wizards** — four makers: *Make pictures* (three steps), *Make a puppet*,
+*Animate a character* (sprite sheets, turnarounds, expressions, mouth shapes)
+and *Prompt factory* (a big prompt list, copied for Google Sheets or saved as
+CSV). Uploading to WordPress lives under **Download**.
 
-**36 styles** in six families, with per-style notes on which engines can
-actually do them. Star the ones you use and they come first. Infographics,
-posters and the branded house style are limited to the models that can really
-render text, rather than letting you find out the expensive way.
+**Gallery** — *Everything made*, *Styles* (36 looks in six families, with notes
+on which engines can do them; star the ones you use) and *Templates* (picture
+setups and puppet templates, ready to reuse).
 
-**Sheets** — sprite sheets, character turnarounds, expression sets, and viseme
-sheets: the mouth shapes an avatar needs to look like it is speaking. Each
-frame gets its own seed and a *"change only this"* instruction.
+**The puppet maker** — describe a character or add inspiration photos, pick
+head, waist-up or full body, and get a puppet for Video Forge that talks (with
+half-open mouths), blinks, raises its brows, nods and waves. Two engines (faces,
+parts) including Z-Image and FLUX.2 klein on your own machine, and Cloudflare
+FLUX.2. A picture checker looks at every part; each gets at most three tries.
+[The method](docs/puppet-recipe.md) · [in plain words](docs/puppets-eli5.md).
 
-**GIFs** — turn any finished picture into an animation, or describe one and
-have the frames generated.
-
-**Text with perspective** — drop text onto an image and drag its four corners
-independently. Real projective warp, so text sits on a wall or a sign instead
-of floating over it.
-
-**Vectors** — SVG and Lottie written by a code model, sanitised before
-anything is rendered or saved.
+**GIFs, lettering, vectors** — turn any finished picture into an animation;
+drop real fonts on a picture and drag its four corners so text sits on a wall;
+SVG and Lottie written by a code model and sanitised before use.
 
 **Key pools** — as many keys as you like per engine. On a `429` the key rests
-and the next one retries the same row immediately. Check every key at once and
-see which ones actually work.
+and the next one retries the same row immediately. A **Test** sits beside every
+key. Keys are shared with Video Forge when both are installed.
+
+**Hover help** — hold the mouse over anything and a small bubble says what it
+does, in two short sentences.
+
+**Cursor chasers** — make a little creature that runs after the mouse on your
+website (Animate a character → Cursor chaser), try it in the app, download it
+ready to add.
 
 **Files** — a linked folder (point it at a Drive sync folder for free cloud
-backup), a ZIP with the structure and CSV, or one picture at a time. Click any
-picture to see it full size.
+backup), a ZIP with the structure and CSV, or one picture at a time.
 
 **Your settings, provably saved** — last saved and read back at what time, how
 many keys are stored, Save now, Back up to a file, Restore.
@@ -318,7 +364,7 @@ id,filename,prompt,category,aspect_ratio,seed,model,status
 ```
 
 `filename` is the only required column. Everything else has a sensible
-default. Import forgives missing columns; export is CSV or XLSX.
+default. Import forgives missing columns; export is CSV (also a copy made for Excel).
 
 Any tool that can read and write this CSV is a first-class citizen of the
 project. That is the whole design. [Every column, explained](docs/manifest.md).
@@ -363,12 +409,11 @@ Being straight about this saves everyone time.
 
 ## Licence
 
-[Apache-2.0](LICENSE). Use it, sell what you make with it, build on it.
+No licence: all rights reserved (since 26 Oct 2026). You may look at the code;
+you may not copy, redistribute or build on it without permission. Copies taken
+before that date keep the Apache-2.0 licence they came with.
 
-If you redistribute it or something derived from it, the [NOTICE](NOTICE)
-file has to travel with it — in your docs, your own NOTICE, or your credits
-screen. That is the one thing asked in return. Just *using* the app carries no
-obligation at all.
+The [NOTICE](NOTICE) file credits the other people's work this app uses.
 
 ---
 

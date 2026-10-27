@@ -17,7 +17,7 @@
  * flux.2-klein-4b — the same scene came back with only the asked-for change.
  */
 
-export type SheetKind = "sprite-walk" | "sprite-actions" | "turnaround" | "visemes" | "expressions" | "avatar-eyes" | "avatar-brows";
+export type SheetKind = "sprite-walk" | "sprite-actions" | "turnaround" | "visemes" | "expressions" | "avatar-eyes" | "avatar-brows" | "cursor-chaser";
 
 export interface SheetFrame {
   /** short name, used for the file and the label under the frame */
@@ -125,6 +125,20 @@ const EXPRESSIONS: SheetFrame[] = [
 ];
 
 /** Every frame in a set must be framed identically or the sheet is useless. */
+/** A cursor chaser (lib/cursorChaser.ts): run ×4, sit, sleep — all facing right. */
+const CHASER: SheetFrame[] = [
+  { id: "run_1", direction: "running fast to the RIGHT, side view, front legs stretched forward, back legs pushing off", label: "run 1" },
+  { id: "run_2", direction: "running fast to the RIGHT, side view, all legs gathered under the body, mid-leap", label: "run 2" },
+  { id: "run_3", direction: "running fast to the RIGHT, side view, back legs stretched behind, front legs reaching down", label: "run 3" },
+  { id: "run_4", direction: "running fast to the RIGHT, side view, legs crossing under the body, ears and tail streaming back", label: "run 4" },
+  { id: "sit", direction: "sitting down calmly, side view facing RIGHT, looking up and to the right, tail curled round", label: "sit" },
+  { id: "sleep", direction: "curled up asleep, side view facing RIGHT, eyes closed, peaceful", label: "sleep" },
+];
+const CHASER_COMMON =
+  "a small cute mascot creature, the WHOLE body visible and centred with space around it, side view facing RIGHT, " +
+  "simple bold shapes and a clear outline that read well when tiny, identical character design, colours and size in every frame, " +
+  "flat even lighting, plain solid flat background";
+
 const SPRITE_COMMON =
   "full body, whole figure visible, centred in frame, identical character design in every frame, " +
   "same clothing, same colours, same proportions, same scale, flat even lighting, plain solid background, side-on game sprite";
@@ -138,6 +152,15 @@ const SHEET_NEGATIVE =
   "busy background, scenery, text, letters, watermark, motion blur";
 
 export const SHEET_DEFS: SheetDef[] = [
+  {
+    kind: "cursor-chaser",
+    label: "Cursor chaser",
+    blurb: "A little creature that runs after the mouse on a website, sits, and naps. Download it ready to add to any site.",
+    columns: 6,
+    frames: CHASER,
+    common: CHASER_COMMON,
+    negative: SHEET_NEGATIVE,
+  },
   {
     kind: "sprite-walk",
     label: "Walk cycle",
@@ -216,6 +239,7 @@ const CHANGE_ONLY: Record<SheetKind, string> = {
   expressions: "the expression on the face",
   "avatar-eyes": "how far the eyelids are lowered — the mouth must not move",
   "avatar-brows": "the position of the eyebrows — the mouth and eyes must not move",
+  "cursor-chaser": "the pose of the body and legs — it always faces right",
 };
 
 /**
@@ -338,6 +362,8 @@ export function stripFor(def: SheetDef): FrameStrip {
   switch (def.kind) {
     case "sprite-walk":
       return { order: ids, frameMs: 90, pingPong: false, label: "walk cycle, looping" };
+    case "cursor-chaser":
+      return { order: ids, frameMs: 140, pingPong: false, label: "running, sitting, napping" };
     case "turnaround":
       return { order: ids, frameMs: 220, pingPong: true, label: "turning, out and back" };
     case "visemes":

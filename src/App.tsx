@@ -20,6 +20,7 @@ type UpdateReady = {
 };
 import { SEED_ROWS } from "./lib/seed";
 import { downloadCsv, parseCsv, rowsFromCsv, rowsToCsv } from "./lib/csv";
+import { toFlowJobs } from "./lib/flowExport";
 import { renderPreview } from "./lib/preview";
 import { nameForMime, styleDriftCount, uniqueName, violationCount, withSuffix } from "./lib/validate";
 import {
@@ -56,8 +57,10 @@ import { measureStorage, safeSet, storageWarning, type SaveResult } from "./lib/
 import { saveSettingsVerified, type SaveProof } from "./lib/settingsBackup";
 import { tailorPrompt } from "./lib/promptTailor";
 import { styleById } from "./lib/styleCatalogue";
-import { checkPaidRun, type PaidRunCheck } from "./lib/paidGuard";
+import type { PaidRunCheck } from "./lib/paidGuard";
+import { ensureAffordable, registerPaidAsker, type PaidAnswer, type PaidAskOptions } from "./lib/paidGate";
 import PaidConfirm from "./components/PaidConfirm";
+import { autosaveImage, loadAutosaved, unsavedPictures } from "./lib/autosave";
 import { checkBatch, collectBatch, describeJob, submitBatch } from "./lib/geminiBatch.mjs";
 import {
   clearTauriFolder,
@@ -75,13 +78,31 @@ import DocsView from "./components/DocsView";
 import AgentsView from "./components/AgentsView";
 import SettingsView, { type SettingsSection } from "./components/SettingsView";
 import WizardView from "./components/WizardView";
+import { openSettings } from "./components/ErrorLine";
+import { needsSettings, plainError } from "./lib/plainError";
 import PromptFactory from "./components/PromptFactory";
 import { BatchLibrary, ImageLibrary, StyleLibrary, TemplateLibrary } from "./components/LibraryViews";
 import WpImportModal from "./components/WpImportModal";
 import GifMaker from "./components/GifMaker";
 import UpdateReadyDialog from "./components/UpdateReadyDialog";
 import { MOVED_EVENT } from "./components/DesktopModeCard";
-import { desktopInfo, installUpdate, type LaunchMode } from "./lib/desktop";
+import { SparkField } from "./components/SparkField";
+import { loadThumbs, saveThumb, makeThumb } from "./lib/thumbStore";
+import { flushVault } from "./lib/vault";
+import { setTextFallbacks } from "./lib/providers";
+import MadeView from "./components/MadeView";
+import { TipLayer } from "./components/TipLayer";
+import CanvaFill from "./components/CanvaFill";
+import { canvaUpload } from "./lib/canva";
+import { listWorkshop, markedParts, saveMeta as saveWorkshopMeta, type WorkshopMeta } from "./lib/puppet/workshop";
+import type { PuppetTemplate } from "./lib/batches";
+import { DEFAULT_SETUP } from "./lib/batches";
+import { CATEGORY_FOLDER } from "./lib/output";
+import { FORGE_PALETTE } from "./lib/theme";
+import imageMark from "./assets/image-mark.png";
+import videoMark from "./assets/video-mark.png";
+import { keysFromSettings, fillFromShared, loadSharedKeys, saveSharedKeys } from "./lib/sharedKeys";
+import { desktopInfo, installUpdate, videoForgeInstalled, openVideoForge, type LaunchMode } from "./lib/desktop";
 import ChatView from "./components/ChatView";
 import StartView from "./components/StartView";
 import { withStyleBlock } from "./lib/engines.mjs";
@@ -98,10 +119,13 @@ import { filenameFor, type ChatPlan, type RowEdit } from "./lib/chatPlan";
 import { CountUp, type MotionLevel } from "./components/motion";
 import Letterer from "./components/Letterer";
 import SheetMaker from "./components/SheetMaker";
+import PuppetMaker from "./components/PuppetMaker";
+import PuppetWorkbench, { workshopIO } from "./components/PuppetWorkbench";
+import { openOrders as openPuppetOrders, type PuppetOrder } from "./lib/puppet/shelf";
 import VectorMaker from "./components/VectorMaker";
 import TopMenu, { type View } from "./components/TopMenu";
 import { CursorFX, DotField, EmberField, StarField } from "./components/effects";
-import { Btn, IAnvil, IFolder, IPlay, IQuill, IWand, ToastHost, IX } from "./components/ui";
+import { Btn, IFolder, IPlay, IQuill, IWand, ToastHost, IX } from "./components/ui";
 import type { FolderState } from "./components/SettingsDrawer";
 import MarketApp from "./market/MarketApp";
 
@@ -192,10 +216,13 @@ const nowTime = () => new Date().toLocaleTimeString("en-GB", { hour12: false });
 
 export default function App() {
   const [mode, setMode] = useState<"forge" | "market">("forge");
-  if (mode === "market") {
-    return <MarketApp onOpenForge={() => setMode("forge")} />;
-  }
-  return <ForgeApp onOpenMarket={() => setMode("market")} />;
+  // The hover help bubble, over everything (components/TipLayer.tsx).
+  return (
+    <>
+      {mode === "market" ? <MarketApp onOpenForge={() => setMode("forge")} /> : <ForgeApp onOpenMarket={() => setMode("market")} />}
+      <TipLayer />
+    </>
+  );
 }
 
 function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
@@ -245,9 +272,33 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const [gifFor, setGifFor] = useState<null | { row: ManifestRow; blob: Blob }>(null);
   const [textFor, setTextFor] = useState<null | { row: ManifestRow; blob: Blob }>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
+  const [canvaFillOpen, setCanvaFillOpen] = useState(false);
+  // The puppet maker, opened from a menu (no order) or by Video Forge's order.
+  const [puppet, setPuppet] = useState<{ order: PuppetOrder | null; template?: PuppetTemplate | null; open?: WorkshopMeta | null; autoRemake?: boolean } | null>(null);
+  // Made reads the puppets again each time the maker closes.
+  const [puppetsSeen, setPuppetsSeen] = useState(0);
+  // The puppet review workbench opened from Made (#11); from the puppet maker it opens inside that.
+  const [workbench, setWorkbench] = useState<WorkshopMeta | null>(null);
+  // "Remake all marked": the puppets still to do, one after another.
+  const remakeQueue = useRef<WorkshopMeta[]>([]);
+  const nextRemake = useCallback(() => {
+    const next = remakeQueue.current.shift();
+    setPuppetsSeen((n) => n + 1);
+    setPuppet(next ? { order: null, open: next, autoRemake: true } : null);
+  }, []);
+  const remakeAllMarked = useCallback(async () => {
+    remakeQueue.current = (await listWorkshop()).filter((w) => markedParts(w).length);
+    nextRemake();
+  }, [nextRemake]);
   const [vectorOpen, setVectorOpen] = useState(false);
   const [animateOpen, setAnimateOpen] = useState(false);
-  const [paidAsk, setPaidAsk] = useState<null | { check: PaidRunCheck; targets: number[] }>(null);
+  /* The cost question. Every caller reaches it through ensureAffordable() in
+     lib/paidGate.ts; this is the one window that asks it and hands the answer back. */
+  const [paidAsk, setPaidAsk] = useState<null | { check: PaidRunCheck; opts: PaidAskOptions; answer: (a: PaidAnswer) => void }>(null);
+  useEffect(() => {
+    registerPaidAsker((check, opts) => new Promise<PaidAnswer>((resolve) => setPaidAsk({ check, opts, answer: resolve })));
+    return () => registerPaidAsker(null);
+  }, []);
 
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
@@ -263,15 +314,87 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     window.addEventListener(MOVED_EVENT, onMoved);
     return () => window.removeEventListener(MOVED_EVENT, onMoved);
   }, []);
+  // Keys shared with Video Forge (lib/sharedKeys.ts): fill empty boxes once,
+  // then share whatever is typed here. `sharedSent` is what the file already
+  // holds, so an unchanged key is never written again.
+  // The twin switch. null = not asked yet / not the desktop app: the mark
+  // still shows, and clicking it explains. false = asked, not installed.
+  const [videoForge, setVideoForge] = useState<boolean | null>(null);
+  const [forgeGoing, setForgeGoing] = useState(false);
+  useEffect(() => {
+    if (isDesktop) void videoForgeInstalled().then(setVideoForge);
+  }, [isDesktop]);
+  // Puppet orders from Video Forge (Forge shelf). Checked now and every 20 s;
+  // a new one opens the puppet maker filled in, unless it is already open.
+  const puppetRef = useRef(puppet);
+  puppetRef.current = puppet;
+  const seenOrders = useRef(new Set<string>());
+  useEffect(() => {
+    if (!isDesktop) return;
+    const look = () =>
+      void openPuppetOrders().then((orders) => {
+        const fresh = orders.find((o) => !seenOrders.current.has(o.id));
+        if (!fresh || puppetRef.current) return;
+        seenOrders.current.add(fresh.id);
+        pushToast("info", `${fresh.from} ordered a puppet: ${fresh.name}.`);
+        setPuppet({ order: fresh });
+      });
+    look();
+    const t = window.setInterval(look, 20000);
+    return () => window.clearInterval(t);
+  }, [isDesktop]);
+  // Chat and the other text jobs fall back to any other text engine with a key.
+  useEffect(() => setTextFallbacks(settings.textProviders), [settings.textProviders]);
+  const sharedSent = useRef<Record<string, string> | null>(null);
+  useEffect(() => {
+    if (!isDesktop) return;
+    void loadSharedKeys().then((keys) => {
+      sharedSent.current = keys;
+      setSettings((prev) => fillFromShared(prev, keys));
+    });
+  }, [isDesktop]);
+  useEffect(() => {
+    const sent = sharedSent.current;
+    if (!isDesktop || !sent) return;
+    const t = window.setTimeout(() => {
+      const mine = keysFromSettings(settings);
+      const changed = Object.fromEntries(Object.entries(mine).filter(([k, v]) => sent[k] !== v));
+      if (!Object.keys(changed).length) return;
+      sharedSent.current = { ...sent, ...changed };
+      void saveSharedKeys(changed);
+    }, 1500);
+    return () => window.clearTimeout(t);
+  }, [settings, isDesktop]);
   const stopRef = useRef(false);
+  // HALT MEANS NOW. The stop flag only kept the NEXT picture from starting;
+  // the ones in flight carried on — minutes, on a local model — so "Halt the
+  // forge" looked like it did nothing (Ak, 13 Oct 2026). This cancels them;
+  // strike() already puts a cancelled row back to "pending".
+  const runAbortRef = useRef<AbortController | null>(null);
+  const haltNow = useCallback(() => {
+    stopRef.current = true;
+    runAbortRef.current?.abort();
+  }, []);
   const folderRef = useRef<FileSystemDirectoryHandle | null>(null);
   const tauriFolderRef = useRef<string | null>(null);
   const imagesRef = useRef<Map<string, Blob>>(new Map());
+  /** names of pictures that exist somewhere besides this page's memory (a folder, the safety copy, a zip) */
+  const persistedRef = useRef<Set<string>>(new Set());
   const toastId = useRef(1);
   /** set once repairForge exists, so the load-time warning can offer to run it */
   const repairForgeRef = useRef<null | (() => void)>(null);
 
   useEffect(() => saveBatches(batches), [batches]);
+  // "Made" is where the Forge tab lands; the spreadsheet is behind "Edit as a table".
+  const [tableMode, setTableMode] = useState(false);
+  // Thumbnails kept from earlier sessions fill the rows that have no picture
+  // in memory — after a restart, that is all of them (lib/thumbStore.ts).
+  useEffect(() => {
+    void loadThumbs().then((thumbs) => {
+      if (!Object.keys(thumbs).length) return;
+      setRows((prev) => prev.map((r) => (!r.preview && thumbs[r.filename] ? { ...r, preview: thumbs[r.filename] } : r)));
+    });
+  }, []);
   useEffect(() => saveSetups(setups), [setups]);
 
 
@@ -311,8 +434,13 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   /* ---------- helpers ---------- */
   const pushToast = useCallback((kind: Toast["kind"], msg: string, action?: Toast["action"]) => {
     const id = toastId.current++;
-    setToasts((t) => [...t.slice(-3), { id, kind, msg, action }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), action ? 7000 : 4600);
+    // Every error says what to do next, and offers a button to Settings when
+    // the trouble is a key or a setting (lib/plainError).
+    const shown = kind === "err" ? plainError(msg, "Try again. If it keeps happening, check Settings.") : msg;
+    const act =
+      action ?? (kind === "err" && needsSettings(shown) ? { label: "Open Settings", run: () => openSettings(shown) } : undefined);
+    setToasts((t) => [...t.slice(-3), { id, kind, msg: shown, action: act }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), act ? 7000 : 4600);
   }, []);
 
   const pushLog = useCallback((msg: string, kind: LogEntry["kind"]) => {
@@ -387,7 +515,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
        data and we could not read it. Nothing has been overwritten — saving is
        held back until this is answered — but it has to be answered. */
     if (rowsRescued || settingsRescued) {
-      const what = [rowsRescued && "your manifest", settingsRescued && "your settings and keys"]
+      const what = [rowsRescued && "your list", settingsRescued && "your settings and keys"]
         .filter(Boolean)
         .join(" and ");
       const msg = `Could not read ${what}. The original is kept safe and nothing has been overwritten.`;
@@ -440,6 +568,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     const cached = imagesRef.current.get(r.filename);
     if (cached) return cached;
     if (!r.preview) return null;
+    // Made in an earlier session: the full picture is in the safety copy; the preview is only a thumbnail.
+    const kept = await loadAutosaved(r);
+    if (kept) return kept;
     if (r.preview.startsWith("<svg") || r.preview.startsWith("data:image/svg")) {
       const dims = ASPECTS[r.aspect_ratio];
       try {
@@ -455,23 +586,125 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     }
   }, []);
 
+  /** Pictures made before thumbnails were kept: read them back from the
+   *  linked folder (each category in its own subfolder) and keep a thumbnail. */
+  const backfillThumbs = useCallback(async (): Promise<number> => {
+    const dir = folderRef.current;
+    if (!dir) {
+      pushToast("info", "No folder is linked — link your output folder first (top right).");
+      return 0;
+    }
+    let n = 0;
+    for (const r of rowsRef.current.filter((x) => x.status === "done" && !x.preview)) {
+      try {
+        const sub = await dir.getDirectoryHandle(CATEGORY_FOLDER[r.category]);
+        const file = await (await sub.getFileHandle(r.filename)).getFile();
+        await saveThumb(r.filename, file);
+        const thumb = await makeThumb(file);
+        setRows((prev) => prev.map((x) => (x.id === r.id ? { ...x, preview: thumb } : x)));
+        n++;
+      } catch {
+        /* not in the folder — leave it */
+      }
+    }
+    return n;
+  }, [pushToast]);
+
   const saveToFolder = useCallback(
     async (row: ManifestRow, blob: Blob) => {
+      let saved = false;
       try {
         if (isTauri() && tauriFolderRef.current) {
           const path = await tauriWriteImage(tauriFolderRef.current, row, blob);
           pushLog(`⤓ ${row.filename} → ${path}`, "ok");
-          return;
+          saved = true;
+        } else if (folderRef.current) {
+          const path = await writeImageFile(folderRef.current, row, blob);
+          pushLog(`⤓ ${row.filename} → ${path}`, "ok");
+          saved = true;
         }
-        const h = folderRef.current;
-        if (!h) return;
-        const path = await writeImageFile(h, row, blob);
-        pushLog(`⤓ ${row.filename} → ${path}`, "ok");
       } catch {
         pushLog(`⚠ could not write ${row.filename} into the linked folder`, "err");
       }
+      // No folder linked, or writing to it failed: keep a copy in the app's own folder, so
+      // closing or crashing after a paid run loses nothing (only works in the desktop app).
+      if (!saved && (await autosaveImage(row, blob))) {
+        saved = true;
+        pushLog(`⤓ ${row.filename} kept in the app's own pictures folder`, "info");
+      }
+      if (saved) persistedRef.current.add(row.filename);
     },
     [pushLog]
+  );
+
+  /* Closing the window or the tab while pictures exist nowhere but in memory: ask first.
+     In the desktop app the safety copy normally covers every picture, so this fires only when
+     that copy could not be written (disk full, folder locked) or in a plain browser tab with no
+     folder linked. electron/main.js turns the request into a dialog. */
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if (unsavedPictures(imagesRef.current.keys(), persistedRef.current).length === 0) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, []);
+
+  /** The full picture of a row: in memory if made this session, else from the linked folder, else the safety copy. */
+  const getPicture = useCallback(async (r: ManifestRow): Promise<Blob | null> => {
+    const mem = imagesRef.current.get(r.filename);
+    if (mem) return mem;
+    const dir = folderRef.current;
+    if (!dir) return loadAutosaved(r);
+    try {
+      const sub = await dir.getDirectoryHandle(CATEGORY_FOLDER[r.category]);
+      return await (await sub.getFileHandle(r.filename)).getFile();
+    } catch {
+      return loadAutosaved(r);
+    }
+  }, []);
+
+  /** A finished picture made elsewhere (Canva): a new row in Made, done, saved to the folder. */
+  const addFinished = useCallback(
+    async (name: string, blob: Blob, note: string) => {
+      const taken = new Set(rowsRef.current.map((r) => r.filename));
+      let filename = name;
+      for (let i = 2; taken.has(filename); i++) filename = name.replace(/(\.png)?$/, `_${i}.png`);
+      const id = rowsRef.current.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+      const preview = await makeThumb(blob);
+      const row: ManifestRow = {
+        id, filename, prompt: note ? `Canva design — ${note}` : "Canva design", category: "image", item_id: "", shop_id: "", event_id: "",
+        style: "", aspect_ratio: "1:1", seed: 0, model: "canva", status: "done", error: "", generated_at: new Date().toISOString(),
+        imported_attachment_id: "", preview, made_with: "Canva",
+      } as ManifestRow;
+      imagesRef.current.set(filename, blob);
+      setRows((prev) => [...prev, row]);
+      void saveThumb(filename, blob);
+      await saveToFolder(row, blob);
+    },
+    [saveToFolder]
+  );
+
+  const sendToCanva = useCallback(
+    async (ids: number[]) => {
+      let ok = 0;
+      for (const id of ids) {
+        const r = rowsRef.current.find((x) => x.id === id);
+        if (!r) continue;
+        const blob = await getPicture(r);
+        if (!blob) continue;
+        try {
+          await canvaUpload(settingsRef.current, r.filename, blob);
+          ok++;
+        } catch (e) {
+          pushToast("err", `Canva: ${(e as Error).message}`);
+          return;
+        }
+      }
+      pushToast("ok", `${ok} picture${ok === 1 ? "" : "s"} sent to your Canva uploads.${ok < ids.length ? ` ${ids.length - ok} were not on this computer any more.` : ""}`);
+    },
+    [getPicture, pushToast]
   );
 
   /* ---------- the strike ---------- */
@@ -558,7 +791,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       }
 
       try {
-        const { blob, dataUrl } = await generateReal({ ...row, prompt, negative_prompt }, s, undefined, exhaust, cdH * 3600e3);
+        const { blob, dataUrl } = await generateReal({ ...row, prompt, negative_prompt }, s, runAbortRef.current?.signal, exhaust, cdH * 3600e3);
         if (halted()) {
           setRows((prev) => prev.map((r) => (r.id === id && r.status === "generating" ? { ...r, status: "pending" } : r)));
           pushLog(`· ${row.filename} halted mid-strike`, "info");
@@ -588,7 +821,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         }
         const saved = { ...row, filename };
         imagesRef.current.set(filename, blob);
-        patchRow(id, { filename, status: "done", generated_at: new Date().toISOString(), preview: dataUrl, error: "" });
+        patchRow(id, { filename, status: "done", generated_at: new Date().toISOString(), preview: dataUrl, error: "", made_with: route.def?.id || (route.engine === "local" ? `local:${route.apiModel}` : route.engine) });
+        void saveThumb(filename, blob);
         pushLog(`✓ ${filename} struck · ${(blob.size / 1024).toFixed(0)} KB via ${route.engine}`, "ok");
         setSettings((prev) => ({ ...prev, usage: bumpUsage(prev.usage, modelId || s.provider) }));
         // The picture exists and is already counted. If writing it to the
@@ -628,24 +862,34 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   );
 
   const runQueue = useCallback(
-    async (targets?: number[], approvedCost = false) => {
+    async (targets?: number[]) => {
       if (isRunning) return;
       const ids = targets ?? rowsRef.current.filter((r) => r.status === "pending" || r.status === "failed").map((r) => r.id);
       if (ids.length === 0) return;
 
-      // Nothing spends money without being asked. Free engines never get here.
-      if (!approvedCost && settingsRef.current.confirmPaidRuns) {
-        const about = ids
-          .map((id) => rowsRef.current.find((r) => r.id === id))
-          .filter((r): r is ManifestRow => Boolean(r));
-        const check = checkPaidRun(about, settingsRef.current);
-        if (check.costs) {
-          setPaidAsk({ check, targets: ids });
-          return;
+      // Nothing spends money without being asked. Free engines pass straight through.
+      const about = ids
+        .map((id) => rowsRef.current.find((r) => r.id === id))
+        .filter((r): r is ManifestRow => Boolean(r));
+      const gate = await ensureAffordable(about, settingsRef.current);
+      if (!gate.ok) {
+        if (gate.useFree) {
+          const engineId = gate.useFree;
+          patchSettings({ provider: engineId as ForgeSettings["provider"] });
+          pushLog(`↪ switched to ${engineId} instead — this run is free`, "ok");
+          // let the new engine settle into state, then ask the question again for what is left
+          setTimeout(() => void runQueue(ids), 60);
+        } else {
+          pushToast("info", gate.reason);
         }
+        return;
+      }
+      if (gate.check.costs && settingsRef.current.confirmPaidRuns) {
+        pushLog(`⚑ you approved about ${formatUsd(gate.check.totalUsd)} on ${gate.check.model}`, "info");
       }
 
       stopRef.current = false;
+      runAbortRef.current = new AbortController();
       setIsRunning(true);
 
       const queued = ids
@@ -757,7 +1001,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     setRows((prev) => [...prev, row]);
     setSelectedId(row.id);
     setView("workbench");
-    pushLog(`+ row #${row.id} added to the manifest`, "info");
+    pushLog(`+ row #${row.id} added to the list`, "info");
   }, [styleLock, pushLog]);
 
   const deleteRow = useCallback(
@@ -767,7 +1011,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       const r = rowsRef.current[idx];
       setRows((prev) => prev.filter((x) => x.id !== id));
       setSelectedId((s) => (s === id ? null : s));
-      pushToast("info", `${r.filename} removed from the manifest.`, {
+      pushToast("info", `${r.filename} removed from the list.`, {
         label: "undo",
         run: () =>
           setRows((prev) => {
@@ -970,6 +1214,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     try {
       const { blob, count } = await buildZipBlob(rowsRef.current, getBlobFor, rowsToCsv(rowsRef.current));
       downloadBlob("marketplace-images.zip", blob);
+      for (const name of imagesRef.current.keys()) persistedRef.current.add(name); // they are in the zip now
       pushToast("ok", `ZIP ready — ${count} plate${count === 1 ? "" : "s"} in shops/items/events/npcs plus the CSV.`);
     } catch {
       pushToast("err", "ZIP packing failed.");
@@ -1001,10 +1246,18 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       }
       const variantSeed = row.seed + 1;
       const s = settingsRef.current;
+      const isSvgPlate = row.preview.startsWith("<svg") || row.preview.startsWith("image/svg");
+      // A variant is one more picture on the same route: it asks first like any other paid run.
+      if (!isSvgPlate && s.provider !== "simulated") {
+        const gate = await ensureAffordable([{ ...row, seed: variantSeed }], s);
+        if (!gate.ok) {
+          pushToast("info", gate.reason);
+          return;
+        }
+      }
       pushToast("info", `Forging a variant of ${row.filename}…`);
       try {
         let variant: string;
-        const isSvgPlate = row.preview.startsWith("<svg") || row.preview.startsWith("image/svg");
         if (isSvgPlate || s.provider === "simulated") {
           // procedural — instant and free
           variant = renderPreview({ ...row, seed: variantSeed });
@@ -1033,12 +1286,14 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         const trueName = nameForMime(row.filename, blob.type);
         if (trueName !== row.filename && !rowsRef.current.some((r) => r.id !== id && r.filename === trueName)) filename = trueName;
         imagesRef.current.set(filename, blob);
+        // the kept variant replaces the old picture everywhere it is saved
+        void saveToFolder({ ...row, filename }, blob);
       }
       patchRow(id, { preview: compare.variant, seed: compare.variantSeed, ...(row ? { filename } : {}) });
       setCompare(null);
       pushToast("ok", "Variant kept — it replaces the original.");
     },
-    [compare, patchRow, pushToast]
+    [compare, patchRow, pushToast, saveToFolder]
   );
 
   /* ---------- exports ---------- */
@@ -1053,28 +1308,32 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     [batches, pushToast]
   );
 
-  const exportXlsx = useCallback(async () => {
-    try {
-      const XLSX = await import("xlsx");
-      const ws = XLSX.utils.json_to_sheet(
-        rowsRef.current.map((r) => {
-          const dims = ASPECTS[r.aspect_ratio];
-          return {
-            id: r.id, filename: r.filename, prompt: r.prompt, negative_prompt: r.negative_prompt ?? "",
-            note: r.note ?? "", category: r.category, kind: r.kind ?? "", item_id: r.item_id, shop_id: r.shop_id,
-            event_id: r.event_id, style: r.style, aspect_ratio: r.aspect_ratio, width: dims.w, height: dims.h,
-            seed: r.seed, model: r.model, status: r.status, error: r.error, generated_at: r.generated_at,
-            imported_attachment_id: r.imported_attachment_id,
-          };
-        })
-      );
-      const wb = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(wb, ws, "manifest");
-      XLSX.writeFile(wb, "marketplace-images.xlsx");
-      pushToast("ok", "marketplace-images.xlsx exported.");
-    } catch {
-      pushToast("err", "XLSX export failed.");
+  // For Google Flow: a plain list of prompts the Flow Prompt Feeder extension reads,
+  // so pictures can still be re-made by hand after the Google credit ends.
+  const exportFlow = useCallback(() => {
+    const file = toFlowJobs({ rows: rowsRef.current, source: "Image Forge manifest" });
+    if (file.jobs.length === 0) {
+      pushToast("info", "Nothing to export yet: no row has a prompt.");
+      return;
     }
+    const blob = new Blob([JSON.stringify(file, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "flow-jobs.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    pushToast("ok", `flow-jobs.json exported: ${file.jobs.length} picture${file.jobs.length === 1 ? "" : "s"} for the Flow extension.`);
+  }, [pushToast]);
+
+  // For Excel: the same CSV as the plain export, with a byte-order mark so Excel reads accents,
+  // Greek and emoji correctly. (A real .xlsx writer was dropped: its library has open security
+  // advisories with no fix, and it was only ever used to write this one file.)
+  const exportXlsx = useCallback(() => {
+    downloadCsv("marketplace-images-for-excel.csv", String.fromCharCode(0xfeff) + rowsToCsv(rowsRef.current));
+    pushToast("ok", "marketplace-images-for-excel.csv exported — open it in Excel.");
   }, [pushToast]);
 
   /* ---------- advanced: repair / backup / reset / github ---------- */
@@ -1137,20 +1396,32 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
   const sendBatch = useCallback(async () => {
     const s = settingsRef.current;
-    const pending = rowsRef.current.filter((r) => r.status === "pending" || r.status === "failed");
-    if (!pending.length) {
+    const waiting = rowsRef.current.filter((r) => r.status === "pending" || r.status === "failed");
+    if (!waiting.length) {
       pushToast("info", "Nothing pending to send.");
       return;
     }
-    const modelId = findModel((pending[0].model || "").trim())?.id ?? s.geminiModel;
-    const def = findModel(modelId);
-    if (!def || def.engine !== "gemini" || def.batchPriceUsd === null) {
+    // Only rows that really go to Google. Rows meant for a free engine stay where they are.
+    const googleRows = waiting.filter((r) => {
+      const route = resolveRoute(r, s);
+      return route.engine === "gemini" && route.def?.batchPriceUsd != null;
+    });
+    if (!googleRows.length) {
       pushToast("err", "Batch jobs are a Google feature — set those rows to a Nano Banana model first.");
       return;
     }
+    // One batch job is one model: take the first Google row's model and the rows that share it.
+    const modelId = resolveRoute(googleRows[0], s).def?.id ?? s.geminiModel;
+    const pending = googleRows.filter((r) => resolveRoute(r, s).def?.id === modelId);
     const apiKey = s.geminiKeys.find((k) => k.key.trim())?.key ?? "";
     if (!apiKey.trim()) {
       pushToast("err", "Add a Google key in Settings → Engines before sending a batch.");
+      return;
+    }
+    // Paid: ask first, on the Google rows only, at the half-price rate.
+    const gate = await ensureAffordable(pending, s, { batch: true, approveLabel: "Send to Google — spend it" });
+    if (!gate.ok) {
+      pushToast("info", gate.reason);
       return;
     }
     const { total } = estimateCost(pending, s, { batch: true });
@@ -1215,6 +1486,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
           imagesRef.current.set(filename, blob);
           await saveToFolder({ ...row, filename }, blob);
           patchRow(row.id, { filename, status: "done", generated_at: new Date().toISOString(), error: "" });
+          void saveThumb(filename, blob);
         }
         for (const f of failures) {
           const row = rowsRef.current.find((r) => r.filename === f.filename);
@@ -1290,7 +1562,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       if (c.market) localStorage.removeItem("emberfair-v1");
       imagesRef.current.clear();
       pushToast("info", "Wiped the checked stores — reloading with a clean slate…");
-      setTimeout(() => window.location.reload(), 600);
+      // The vault must hear about it first, or the reload brings it all back.
+      void flushVault().finally(() => setTimeout(() => window.location.reload(), 600));
     },
     [pushToast]
   );
@@ -1458,8 +1731,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         const failed = [...outcome.failed];
         const done: string[] = [];
         for (const filename of outcome.done) {
-          const blob = imagesRef.current.get(filename);
-          // A picture made in an earlier session is not in memory any more.
+          const rowFor = rowsRef.current.find((x) => x.filename === filename);
+          // A picture made in an earlier session is not in memory any more: the safety copy has it.
+          const blob = imagesRef.current.get(filename) ?? (rowFor ? await getPicture(rowFor) : null);
           if (blob && (await linkSend(id, filename, blob))) done.push(filename);
           else failed.push({ filename, error: "the picture was made, but is not in memory any more — press Redo in Image Forge" });
         }
@@ -1472,7 +1746,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         );
       })();
     }
-  }, [rows, linkAvailable, pushLog]);
+  }, [rows, linkAvailable, pushLog, getPicture]);
 
   /**
    * A whole list from the chat, into the manifest.
@@ -1663,6 +1937,16 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     if (v === "wizard") setWizardPreset(null);
   }, []);
 
+  // "Open Settings" buttons next to error messages ask for this (ErrorLine, toasts).
+  useEffect(() => {
+    const open = (e: Event) => {
+      const section = (e as CustomEvent<{ section?: SettingsSection }>).detail?.section ?? "engines";
+      nav("settings", section);
+    };
+    window.addEventListener("forge:open-settings", open);
+    return () => window.removeEventListener("forge:open-settings", open);
+  }, [nav]);
+
   /* ---------- derived ---------- */
   const batchRows = useMemo(
     () => (batchFilter ? rows.filter((r) => batches.find((b) => b.id === batchFilter)?.rowIds.includes(r.id)) : rows),
@@ -1685,8 +1969,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   /* Batch is a Google-only trick, so only offer it when the waiting rows can use it. */
   const batchable = rows.filter((r) => {
     if (r.status !== "pending" && r.status !== "failed") return false;
-    const def = findModel((r.model || "").trim()) ?? findModel(settings.geminiModel);
-    return def?.engine === "gemini" && def.batchPriceUsd !== null;
+    const route = resolveRoute(r, settings);
+    return route.engine === "gemini" && route.def?.batchPriceUsd != null;
   }).length;
   const doneCount = rows.filter((r) => r.status === "done").length;
   const finishedCount = doneCount + rows.filter((r) => r.status === "imported").length;
@@ -1719,8 +2003,11 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
    */
   useEffect(() => {
     const root = document.documentElement;
-    const palette = surfacesFor(accentHex(settings.ambient.accent));
+    const palette = settings.ambient.accent === "forge" ? FORGE_PALETTE : surfacesFor(accentHex(settings.ambient.accent));
     for (const [name, value] of Object.entries(palette)) root.style.setProperty(name, value);
+    // The Forge look's type and its switch for index.css (html[data-forge]).
+    if (settings.ambient.accent === "forge") root.setAttribute("data-forge", "");
+    else root.removeAttribute("data-forge");
     root.style.setProperty("--color-ember", accentHex(settings.ambient.accent));
     root.style.setProperty("--accent", accentHex(settings.ambient.accent));
   }, [settings.ambient.accent]);
@@ -1734,8 +2021,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[var(--color-bg,#17120e)] p-6 text-center">
         <div className="max-w-md">
-          <h1 className="font-display text-2xl text-cream">Image Forge moved</h1>
-          <p className="mt-2 text-[14px] leading-relaxed text-dust">
+          <h1 data-tip="This copy of Image Forge has stopped, because it now runs somewhere else." className="font-display text-2xl text-cream">Image Forge moved</h1>
+          <p data-tip="Tells you where Image Forge went. Your settings came with it." className="mt-2 text-[14px] leading-relaxed text-dust">
             {movedTo === "window"
               ? "It is now open in its own window, with all your settings. You can close this browser tab."
               : "It is now open in your browser, with all your settings."}
@@ -1747,8 +2034,8 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
   return (
     <div
-      className="grain relative flex h-screen flex-col overflow-hidden bg-ink"
-      data-glow={settings.ambient.glow}
+      className={`${settings.ambient.accent === "forge" ? "" : "grain"} relative isolate flex h-screen flex-col overflow-hidden bg-black`}
+      data-glow={settings.ambient.accent === "forge" ? "off" : settings.ambient.glow}
       style={
         {
           // The palette itself is set on <html> in the effect above, because
@@ -1759,6 +2046,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
         } as CSSProperties
       }
     >
+      {/* The Forge ground, shared with Video Forge: tiny sparks on black, and a
+          burst up-and-right on every click (12 Oct 2026). */}
+      <SparkField moving={motionLevel !== "off"} field={settings.ambient.accent !== "forge"} />
       {settings.ambient.background === "dots" && (
         <DotField
           className="absolute inset-0 z-0"
@@ -1809,17 +2099,38 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
       {/* header */}
       <header className="relative z-20 flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-line bg-coal/85 px-5 py-3 backdrop-blur">
-        <button onClick={() => nav("workbench")} className="btn-press flex items-center gap-3 text-left">
-          <span className="plaque flex h-10 w-10 items-center justify-center rounded-xl text-ember">
-            <IAnvil size={24} />
-          </span>
-          <span>
+        {/* The twin marks: this app lit, Video Forge greyed. Clicking Video
+            Forge's slides the light over and opens it (same switch as in
+            Video Forge, 12 Oct 2026). */}
+        <div className="flex items-center gap-3">
+          <div className={`forge-twin ${forgeGoing ? "going" : ""}`}>
+            <div className="lamp" />
+            <button className="slot-mark" title="Image Forge — back to the workbench" aria-label="Image Forge (this app)" onClick={() => nav("workbench")}>
+              <img src={imageMark} alt="" />
+            </button>
+            {videoForge !== false && (
+              <button
+                className="slot-mark off"
+                title="Open Video Forge"
+                aria-label="Open Video Forge"
+                onClick={async () => {
+                  setForgeGoing(true);
+                  const ok = await openVideoForge();
+                  setTimeout(() => setForgeGoing(false), 900);
+                  if (!ok) pushToast("info", "Video Forge isn't installed on this computer.");
+                }}
+              >
+                <img src={videoMark} alt="" />
+              </button>
+            )}
+          </div>
+          <button data-tip="Takes you back to the main workbench, the home screen of Image Forge." onClick={() => nav("workbench")} className="btn-press text-left">
             <span className="block font-display text-[19px] leading-none tracking-wide text-cream">
               IMAGE <span className="text-ember">FORGE</span>
             </span>
-            <span className="mt-1 block font-mono text-[9.5px] tracking-[0.14em] text-dust uppercase">image pipeline</span>
-          </span>
-        </button>
+            <span className="mt-1 block font-mono text-[9.5px] tracking-[0.14em] text-dust uppercase">AI image generator · BYOK</span>
+          </button>
+        </div>
 
         <TopMenu
           view={view}
@@ -1842,10 +2153,14 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
             rerunMarked(ids);
           }}
           onWpImport={() => setWpOpen(true)}
+          onPuppet={() => setPuppet({ order: null })}
+          onAnimate={() => setSheetOpen(true)}
+          onCanvaFill={() => setCanvaFillOpen(true)}
           onZip={zipAll}
           motion={motionLevel}
               onExportCsv={exportCsv}
               onExportXlsx={exportXlsx}
+              onExportFlow={exportFlow}
             />
 
         <div className="ml-auto flex items-center gap-2">
@@ -1881,6 +2196,13 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
                     onPick: () => setSheetOpen(true),
                   },
                   {
+                    id: "puppet",
+                    title: "Puppet for Video Forge",
+                    hint: "describe it (or drop a photo) — it comes out talking, blinking and waving",
+                    icon: <span className="text-[13px] leading-none">✦</span>,
+                    onPick: () => setPuppet({ order: null }),
+                  },
+                  {
                     id: "graphics",
                     title: "Animated graphics",
                     hint: "SVG icons and illustrations, and Lottie JSON that plays in a web page",
@@ -1907,7 +2229,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
           </div>
           )}
           <span className="hidden font-mono text-[10.5px] text-dust xl:block">
-            {queueLen > 0 ? `${queueLen} awaiting the hammer` : coolingCount > 0 ? `${coolingCount} cooling` : "queue clear"}
+            {queueLen > 0 ? `${queueLen} waiting to be made` : coolingCount > 0 ? `${coolingCount} resting (engine limit)` : "nothing waiting"}
           </span>
           {settings.batchJobs.length > 0 && (
             <button
@@ -1923,33 +2245,29 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               onClick={() => void sendBatch()}
               disabled={isRunning}
               className="btn-press hidden items-center gap-1.5 rounded-lg border border-line bg-panel/70 px-3 py-2 text-[12px] font-semibold text-parch hover:text-cream disabled:opacity-35 xl:flex"
-              title={`Send ${batchable} row${batchable > 1 ? "s" : ""} to Google as a background job at HALF PRICE. You collect them later — usually within the hour. Nothing to do with a "batch" of rows; this is only about cost.`}
+              title={`PAID, at half price: sends the ${batchable} waiting row${batchable > 1 ? "s" : ""} that use a Google model to Google as a background job, and asks you first with the price. You collect them later, usually within the hour; rows on free engines are left alone.`}
             >
-              New €/2 delayed queue
+              Send to Google at half price (paid)
             </button>
           )}
-          {/* The two live together: one makes work, the other does it. They
-              used to sit at opposite ends of the bar sharing a play icon,
-              which said both were ways of starting the same thing. */}
-          <button
-            onClick={() => nav("wizard")}
-            title="Set up a new queue of pictures — the wizard asks one easy question at a time"
-            className="btn-press flex items-center gap-1.5 rounded-lg border border-line2 bg-panel/70 px-3 py-2 text-[13px] text-parch hover:border-ember/50 hover:text-cream"
-          >
-            <IWand size={13} /> New queue
-          </button>
-          <button
-            onClick={() => runQueue()}
-            disabled={isRunning || queueLen === 0}
-            className={`btn-press flex items-center gap-2 rounded-lg px-4 py-2 text-[13px] font-semibold ${
-              isRunning
-                ? "stripes-live text-[var(--color-on-accent)]"
-                : `bg-ember text-[var(--color-on-accent)] hover:bg-[var(--color-accent-lift)] disabled:cursor-not-allowed disabled:opacity-35 disabled:shadow-none ${queueLen > 0 ? "breathe" : ""}`
-            }`}
-          >
-            <IPlay size={13} />
-            {isRunning ? "Forging…" : `Run queue · ${queueLen}`}
-          </button>
+          {/* One "make what is waiting" button, the same words as Made's, shown
+              only when something is waiting and not on Made itself, which has
+              its own (13 Oct 2026: the two used to repeat each other). New
+              work starts from Start or Wizards → Make pictures. */}
+          {(isRunning || queueLen > 0) && !(view === "workbench" && !tableMode) && view !== "lib-images" && (
+            <button
+              onClick={() => (isRunning ? nav("workbench") : runQueue())}
+              title={isRunning ? "Pictures are being made — click to watch them in Made" : `Make the ${queueLen} picture${queueLen === 1 ? "" : "s"} waiting in Made`}
+              className={`btn-press flex items-center gap-2 rounded-full px-4 py-2 text-[13px] font-semibold ${
+                isRunning
+                  ? "stripes-live text-[var(--color-on-accent)]"
+                  : "bg-ember text-[var(--color-on-accent)] hover:bg-[var(--color-accent-lift)] breathe"
+              }`}
+            >
+              <IPlay size={13} />
+              {isRunning ? "Making…" : `Make the ${queueLen} waiting`}
+            </button>
+          )}
         </div>
       </header>
 
@@ -1964,6 +2282,32 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               onMake={makeFromStart}
               onOpenForge={() => nav("workbench")}
               onOpenSettings={() => nav("settings", "engines")}
+              onOpenStyles={() => nav("lib-styles")}
+              onEngine={(p) => patchSettings(p)}
+            />
+          </main>
+        ) : (view === "workbench" && !tableMode) || view === "lib-images" ? (
+          <main className="min-w-0 flex-1 overflow-y-auto">
+            <MadeView
+              rows={rows}
+              batches={batches}
+              settings={settings}
+              isRunning={isRunning}
+              onRun={() => runQueue()}
+              onStop={haltNow}
+              onRedo={rerunMarked}
+              updateRow={patchRow}
+              onOpenTable={() => {
+                setTableMode(true);
+                nav("workbench");
+              }}
+              onBackfill={backfillThumbs}
+              onMakeGif={openGifMaker}
+              onSendToCanva={(ids) => void sendToCanva(ids)}
+              onOpenPuppet={(m) => setPuppet({ order: null, open: m })}
+              onReviewPuppet={(m) => setWorkbench(m)}
+              onRemakeMarked={() => void remakeAllMarked()}
+              puppetsSeen={puppetsSeen}
             />
           </main>
         ) : view === "workbench" ? (
@@ -1979,21 +2323,24 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               styleLock={styleLock}
               isRunning={isRunning}
               onRun={() => runQueue()}
-              onStop={() => {
-                stopRef.current = true;
-              }}
+              onStop={haltNow}
               drift={drift}
               violations={violations}
               motion={motionLevel}
               onJumpSpec={() => nav("settings", "filenames")}
             />
             <main className="relative flex min-w-0 flex-1 flex-col">
+              <div className="flex shrink-0 items-center gap-2 border-b border-line px-5 py-2">
+                <button data-tip="Goes back to the Made screen, where all your finished pictures are." onClick={() => setTableMode(false)} className="btn-press font-mono text-[11px] text-dust hover:text-cream">
+                  ← back to Made
+                </button>
+              </div>
               {activeBatch && (
                 <div className="flex shrink-0 items-center gap-2.5 border-b border-line bg-panel/60 px-5 py-2">
-                  <span className="font-mono text-[10px] tracking-[0.2em] text-dust uppercase">showing batch</span>
-                  <span className="rounded-md border border-ember/40 bg-ember/10 px-2 py-0.5 font-mono text-[11px] text-ember">{activeBatch.name}</span>
-                  <span className="font-mono text-[10px] text-dust">{activeBatch.rowIds.length} pictures</span>
-                  <button onClick={() => setBatchFilter(null)} className="btn-press ml-auto flex items-center gap-1 font-mono text-[10px] text-dust hover:text-cream">
+                  <span data-tip="You are looking at only one group of pictures." className="font-mono text-[10px] tracking-[0.2em] text-dust uppercase">showing batch</span>
+                  <span data-tip="The name of the group you are looking at." className="rounded-md border border-ember/40 bg-ember/10 px-2 py-0.5 font-mono text-[11px] text-ember">{activeBatch.name}</span>
+                  <span data-tip="How many pictures are in this group." className="font-mono text-[10px] text-dust">{activeBatch.rowIds.length} pictures</span>
+                  <button data-tip="Stops showing only this batch and shows all your pictures again." onClick={() => setBatchFilter(null)} className="btn-press ml-auto flex items-center gap-1 font-mono text-[10px] text-dust hover:text-cream">
                     <IX size={10} /> show everything
                   </button>
                 </div>
@@ -2047,7 +2394,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
             <WizardView
               key={wizardPreset?.id ?? "fresh"}
               preset={wizardPreset}
-              setups={setups}
+              setups={setups.filter((t) => t.type !== "puppet")}
               settings={settings}
               patchSettings={patchSettings}
               folder={folder}
@@ -2070,10 +2417,10 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
             {factoryItems.filter((i) => i.filename.trim() && i.prompt.trim()).length > 0 && (
               <div className="sticky bottom-0 border-t border-line bg-coal/90 px-6 py-3 backdrop-blur">
                 <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
-                  <p className="font-mono text-[11px] text-dust">
+                  <p data-tip="How many pictures in your list are ready to be added. The style shown is added to every one so they match." className="font-mono text-[11px] text-dust">
                     {factoryItems.filter((i) => i.filename.trim() && i.prompt.trim()).length} pictures ready · style “{styleLock}” will be appended
                   </p>
-                  <Btn
+                  <Btn data-tip="Puts all these prompts on the workbench as rows, ready to make. Nothing is made until you press Run queue."
                     variant="moss"
                     onClick={() => {
                       const ready = factoryItems.map((i) => ({
@@ -2103,10 +2450,6 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
               </div>
             )}
           </main>
-        ) : view === "lib-images" ? (
-          <main className="min-w-0 flex-1 overflow-y-auto">
-            <ImageLibrary rows={rows} batches={batches} updateRow={patchRow} onRedo={rerunMarked} onMakeGif={openGifMaker} onAddText={openLetterer} />
-          </main>
         ) : view === "lib-styles" ? (
           <main className="min-w-0 flex-1 overflow-y-auto">
               <StyleLibrary settings={settings} patchSettings={patchSettings} styleLock={styleLock} setStyleLock={setStyleLock} pushToast={pushToast} />          </main>
@@ -2115,6 +2458,7 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
             <TemplateLibrary
               setups={setups}
               onDelete={(id) => setSetups((s) => s.filter((x) => x.id !== id))}
+              onUsePuppet={(t) => setPuppet({ order: null, template: t.puppet ?? null })}
               onUse={(t) => {
                 setWizardPreset(t);
                 setView("wizard");
@@ -2232,30 +2576,84 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       {paidAsk && (
         <PaidConfirm
           check={paidAsk.check}
-          onCancel={() => setPaidAsk(null)}
-          onApprove={() => {
-            const t = paidAsk.targets;
-            const spend = formatUsd(paidAsk.check.totalUsd);
-            const on = paidAsk.check.model;
+          note={paidAsk.opts.note}
+          approveLabel={paidAsk.opts.approveLabel}
+          onCancel={() => {
+            paidAsk.answer({ kind: "cancel" });
             setPaidAsk(null);
-            pushLog(`⚑ you approved about ${spend} on ${on}`, "info");
-            void runQueue(t, true);
+          }}
+          onApprove={() => {
+            paidAsk.answer({ kind: "approve" });
+            setPaidAsk(null);
           }}
           onUseFree={(engineId) => {
-            const t = paidAsk.targets;
+            paidAsk.answer({ kind: "free", engineId });
             setPaidAsk(null);
-            patchSettings({ provider: engineId as ForgeSettings["provider"] });
-            pushLog(`↪ switched to ${engineId} instead — this run is free`, "ok");
-            // let the new engine settle into state before running
-            setTimeout(() => void runQueue(t, true), 60);
           }}
         />
       )}
 
+      {canvaFillOpen && (
+        <CanvaFill
+          settings={settings}
+          rows={rows}
+          getPicture={getPicture}
+          onMade={addFinished}
+          onClose={() => setCanvaFillOpen(false)}
+          onOpenSettings={() => {
+            setCanvaFillOpen(false);
+            nav("settings", "canva");
+          }}
+        />
+      )}
       {sheetOpen && (
         <SheetMaker
           settings={settings}
           onClose={() => setSheetOpen(false)}
+          pushToast={pushToast}
+          pushLog={pushLog}
+          onExhaust={(pool, id, until) =>
+            setSettings((prev) => ({
+              ...prev,
+              [pool]: prev[pool].map((k) => (k.id === id ? { ...k, exhaustedUntil: until } : k)),
+            }))
+          }
+        />
+      )}
+
+      {workbench && (
+        <PuppetWorkbench
+          key={workbench.slug}
+          meta={workbench}
+          io={workshopIO(workbench.slug)}
+          onSave={(m) => void saveWorkshopMeta(m)}
+          onClose={() => {
+            setWorkbench(null);
+            setPuppetsSeen((n) => n + 1);
+          }}
+        />
+      )}
+
+      {puppet && (
+        <PuppetMaker
+          settings={settings}
+          order={puppet.order}
+          template={puppet.template}
+          open={puppet.open}
+          key={puppet.open?.slug ?? "new"}
+          autoRemake={puppet.autoRemake}
+          onRemade={(ok) => {
+            pushLog(`${ok ? "✓" : "·"} remade the marked parts of ${puppet.open?.name ?? "a puppet"}`, ok ? "ok" : "info");
+            nextRemake();
+          }}
+          onSaveTemplate={(name, t) =>
+            setSetups((s) => [{ id: uid(), name, createdAt: new Date().toISOString(), data: { ...DEFAULT_SETUP, name }, type: "puppet", puppet: t }, ...s])
+          }
+          onClose={() => {
+            remakeQueue.current = [];
+            setPuppet(null);
+            setPuppetsSeen((n) => n + 1);
+          }}
           pushToast={pushToast}
           pushLog={pushLog}
           onExhaust={(pool, id, until) =>

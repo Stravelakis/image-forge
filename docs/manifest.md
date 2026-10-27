@@ -5,6 +5,10 @@ nav_order: 8
 
 # The manifest
 
+You rarely need to open it: **Start** and **Made** do the everyday work. It is
+still there, under **Made → Edit as a table**, and it is the contract that
+agents and scripts use.
+
 The manifest is a CSV. One row is one picture. It is the contract between you,
 the app, and anything else you point at it — and it is deliberately plain
 enough that a spreadsheet, a Python script or an agent can all be equal
@@ -32,7 +36,7 @@ of `filename,prompt` is a perfectly valid manifest.
 | `note` | Your "make it better" instruction. Folded into the prompt on a redo. |
 | `category` | What the row makes: `image` · `svg` · `lottie` · `sheet` · `gif`. Decides the output folder. |
 | `kind` | World flavour. Seasons the prompt. |
-| `rating` | `like` / `dislike`, set from the Gallery. |
+| `rating` | `like` / `dislike`, set with the ♥ and ✕ in **Made**. |
 | `item_id` `shop_id` `event_id` | Foreign keys back into *your* database. The app never touches them. |
 | `style` | Which of the 36 visual styles to apply. |
 | `aspect_ratio` | `16:9`, `1:1`, `9:16`, `4:3`… Some engines ignore it (Cloudflare, OVHcloud). |
@@ -94,7 +98,8 @@ pending ──▶ generating ──▶ done ──▶ imported
    └─────────────┴──▶ skipped
 ```
 
-- **pending** — queued. **Run queue** picks these up.
+- **pending** — queued. **Run queue** (in the table) and the header's
+  **Make the N waiting** pick these up.
 - **generating** — in flight right now.
 - **done** — the picture exists. If a linked folder is set, it is on disk.
 - **failed** — something went wrong; `error` says what. Retry just these.
@@ -156,7 +161,7 @@ integration with no API involved.
 ## Export
 
 **CSV** — the same format, round-trips exactly.
-**XLSX** — for handing to someone who wants a spreadsheet.
+**For Excel** — the same CSV with a byte-order mark, so Excel reads accents and Greek correctly.
 **ZIP** — the pictures in their folders, with the CSV inside.
 
 The app can also keep the CSV refreshed in your linked folder automatically

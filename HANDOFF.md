@@ -2,8 +2,10 @@
 
 > **Read this before touching anything.** It maps every subsystem, explains the
 > non-obvious decisions, and ends with recipes for the changes you are most
-> likely to make. True as of **25 September 2026, version 1.0.2**. If this file
-> and the code disagree, the code wins — then fix this file.
+> likely to make. True as of **13 October 2026**, package version **1.0.4**
+> plus the unreleased `forge-twins` work (Made, puppet maker, vault, shared keys,
+> hover help, cursor chasers — see CHANGELOG `[Unreleased]`). 715 tests in 39 files.
+> If this file and the code disagree, the code wins — then fix this file.
 
 Also read: **[STANDARDS.md](STANDARDS.md)** (what "done" means here, and how
 this repo applies the owner's shared repo standards),
@@ -35,7 +37,7 @@ the UI; all three share `src/lib/engines.mjs`.
 ```bash
 npm install
 npm run dev                 # browser app → http://localhost:3000
-npm test                    # vitest — 672 tests across 34 files
+npm test                    # vitest — 715 tests across 39 files
 npm run typecheck           # tsc --noEmit (vite build does NOT typecheck)
 npm run build               # vite build → dist/
 node scripts/build-exe.js   # Electron installer + portable → release/
@@ -84,8 +86,11 @@ so those browser-refusing providers fail there.
 ```
 
 The UI is a view switch rendered by `App.tsx`, with a top menu
-(`TopMenu.tsx`): Start, Forge, Chat, Wizards, Gallery, Docs, Settings. The app
-opens on **Start** (`components/StartView.tsx`).
+(`TopMenu.tsx`): Start, **Made**, Chat, Wizards (Make pictures, Make a puppet,
+Animate a character, Prompt factory), Gallery (Everything made, Styles,
+Templates), Docs (the manual, Agents & API), Settings. The app opens on
+**Start** (`components/StartView.tsx`). The old Forge tab is Made
+(`MadeView.tsx`), with the spreadsheet behind "Edit as a table".
 
 ---
 
@@ -115,6 +120,15 @@ opens on **Start** (`components/StartView.tsx`).
 | `components/ui.tsx` | primitives | inline SVG icons, `Btn`, `Lightbox` |
 | `lib/startPlan.ts` + `components/StartView.tsx` | the Start screen | one sentence + a number → N prompts: the text engine writes them if set up, otherwise built-in framings; says which |
 | `lib/link.ts` + `electron/link.mjs` | the link to BYOK Vid Creator | see §14.2 — validation lives only in `link.mjs` |
+| `components/MadeView.tsx` + `lib/thumbStore.ts` | Made | stats, every picture/sheet/GIF/puppet, Redo, "Redo N marked or failed"; thumbnails in IndexedDB; rows record `made_with` |
+| `lib/readyEngines.ts` | Start's engine drop-down | only engines that will work now; each choice is a settings patch |
+| `lib/puppet/` (`recipe`, `pixels`, `maker`, `rig`, `pageIO`, `shelf`) + `components/PuppetMaker.tsx` | the puppet maker | see "The puppet maker" in §9 and `docs/puppet-recipe.md` |
+| `lib/sharedKeys.ts` + `electron/forgeKeys.mjs` | keys shared with Video Forge | DPAPI file `%APPDATA%\Forge\shared-keys.bin`; a shared key only fills an empty box |
+| `lib/vault.ts` + `electron/vault.mjs` | the vault | page storage mirrored to a file the app owns; loaded first; other ports' boxes merged once; `flushVault()` before a reset |
+| `electron/forgeShelf.mjs` + `lib/puppet/shelf.ts` | puppet orders and puppets | `%APPDATA%\Forge\` — same file as Video Forge's |
+| `components/TipLayer.tsx` | hover help | `data-tip` / `data-tip-more` / `title`; `tests/hoverHelp.test.ts` + `scripts/hoverHelp.mjs` fail on any naked control, label, status or number (item 17). Shows on Tab focus, Esc closes. Errors: `lib/plainError.ts` + `components/ErrorLine.tsx` (Open Settings button). Same TipLayer as Video Forge |
+| `lib/cursorChaser.ts` | cursor chasers | one chase script (CHASER_CORE) shared by "Try it here" in `SheetMaker.tsx` and the website download |
+| `components/AgentsView.tsx`, `DocsView.tsx` | the in-app Docs and Agents pages | must match `scripts/mcp-server.js` (8 tools) and the real menus |
 | `electron/main.js` | desktop shell | see §9 |
 | `scripts/build-exe.js` + `build/installer.nsh` | packaging | see §9 |
 
@@ -144,7 +158,11 @@ would silently move every user's data to a new empty folder.** A test forbids
 it.
 
 `imagesRef` (a `Map<filename, Blob>`) is in memory only. Pictures reach disk
-through the folder, ZIP or per-picture save.
+through the folder, ZIP or per-picture save — and, with no folder linked, every
+picture is also written the moment it arrives to `<userData>/images/<folder>/`
+(`electron/autosave.mjs`, `saveToFolder` in `App.tsx`); `getPicture` and
+`getBlobFor` read it back. Pictures with no copy anywhere trigger a
+`beforeunload` warning (a dialog in the desktop window).
 
 ---
 
@@ -187,9 +205,14 @@ stay in step. Node has no CORS, so the MCP server calls both directly.
 `paidGuard.checkPaidRun` routes every row on its own, counts only the rows
 that bill, prices each at the billed model's rate, and names the credit that
 runs out soonest. Free engines (`local`, `simulated`, `cloudflare`,
-`pollinations`, `ovh`) are never gated. There is **no spending guard over
-MCP** — no human is there to confirm — so keep paid keys out of an agent's
-environment.
+`pollinations`, `ovh`) are never gated. A paid model with an UNKNOWN price
+counts as paid ("price unknown"), and Google "Pro" image models are refused
+everywhere. Every generating caller (Forge button, variants, Sheet maker, the
+Google half-price queue, the puppet maker) asks through `ensureAffordable()`
+in `src/lib/paidGate.ts`; the puppet maker also has a per-puppet limit
+(Settings, default $0 = free engines only). Over MCP there is no human to
+confirm, so paid engines are **refused** unless `FORGE_ALLOW_PAID=1`, capped
+by `FORGE_MAX_USD` (default 1), one run at a time (lock file).
 
 ---
 
@@ -233,6 +256,84 @@ The exes are **not signed**. electron-builder's log says "signing with
 signtool" even so; `Get-AuthenticodeSignature` reports `NotSigned`.
 
 ---
+
+### The Video Forge twin (12 October 2026)
+
+- **Shared keys** — `electron/forgeKeys.mjs` (the same file is
+  `tools/lib/forgeKeys.mjs` in Video Forge; change one, copy to the other).
+  A DPAPI-locked file at `%APPDATA%\Forge\shared-keys.bin`, written through
+  Windows PowerShell via stdin. Routes `GET/POST /app/keys` (same
+  `X-Forge-App` guard). The page side is `src/lib/sharedKeys.ts`: fill empty
+  boxes on load, share typed keys 1.5 s after settings change. Removing a key
+  here is NOT shared (only new values are); Video Forge's removals are.
+- **Twin switch** — `GET/POST /app/video-forge` checks/opens
+  `%LOCALAPPDATA%\Programs\Video Forge\Video Forge.exe`.
+- **Look** — `src/components/SparkField.tsx` (copied from Video Forge), root
+  is `bg-black isolate`, marks in `src/assets/`, styles `.forge-twin` at the
+  end of `index.css`.
+- **Test copy** — `IMAGEFORGE_USER_DATA=<folder>` runs on a separate profile;
+  `IMAGEFORGE_PORTS=47901,47902` gives it its own ports so it cannot meet the
+  installed copy.
+- **The vault (13 Oct)** — `electron/vault.mjs` keeps a full snapshot of the
+  page's storage in `<userData>/vault.bin` (DPAPI-locked; plain `vault.json` off
+  Windows), plus `vault-harvest-<port>.bin` of what other ports' boxes held.
+  `src/lib/vault.ts` loads it before anything reads storage, merges the harvest
+  (lists joined, empty settings filled, nothing overwritten) and writes changes
+  back within a couple of seconds. Routes `GET/PUT /app/vault`,
+  `POST /app/vault/harvested`. Reset calls `flushVault()` first or the reload
+  would bring everything back.
+- **Shared keys now cover** gemini, openrouter, nvidia, mistral,
+  cloudflare-account/-token, pollinations, openai, groq, elevenlabs, fish
+  (`SHARED_NAMES` in `forgeKeys.mjs`; `keysFromSettings` in `sharedKeys.ts` maps
+  the page's settings onto them).
+
+### The 13 October round
+
+- **Made** (`src/components/MadeView.tsx`) is the landing tab and the gallery:
+  stats, every row with status and exact date, puppets from the shelf, Redo,
+  batches as a filter; the spreadsheet is behind "Edit as a table".
+  Thumbnails persist in IndexedDB (`src/lib/thumbStore.ts`) — before this,
+  previews lived only in memory and vanished on restart. Rows record
+  `made_with` for engine counts and spend.
+- **Halt** aborts in-flight requests (`runAbortRef`).
+- **Start:** 2 pictures, "Style" (links to styles), engine drop-down of what is
+  set up (`src/lib/readyEngines.ts`) + "Add more engines…".
+- **Settings:** a Test beside every key, run on paste.
+- **Wizards menu:** Make pictures (3 screens: `GROUPS` in WizardView), Make a
+  puppet, Animate a character, Prompt factory (Google Sheets by copy-paste,
+  Excel, CSV). WordPress moved to Download.
+- **Templates:** picture setups and puppet templates (`SavedSetup.type`).
+- **Forge look:** accent "forge" (violet) with `FORGE_PALETTE`, black ground,
+  no specks, Sora, pill buttons (`.forge-primary/.forge-ghost`).
+
+### The puppet maker (12–13 October 2026)
+
+The third kind of character art: a talking, blinking, nodding, waving puppet
+for Video Forge. **Read `docs/puppet-recipe.md`** — it is the method and every
+lesson learned. Map:
+
+| File | What |
+|---|---|
+| `src/lib/puppet/recipe.ts` | styles, framing, the 20 parts and their prompts, bands |
+| `src/lib/puppet/pixels.ts` | pure picture maths: cut a part (patches), key the background (flood fill), resize, composite |
+| `src/lib/puppet/maker.ts` | the run: 4 faces, then parts with ≤3 tries each; engine-agnostic (`generate`, `judge` passed in) |
+| `src/lib/puppet/rig.ts` | builds Video Forge's rig JSON: bust crop, neck, poses |
+| `src/lib/puppet/pageIO.ts` | the page's engines (LocalAI models by name, OVH, Cloudflare FLUX.2, Google), the checker, unload/rest for local |
+| `src/lib/puppet/shelf.ts` + `electron/forgeShelf.mjs` | orders and finished puppets on `%APPDATA%\Forge\` (same file as Video Forge's) |
+| `src/components/PuppetMaker.tsx` | the 4-step pop-up, Forge look (`.forge-*` in `index.css`), click-to-enlarge, live preview |
+| `electron/main.js` `proxyLocal` | `/local-api/<port>` → 127.0.0.1, because LocalAI refuses page requests (CSRF) |
+
+Engines gained **Cloudflare FLUX.2 dev/klein with reference pictures** (also
+unlocks free "from a reference" sheets) and the local engine takes an exact
+size. **Fixed:** Google reference pictures were silently dropped.
+
+Tests: `tests/puppet.test.ts` runs the real code on owl pictures in
+`tests/fixtures/puppet/` (no engine called).
+
+Open: the rest of the app still wears the old brown theme — it moves to the
+Forge look once Ak picks A/B/C on Video Forge's `docs/design/forge-twins-look.html`.
+The checker is over-strict about hats "cut off at the top".
+
 
 ## 10. Releasing
 
@@ -450,3 +551,105 @@ nine. Both apps now warn about this every time; see §12.
 
 The matching note is in `BYOK-Vid-Creator/docs/HANDOFF.md`; keep the two in
 step.
+
+## Next round (13 Oct 2026)
+
+The full review and work list for both forges lives in Video Forge's `docs/FORGES-PLAN.md` (private repo). Done since this note was written: settings and keys moved out of the page storage into the vault file (§9), and the docs were brought up to date (README, GUIDE, `docs/`, the site's three levels, the in-app Docs/Agents pages and `appFacts.ts`). Still to do: translations (Settings → Language & pet lists them as coming), and keeping `appFacts.ts` in step with the app each time a menu or button changes.
+
+## 14 Oct 2026 — review studio and the sample run
+
+- Every puppet is saved as it is made: `electron/workshop.mjs` +
+  `src/lib/puppet/workshop.ts` (`<userData>/workshop/<slug>/`: meta.json with
+  every part's state, checker's note, your note, approval; base.png; each part's
+  layer/keyed/full/pair PNGs; `side_*` / `sit_*` for views). Made lists them
+  (to review / approved / in Video Forge) and opens them in the puppet maker.
+- Review: per part before/after, checker comment, your note, Looks good, Redo
+  with my note (`makeParts({ notes })`), Add a side-facing view.
+- Styles added: Stick figure, 2D vector stick figure, Touched-up photoreal
+  (`PHOTO_EXCLUDED` lists what it leaves out). Cursor chasers are made, not
+  shown (`lib/cursorChaser.ts`); How to use it under every sheet
+  (`lib/recipeHelp.ts`, links checked).
+- The 10 sample puppets are being made by the installed app; status and how
+  to resume: Video Forge `docs/HANDOFF.md` → "Running now".
+
+## 16–18 Oct 2026 — puppet quality, and the long run
+
+**Running now (started 18 Oct 16:29 UTC, up to 36 h, ends by 20 Oct ~04:30 UTC):**
+`%TEMP%\samples\fix2.mjs`, its own hidden process (not tied to a Claude session).
+It drives the installed Image Forge (debug port 9555) through the 10 sample puppets:
+side 3/4 view → "Check and fix every part" (up to 2 passes × 3 rounds). Looks after
+itself: heat (83 °C pause → 72 °C), Image Forge restart, Docker/LocalAI restart,
+45-minute stall watchdog, keeps Windows awake only while it runs.
+- Progress: `%TEMP%\samples\fix2.log` · finished puppets: `done.json` · at the end: `RESULTS.md`
+- Stop: end the `node.exe fix2.mjs` process. Resume: `node fix2.mjs` in `%TEMP%\samples` (skips done puppets).
+- LocalAI's container listens on loopback + the Tailscale address: **Tailscale must be on** or it will not start.
+- Backup of Maria and Lucky before Ak's picks went in: `%APPDATA%\image-forge\workshop-backup-16oct`.
+
+**What changed in the puppet maker (all tested, 727 tests):**
+| Change | Where |
+|---|---|
+| Picture panel: C1 Step 5 (NVIDIA), C2 Nemotron 3.5 Super VL (OpenRouter free), TB Nemotron Omni (NVIDIA) all look at every part; one yes/no question at a time, sent together; green = 2 clean | `src/lib/puppet/quality.ts`, `pageIO.ts pageInspect` |
+| Chosen by scoring against Ak's verdicts on Maria/Lucky: Super VL 27/30, Step 5 26/30, Omni 24, Gemma 4 13, DeepSeek 4.1 Flash 0 (no pictures) | — |
+| NVIDIA capped at 35 requests/minute (hard limit 40); a checker whose free daily allowance is spent sits out | `pageIO.ts turnFor / spentUntil` |
+| Check and fix every part; Mark to remake + Remake all marked (Made); approved parts never touched; marked always remade | `PuppetMaker.tsx`, `MadeView.tsx`, `App.tsx` |
+| Options to pick: a part that never gets green keeps its 3 best tries on its card | `maker.ts` "options" event, `PuppetMaker.tsx pickOption` |
+| Wording says only what is wanted (naming a beard/tongue/lipstick drew it); per-shape targets from Ak's verdicts; tooth protocol per species; paws for animals; soft-shadow mouth inside | `recipe.ts` |
+| Edits colour-matched to the face before cutting; the cut grows into faint mouth corners | `pixels.ts matchColours / cutPart` |
+| Clean faces unless asked (then "experimental"); photo style = high-fashion retouch; lifelike/photo/furry marked experimental; smoother mid-detail fur | `recipe.ts`, style picker |
+
+**Open:** the mouth ruler (face-part model + pixel measurements, `%TEMP%\qc\measure\ruler.py`) works for openings/teeth/lip colour but not yet tongue-vs-lips on humans or small dog mouths — not in the app yet. Dog L still shows the tongue. FLUX.1 Kontext tested (ComfyUI) — not better than FLUX.2 klein, 9× slower; ComfyUI needs `SSLKEYLOGFILE` unset to start.
+
+## 26 Oct 2026 — ultra plan Phase 1 (money, doors, puppet foundations)
+
+The plan lives in Video Forge: `docs/FORGES-ULTRA-PLAN.md`.
+
+**Tests:** 890 in 49 files, tsc clean, `npm run build` clean, `npm audit` 0.
+
+**Real app on a throwaway data folder (`IMAGEFORGE_USER_DATA`, port 47891):**
+- the security header is sent;
+- a foreign Host gets 403;
+- `/app/keys` without the app header gets 403;
+- `/%` gets 400;
+- the relay without the header gets 403;
+- the page renders with no console errors.
+
+**Money (#2):**
+- `ensureAffordable()` (`src/lib/paidGate.ts`) is the one door for every paid picture.
+- An unknown price counts as paid.
+- "Pro" image models are refused.
+- The puppet maker asks for the worst case first; its per-puppet limit defaults to $0, which means free engines only.
+- MCP needs `FORGE_ALLOW_PAID` and has `FORGE_MAX_USD`.
+
+**Doors (#4):**
+- SVG goes through an allow-list cleaner.
+- The security header (CSP) is enforced.
+  - `connect-src` allows `https:` and `http:`. The http part is for your own gateways, such as OmniRoute on the mini PC.
+- A wrong Host header is refused.
+- Only http/https links open outside the app.
+
+**Nothing lost (#5):** pictures autosave to `<userData>/images/`, and closing warns about unsaved ones.
+
+**Puppets (#51, #12, #11):** in `src/lib/puppet`.
+- `recipe.ts`: the facts sheet (`look.facts`), `eyeWords`, `REGION`, `KEEP_EXACTLY`.
+- `quality.ts`:
+  - `panelVerdict` gives yes/maybe/no; the strictest vote wins.
+  - the mouth-shape pick is in `SHAPE_OK`;
+  - the eye count is checked against the facts sheet.
+- `pixels.ts`: `pixelChecks` (the character moved, other places changed, background fringe).
+  - A finding only downgrades the part to "maybe".
+  - It never triggers a paid redo until it has been tuned on Ak's marks.
+- `maker.ts`:
+  - not checked is never green;
+  - every try emits `{type:"try"}`, and `workshop.saveTry` writes `tries.json` plus `<part>.try<n>-<time>.png`.
+
+**Sharp edges:**
+- `src/lib/puppet/spend.ts` repeats maker.ts's 3 tries and 2 fix rounds. Change them together.
+- Engine ids starting with `local` count as free.
+- The harvest server has no Host check.
+
+
+**Review workbench (#11):** `src/components/PuppetWorkbench.tsx` (screen), `src/lib/puppet/workbench.ts` (tested logic).
+- Opens from Made → puppet card → Review, and from the puppet maker's finished screen. The old card review still works next to it.
+- Marks go in `meta.marks`, accepted groups in `meta.acceptedGroups`; a ✗ or "Make again" sets the old `redo` flag and note, so Remake all marked finds it.
+- See it without the desktop app: `npx vite --port 3317`, open `/?demo=workbench` (dev only, sample owl in `src/demo`).
+- Not done: "use this try" (making an older try the part), and the old options/versions pickers are only in the old review.

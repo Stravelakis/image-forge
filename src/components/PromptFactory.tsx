@@ -8,6 +8,7 @@ import type { FactoryItem } from "../lib/batches";
 import { generateIdeas } from "../lib/batches";
 import { downloadCsv } from "../lib/csv";
 import { Btn, CatChip, ICheck, IPlus, IRetry, ITrash, IUpload, IWand, IX } from "./ui";
+import { ErrorLine } from "./ErrorLine";
 
 const field = "w-full rounded-lg border border-line bg-[var(--color-field)] px-2.5 py-1.5 text-[12px] text-cream placeholder:text-dust/50";
 
@@ -18,7 +19,12 @@ export default function PromptFactory({
   items,
   setItems,
   pushToast,
+  world,
+  onWorld,
 }: {
+  /** When given, the world is the caller's (the wizard's), not the factory's own. */
+  world?: string;
+  onWorld?: (id: string) => void;
   settings: ForgeSettings;
   styleId: string;
   /** null = keep prompts style-free (wizard adds the style later) */
@@ -30,7 +36,9 @@ export default function PromptFactory({
   const [mode, setMode] = useState<"write" | "paste" | "file">("write");
   const [theme, setTheme] = useState("");
   const [count, setCount] = useState(8);
-  const [kindId, setKindId] = useState("none");
+  const [ownKind, setOwnKind] = useState("none");
+  const kindId = world ?? ownKind;
+  const setKindId = (id: string) => (onWorld ? onWorld(id) : setOwnKind(id));
   const [pasteText, setPasteText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -185,23 +193,35 @@ export default function PromptFactory({
     downloadCsv("factory-prompts.csv", [head, ...body].join("\n"));
   };
 
+  // GOOGLE SHEETS: copied as tab-separated text, which a sheet splits into
+  // columns on paste — no account link, no key (Ak, 13 Oct 2026).
+  const copyForSheets = async () => {
+    const t = (s: string) => s.replace(/[\t\r\n]+/g, " ");
+    const rows = [["filename", "prompt", "negative_prompt", "category"], ...items.filter((i) => i.filename && i.prompt).map((i) => [t(i.filename), t(i.prompt), t(i.negative_prompt ?? ""), i.category ?? "image"])];
+    try {
+      await navigator.clipboard.writeText(rows.map((r) => r.join("\t")).join("\n"));
+      pushToast("ok", `Copied ${rows.length - 1} rows. In Google Sheets, click cell A1 and paste (Ctrl+V).`);
+    } catch {
+      pushToast("err", "Could not copy — use Export CSV instead.");
+    }
+  };
   const valid = items.filter((i) => i.filename.trim() && i.prompt.trim()).length;
 
   return (
     <div className="mx-auto w-full max-w-5xl px-6 py-10">
       <header className="mb-8">
-        <p className="font-mono text-[11px] tracking-[0.28em] text-potion uppercase">the prompt factory</p>
-        <h2 className="mt-2 font-display text-3xl text-cream">Make a huge list of pictures</h2>
+        <p data-tip="A small label: this page makes long lists of picture descriptions for you." className="font-mono text-[11px] tracking-[0.28em] text-potion uppercase">the prompt factory</p>
+        <h2 data-tip="Ask the AI for dozens of picture ideas at once, or paste your own list." className="mt-2 font-display text-3xl text-cream">Make a huge list of pictures</h2>
         <p className="mt-3 max-w-2xl text-[14px] leading-relaxed text-parch">
           Tell the text engine what you need and it writes{" "}
-          <span className="text-cream">rich prompts + automatic negative prompts</span> for you. No text engine? Paste a
+          <span data-tip="The AI writes a detailed description for every picture, plus a list of things to keep out of it." className="text-cream">rich prompts + automatic negative prompts</span> for you. No text engine? Paste a
           list, upload a CSV, or use the offline idea mill. Then hand the list to the wizard.
         </p>
       </header>
 
       {/* world */}
       <section className="mb-6">
-        <p className="mb-2 font-mono text-[10px] tracking-[0.22em] text-dust uppercase">
+        <p data-tip="Pick what these pictures are about. It changes the words, the things to avoid and the file names." className="mb-2 font-mono text-[10px] tracking-[0.22em] text-dust uppercase">
           the world these pictures live in <span className="text-dust/60">· shapes the prompts, the negatives and the filenames</span>
         </p>
         <div className="flex flex-wrap gap-1.5">
@@ -219,9 +239,9 @@ export default function PromptFactory({
           ))}
         </div>
         {kind.tag && (
-          <p className="mt-2 font-mono text-[10.5px] text-dust">
+          <p data-tip="File names will start with this short tag, so you can tell kinds apart later." className="mt-2 font-mono text-[10.5px] text-dust">
             filenames will carry the tag <span className="text-potion">{kind.tag}_</span> — e.g.{" "}
-            <span className="text-cream">item_{kind.tag}_healing_flask.png</span>
+            <span data-tip="An example of a file name with the tag in it." className="text-cream">item_{kind.tag}_healing_flask.png</span>
           </p>
         )}
       </section>
@@ -235,7 +255,7 @@ export default function PromptFactory({
             { id: "file", label: "⇪ upload CSV / TXT" },
           ] as { id: typeof mode; label: string }[]
         ).map((m) => (
-          <button
+          <button data-tip={m.id === "write" ? "The AI writes a list of picture descriptions for you from a theme." : m.id === "paste" ? "Paste a list you already have and turn it into rows." : "Load a list from a CSV or TXT file (a plain spreadsheet or text file)."}
             key={m.id}
             onClick={() => setMode(m.id)}
             className={`btn-press rounded-lg border px-3.5 py-2 text-[12.5px] font-semibold transition ${
@@ -251,15 +271,15 @@ export default function PromptFactory({
         <div className="rise-in rounded-2xl border border-line bg-panel/50 p-5">
           <div className="grid gap-3 sm:grid-cols-[1fr_120px_auto]">
             <div>
-              <label className="mb-1 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">theme</label>
-              <input value={theme} onChange={(e) => setTheme(e.target.value)} placeholder={kind.id === "none" ? "e.g. a harbour district" : "e.g. the night market"} className={field} />
+              <label data-tip="What the pictures are about." className="mb-1 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">theme</label>
+              <input data-tip="What the pictures are about, for example a harbour district. The AI writes ideas that fit it." value={theme} onChange={(e) => setTheme(e.target.value)} placeholder={kind.id === "none" ? "e.g. a harbour district" : "e.g. the night market"} className={field} />
             </div>
             <div>
-              <label className="mb-1 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">how many</label>
-              <input type="number" min={1} max={40} value={count} onChange={(e) => setCount(Math.max(1, Math.min(40, Number(e.target.value) || 1)))} className={field} />
+              <label data-tip="How many picture ideas to write." className="mb-1 block font-mono text-[10px] tracking-[0.2em] text-dust uppercase">how many</label>
+              <input data-tip="How many picture ideas to write, from 1 to 40." type="number" min={1} max={40} value={count} onChange={(e) => setCount(Math.max(1, Math.min(40, Number(e.target.value) || 1)))} className={field} />
             </div>
             <div className="flex items-end gap-2">
-              <Btn variant="primary" onClick={runAi} disabled={busy || !settings.scribe.key.trim()}>
+              <Btn data-tip="Your text AI writes the picture descriptions. It needs a text engine set up in Settings." variant="primary" onClick={runAi} disabled={busy || !settings.scribe.key.trim()}>
                 <IWand size={13} /> {busy ? "writing…" : "Write prompts"}
               </Btn>
               <Btn onClick={runOffline} disabled={busy} title="no text engine needed">
@@ -269,24 +289,24 @@ export default function PromptFactory({
           </div>
           {!settings.scribe.key.trim() && (
             <p className="mt-3 rounded-lg border border-potion/30 bg-potion/6 px-3 py-2 text-[12px] text-parch">
-              No text-engine key yet — set one in <span className="text-cream">Settings → Text engines</span>, or use the{" "}
-              <span className="text-cream">idea mill</span> right now. It works offline.
+              No text-engine key yet — set one in <span data-tip="The place in Settings where you add a free text key." className="text-cream">Settings → Text engines</span>, or use the{" "}
+              <span data-tip="A small built-in helper that makes ideas without any key. It is free and works offline." className="text-cream">idea mill</span> right now. It works offline.
             </p>
           )}
-          {error && <p className="mt-3 rounded-lg border border-ember/35 bg-ember/8 px-3 py-2 text-[12px] text-ember">{error}</p>}
+          {error && <div className="mt-3 rounded-lg border border-ember/35 bg-ember/8 px-3 py-2"><ErrorLine text={error} next="Try again, or use the idea mill." tip="What went wrong, and what the forge did instead." className="text-[12px] text-ember" /></div>}
         </div>
       )}
 
       {mode === "paste" && (
         <div className="rise-in rounded-2xl border border-line bg-panel/50 p-5">
-          <p className="mb-2 text-[12.5px] text-parch">
-            One picture per line. Formats: <span className="font-mono text-[11px] text-cream">a healing potion</span> ·{" "}
-            <span className="font-mono text-[11px] text-cream">item_potion.png | a healing potion | no text</span> ·{" "}
+          <p data-tip="The ways you can write your list. One picture per line." className="mb-2 text-[12.5px] text-parch">
+            One picture per line. Formats: <span data-tip="Just a description. The forge makes up the file name." className="font-mono text-[11px] text-cream">a healing potion</span> ·{" "}
+            <span data-tip="File name, description and things to avoid, split by a bar." className="font-mono text-[11px] text-cream">item_potion.png | a healing potion | no text</span> ·{" "}
             <span className="font-mono text-[11px] text-cream">shop_forge.png → the forge at dawn → no smoke</span>
           </p>
-          <textarea value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={6} placeholder={"the forge at dawn\nitem_rope.png | fifty feet of hempen rope\nshop_tavern.png | a tavern called The Tipsy Griffin | no neon"} className={field + " resize-y font-mono text-[12px]"} />
+          <textarea data-tip="Paste your list here, one picture per line. Put a bar between the file name, the description and what to avoid." value={pasteText} onChange={(e) => setPasteText(e.target.value)} rows={6} placeholder={"the forge at dawn\nitem_rope.png | fifty feet of hempen rope\nshop_tavern.png | a tavern called The Tipsy Griffin | no neon"} className={field + " resize-y font-mono text-[12px]"} />
           <div className="mt-3">
-            <Btn variant="primary" onClick={parsePaste} disabled={!pasteText.trim()}>
+            <Btn data-tip="Turns each line you pasted into a row in the list below." variant="primary" onClick={parsePaste} disabled={!pasteText.trim()}>
               <ICheck size={13} /> Turn into rows
             </Btn>
           </div>
@@ -296,13 +316,13 @@ export default function PromptFactory({
       {mode === "file" && (
         <div className="rise-in rounded-2xl border border-dashed border-line2 bg-panel/30 p-8 text-center">
           <IUpload size={22} className="mx-auto text-dust" />
-          <p className="mt-3 text-[13.5px] text-parch">
-            A CSV with <span className="font-mono text-[11.5px] text-cream">filename, prompt, negative_prompt, category</span>{" "}
+          <p data-tip="What your file should look like: a spreadsheet file (CSV) with these columns, or a plain text file with one description per line." className="mt-3 text-[13.5px] text-parch">
+            A CSV with <span data-tip="The column names your spreadsheet file needs." className="font-mono text-[11.5px] text-cream">filename, prompt, negative_prompt, category</span>{" "}
             — or a plain text file with one prompt per line.
           </p>
           <input ref={fileRef} type="file" accept=".csv,.txt,text/csv,text/plain" className="hidden" onChange={(e) => e.target.files?.[0] && onFile(e.target.files[0])} />
           <div className="mt-4">
-            <Btn variant="primary" onClick={() => fileRef.current?.click()}>
+            <Btn data-tip="Pick a CSV or TXT file from your computer to load as a list." variant="primary" onClick={() => fileRef.current?.click()}>
               Choose file…
             </Btn>
           </div>
@@ -313,26 +333,29 @@ export default function PromptFactory({
       {items.length > 0 && (
         <section className="mt-8">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 className="font-display text-lg text-cream">
-              The list <span className="font-mono text-[11px] text-moss">· {valid} ready</span>
+            <h3 data-tip="Your list of pictures. Check it, change it, then send it on." className="font-display text-lg text-cream">
+              The list <span data-tip="How many rows are complete and ready to make." className="font-mono text-[11px] text-moss">· {valid} ready</span>
             </h3>
             <div className="flex gap-2">
-              <Btn onClick={addManual}>
+              <Btn data-tip="Adds one empty row to the list so you can type it in yourself." onClick={addManual}>
                 <IPlus size={13} /> Add row
               </Btn>
-              <Btn onClick={exportCsv} disabled={valid === 0}>
-                <IWand size={12} /> Export CSV
+              <Btn onClick={() => void copyForSheets()} disabled={valid === 0} title="Copy the list, then paste it into Google Sheets — the columns land in place">
+                Copy for Google Sheets
+              </Btn>
+              <Btn data-tip="Saves this list as a CSV file, a simple table that any spreadsheet can open." onClick={exportCsv} disabled={valid === 0}>
+                <IWand size={12} /> CSV
               </Btn>
             </div>
           </div>
           <div className="overflow-x-auto rounded-xl border border-line">
-            <table className="w-full min-w-[780px] border-collapse text-left">
+            <table data-tip="One row per picture: file name, kind, description and things to avoid. Click a cell to change it." className="w-full min-w-[780px] border-collapse text-left">
               <thead>
                 <tr className="border-b border-line bg-[var(--color-field)] font-mono text-[9.5px] tracking-[0.18em] text-dust uppercase">
                   <th className="px-3.5 py-2.5 font-medium w-[24%]">filename</th>
-                  <th className="px-3.5 py-2.5 font-medium w-[8%]">cat</th>
-                  <th className="px-3.5 py-2.5 font-medium w-[34%]">prompt</th>
-                  <th className="px-3.5 py-2.5 font-medium w-[28%]">negative prompt</th>
+                  <th className="px-3.5 py-2.5 font-medium w-[8%]">kind</th>
+                  <th className="px-3.5 py-2.5 font-medium w-[34%]">description</th>
+                  <th className="px-3.5 py-2.5 font-medium w-[28%]">things to avoid</th>
                   <th className="px-3.5 py-2.5 font-medium w-[6%]"></th>
                 </tr>
               </thead>
@@ -342,10 +365,10 @@ export default function PromptFactory({
                   return (
                     <tr key={i} className="border-b border-line/60 align-top transition-colors last:border-0 hover:bg-raise/30">
                       <td className="px-3.5 py-2.5">
-                        <input value={it.filename} onChange={(e) => patch(i, { filename: e.target.value })} className={field + " font-mono text-[11px]"} />
+                        <input data-tip="The file name this picture will be saved under." value={it.filename} onChange={(e) => patch(i, { filename: e.target.value })} className={field + " font-mono text-[11px]"} />
                       </td>
                       <td className="px-3.5 py-3">
-                        <select value={cat} onChange={(e) => patch(i, { category: e.target.value as Category, filename: autoFixFilename(it.filename, e.target.value as Category) })} className={field + " w-[92px] font-mono text-[11px]"}>
+                        <select data-tip="What kind of picture this is. Changing it also fixes the start of the file name to match." value={cat} onChange={(e) => patch(i, { category: e.target.value as Category, filename: autoFixFilename(it.filename, e.target.value as Category) })} className={field + " w-[92px] font-mono text-[11px]"}>
                           {CATEGORIES.map((c) => (
                             <option key={c} value={c}>{c}</option>
                           ))}
@@ -355,10 +378,10 @@ export default function PromptFactory({
                         </div>
                       </td>
                       <td className="px-3.5 py-2.5">
-                        <textarea value={it.prompt} onChange={(e) => patch(i, { prompt: e.target.value })} rows={2} className={field + " resize-y"} placeholder="what should the picture show…" />
+                        <textarea data-tip="What this picture should show." value={it.prompt} onChange={(e) => patch(i, { prompt: e.target.value })} rows={2} className={field + " resize-y"} placeholder="what should the picture show…" />
                       </td>
                       <td className="px-3.5 py-2.5">
-                        <textarea value={it.negative_prompt ?? ""} onChange={(e) => patch(i, { negative_prompt: e.target.value || undefined })} rows={2} placeholder={kind.negative} className={field + " resize-y text-blood/80"} />
+                        <textarea data-tip="Things this picture must not show. Leave it empty if there is nothing to avoid." value={it.negative_prompt ?? ""} onChange={(e) => patch(i, { negative_prompt: e.target.value || undefined })} rows={2} placeholder={kind.negative} className={field + " resize-y text-blood/80"} />
                       </td>
                       <td className="px-3.5 py-3">
                         <button onClick={() => remove(i)} className="btn-press rounded-md p-1.5 text-dust hover:bg-blood/15 hover:text-blood" title="remove">

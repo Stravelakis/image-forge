@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import type { ManifestRow, Toast } from "../types";
 import type { ForgeSettings } from "../lib/providers";
 import { estimateCost, formatUsd, generateReal, resolveRoute } from "../lib/providers";
+import { ensureAffordable } from "../lib/paidGate";
 import {
   SHEET_DEFS,
   cellPosition,
@@ -19,6 +20,10 @@ import {
 } from "../lib/sheets";
 import { downloadBlob } from "../lib/output";
 import { Btn, IX } from "./ui";
+import { useEffect } from "react";
+import { RecipeHelpBox } from "./RecipeHelpBox";
+import { borderColour, keyOut } from "../lib/puppet/pixels";
+import { CHASER_FRAMES, chaserDemo, chaserReadme, chaserScript, tryChaser } from "../lib/cursorChaser";
 
 const field =
   "w-full rounded-lg border border-line bg-[var(--color-field)] px-3 py-2 text-[13px] text-cream placeholder:text-dust/60";
@@ -79,7 +84,10 @@ export default function SheetMaker({
   }, [settings, shots]);
 
   const route = resolveRoute({ prompt: "", aspect_ratio: "1:1", seed: 1, model: "" } as never, settings);
-  const canReference = route.engine === "local" || route.engine === "gemini";
+  // Cloudflare's own default (FLUX schnell) cannot work from a picture, but its
+  // FLUX.2 klein can — so "from a reference" uses that on Cloudflare (12 Oct 2026).
+  const refModel = route.engine === "cloudflare" ? "cloudflare-flux2-klein" : "";
+  const canReference = route.engine === "local" || route.engine === "gemini" || route.engine === "cloudflare";
 
   const blobToB64 = (b: Blob): Promise<string> =>
     new Promise((res, rej) => {
@@ -102,7 +110,7 @@ export default function SheetMaker({
       style: "",
       aspect_ratio: "1:1",
       seed,
-      model: "",
+      model: method === "from-reference" ? refModel : "",
       status: "pending",
       error: "",
       generated_at: "",
@@ -111,6 +119,15 @@ export default function SheetMaker({
 
   const run = useCallback(async () => {
     stopRef.current = false;
+    // Every picture of the sheet is a real generation: ask before spending, like the Forge button does.
+    const gate = await ensureAffordable(
+      Array.from({ length: shots }, (_, i) => makeRow("sheet", i + 1)),
+      settings
+    );
+    if (!gate.ok) {
+      pushToast("info", gate.reason);
+      return;
+    }
     setBusy(true);
     setFrames([]);
     setSheetUrl("");
@@ -169,7 +186,7 @@ export default function SheetMaker({
       setBusy(false);
       setProgress("");
     }
-  }, [character, def, method, onExhaust, pushLog, pushToast, settings]);
+  }, [character, def, method, onExhaust, pushLog, pushToast, settings, shots]);
 
   /** Lay every finished frame onto one picture. */
   const assemble = useCallback(async () => {
@@ -203,6 +220,64 @@ export default function SheetMaker({
       pushToast("ok", "Sheet assembled and saved.");
     }, "image/png");
   }, [character, def, frames, pushToast]);
+
+  /** The cursor chaser's frames: small, background cut away, in a strip. */
+  const chaserStrip = useCallback(async (): Promise<string | null> => {
+    const ready = CHASER_FRAMES.map((id) => frames.find((f) => f.id === id && f.url));
+    if (ready.some((f) => !f)) {
+      pushToast("info", "All six frames are needed — make the missing ones again first.");
+      return null;
+    }
+    const S = 128;
+    const strip = document.createElement("canvas");
+    strip.width = S * ready.length;
+    strip.height = S;
+    const sg = strip.getContext("2d")!;
+    for (const [i, f] of ready.entries()) {
+      const im = await new Promise<HTMLImageElement>((res) => {
+        const x = new Image();
+        x.onload = () => res(x);
+        x.src = f!.url!;
+      });
+      const c = document.createElement("canvas");
+      c.width = S;
+      c.height = S;
+      const g = c.getContext("2d")!;
+      g.drawImage(im, 0, 0, S, S);
+      const d = g.getImageData(0, 0, S, S);
+      const img = { width: S, height: S, data: new Uint8ClampedArray(d.data) };
+      const keyed = keyOut(img, borderColour(img));
+      g.putImageData(new ImageData(new Uint8ClampedArray(keyed.data), S, S), 0, 0);
+      sg.drawImage(c, i * S, 0);
+    }
+    return strip.toDataURL("image/png");
+  }, [frames, pushToast]);
+
+  const [trying, setTrying] = useState<null | (() => void)>(null);
+  const tryIt = useCallback(async () => {
+    if (trying) {
+      trying();
+      setTrying(null);
+      return;
+    }
+    const strip = await chaserStrip();
+    if (strip) setTrying(() => tryChaser(strip, 72));
+  }, [trying, chaserStrip]);
+
+  const downloadChaser = useCallback(async () => {
+    const strip = await chaserStrip();
+    if (!strip) return;
+    const name = character.split(/[\s,]+/)[0] || "chaser";
+    const { default: JSZip } = await import("jszip");
+    const zip = new JSZip();
+    const dir = zip.folder(`${name}-cursor-chaser`)!;
+    dir.file("chaser.png", strip.split(",")[1], { base64: true });
+    dir.file("chaser.js", chaserScript());
+    dir.file("demo.html", chaserDemo(name));
+    dir.file("README.txt", chaserReadme(name));
+    downloadBlob(`${name}-cursor-chaser.zip`, await zip.generateAsync({ type: "blob" }));
+    pushToast("ok", "Saved — open demo.html inside the folder to see it run.");
+  }, [chaserStrip, character, pushToast]);
 
   const saveFrames = useCallback(() => {
     const base = character.split(/\s+/)[0] || "character";
@@ -248,10 +323,10 @@ export default function SheetMaker({
       <div className="my-6 w-full max-w-5xl rounded-2xl border border-line bg-panel shadow-2xl">
         <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
           <div>
-            <p className="font-display text-[17px] tracking-wide text-cream">Make a sheet</p>
-            <p className="font-mono text-[10.5px] text-dust">many frames of the same character</p>
+            <p data-tip="Make a sheet: one picture with many small pictures of the same character, like a flip book." className="font-display text-[17px] tracking-wide text-cream">Make a sheet</p>
+            <p data-tip="A sheet is a set of small pictures of one character, each showing a different pose or mouth shape." className="font-mono text-[10.5px] text-dust">many frames of the same character</p>
           </div>
-          <button onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
+          <button data-tip="Closes the sheet maker." onClick={onClose} className="btn-press rounded-lg p-2 text-dust hover:bg-raise hover:text-cream">
             <IX size={16} />
           </button>
         </div>
@@ -260,10 +335,10 @@ export default function SheetMaker({
           {/* left: what to make */}
           <div className="space-y-4">
             <div>
-              <label className={label}>what kind of sheet</label>
+              <label data-tip="Pick which kind of sheet to make." className={label}>what kind of sheet</label>
               <div className="grid gap-2 sm:grid-cols-2">
                 {SHEET_DEFS.map((d) => (
-                  <button
+                  <button data-tip={`${d.label}: ${d.blurb} (${d.frames.length} frames)`}
                     key={d.kind}
                     onClick={() => setDef(d)}
                     className={`btn-press rounded-lg border p-3 text-left ${
@@ -279,8 +354,8 @@ export default function SheetMaker({
             </div>
 
             <div>
-              <label className={label}>describe the character</label>
-              <textarea
+              <label data-tip="Say who the character is and how it looks." className={label}>describe the character</label>
+              <textarea data-tip="Say who the character is and how it should look, for example a stout dwarf blacksmith in claymation style."
                 value={character}
                 onChange={(e) => setCharacter(e.target.value)}
                 rows={2}
@@ -290,9 +365,9 @@ export default function SheetMaker({
             </div>
 
             <div>
-              <label className={label}>how to make it</label>
+              <label data-tip="Choose how the sheet gets made." className={label}>how to make it</label>
               <div className="grid gap-2 sm:grid-cols-2">
-                <button
+                <button data-tip="Draws the character once, then changes that same picture into every pose. Slower, but the character stays the same in every frame."
                   onClick={() => setMethod("from-reference")}
                   disabled={!canReference}
                   className={`btn-press rounded-lg border p-3 text-left disabled:opacity-40 ${
@@ -305,7 +380,7 @@ export default function SheetMaker({
                     genuinely stays the same and each frame is usable on its own.
                   </span>
                 </button>
-                <button
+                <button data-tip="Draws the whole grid in one go. Quick and cheap, but the frames may drift and not match."
                   onClick={() => setMethod("one-shot")}
                   className={`btn-press rounded-lg border p-3 text-left ${
                     method === "one-shot" ? "border-ember/60 bg-ember/10" : "border-line bg-[var(--color-field)]"
@@ -320,35 +395,35 @@ export default function SheetMaker({
               </div>
               {!canReference && (
                 <p className="mt-2 rounded-lg border border-ember/40 bg-ember/10 px-3 py-2 text-[11.5px] text-ember">
-                  “From a reference” needs your own machine or a Google model — the engine you have chosen cannot work
+                  “From a reference” needs your own machine, Cloudflare (FLUX.2) or a Google model — the engine you have chosen cannot work
                   from a picture. Switch engine, or use “all in one picture”.
                 </p>
               )}
             </div>
 
             <div className="rounded-lg border border-line bg-[var(--color-field)] px-3 py-2.5">
-              <p className="text-[12px] text-parch">
+              <p data-tip="How many pictures will be drawn, and what they cost. Image Forge asks you before it spends anything." className="text-[12px] text-parch">
                 {shots} generation{shots === 1 ? "" : "s"} ·{" "}
                 <span className={cost.total > 0 ? "text-ember" : "text-moss"}>
                   {cost.total > 0 ? `about ${formatUsd(cost.total)}` : "free"}
                 </span>
-                {cost.unknown > 0 && <span className="text-dust"> ({cost.unknown} at an unknown price)</span>}
+                {cost.unknown > 0 && <span data-tip="For this many pictures the painter has not published a price, so the cost is not known." className="text-dust"> ({cost.unknown} at an unknown price)</span>}
               </p>
-              <p className="mt-0.5 font-mono text-[10.5px] text-dust">
+              <p data-tip="Which painter will draw the sheet." className="mt-0.5 font-mono text-[10.5px] text-dust">
                 using {route.engine} · {route.apiModel}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Btn variant="primary" onClick={run} disabled={busy}>
+              <Btn data-tip="Makes the sheet: the engine draws every frame of the animation. This can take a few minutes." variant="primary" onClick={run} disabled={busy}>
                 {busy ? "drawing…" : "Make the sheet"}
               </Btn>
               {busy && (
-                <Btn variant="danger" onClick={() => (stopRef.current = true)}>
+                <Btn data-tip="Stops drawing. The frames already finished are kept." variant="danger" onClick={() => (stopRef.current = true)}>
                   Stop
                 </Btn>
               )}
-              {progress && <span className="text-[11.5px] text-dust">{progress}</span>}
+              {progress && <span data-tip="How far along the sheet is." className="text-[11.5px] text-dust">{progress}</span>}
             </div>
           </div>
 
@@ -356,21 +431,21 @@ export default function SheetMaker({
           <div className="space-y-3">
             {shown?.url && (
               <div>
-                <p className={label}>playing · {shown.labelText}</p>
+                <p data-tip="The small picture that is showing now." className={label}>playing · {shown.labelText}</p>
                 <img src={shown.url} alt={shown.labelText} className="w-full rounded-lg border border-ember/50" />
               </div>
             )}
 
             {sheetUrl && !shown && (
               <div>
-                <p className={label}>the sheet</p>
+                <p data-tip="The finished sheet with all the small pictures." className={label}>the sheet</p>
                 <img src={sheetUrl} alt="the finished sheet" className="w-full rounded-lg border border-moss/40" />
               </div>
             )}
 
             {refUrl && !sheetUrl && !shown && (
               <div>
-                <p className={label}>the character everything is based on</p>
+                <p data-tip="The first picture that every other one copies the character from." className={label}>the character everything is based on</p>
                 <img src={refUrl} alt="reference" className="w-full rounded-lg border border-line" />
               </div>
             )}
@@ -389,25 +464,35 @@ export default function SheetMaker({
                           }`}
                         />
                       ) : (
-                        <div className="flex aspect-square items-center justify-center rounded border border-blood/40 bg-blood/10 p-1 text-center font-mono text-[8px] text-blood">
+                        <div data-tip="This small picture did not work. You can make it again." className="flex aspect-square items-center justify-center rounded border border-blood/40 bg-blood/10 p-1 text-center font-mono text-[8px] text-blood">
                           failed
                         </div>
                       )}
-                      <p className="mt-0.5 truncate font-mono text-[8.5px] text-dust">{f.labelText}</p>
+                      <p data-tip="The name of this small picture." className="mt-0.5 truncate font-mono text-[8.5px] text-dust">{f.labelText}</p>
                     </div>
                   ))}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  <Btn onClick={assemble}>Save as one sheet</Btn>
-                  <Btn onClick={saveFrames}>Save each frame</Btn>
+                  <Btn data-tip="Joins all the finished frames into one picture file and saves it." onClick={assemble}>Save as one sheet</Btn>
+                  <Btn data-tip="Saves every finished frame as its own separate picture." onClick={saveFrames}>Save each frame</Btn>
+                  {def.kind === "cursor-chaser" && (
+                    <>
+                      <Btn data-tip="Lets it chase your mouse here for a moment, to see it before you download it. Press again to stop." onClick={() => void tryIt()}>
+                        {trying ? "■ Stop trying" : "Try it here"}
+                      </Btn>
+                      <Btn data-tip="Saves a folder ready for any website: the picture strip, a small script, a demo page and how-to." onClick={() => void downloadChaser()}>
+                        Download for a website
+                      </Btn>
+                    </>
+                  )}
                 </div>
 
                 <div className="rounded-lg border border-line bg-[var(--color-field)] p-3">
-                  <p className={label}>play it</p>
+                  <p data-tip="Play the small pictures one after another to see them move." className={label}>play it</p>
                   <div className="flex flex-wrap gap-2">
                     {!playing ? (
-                      <Btn
+                      <Btn data-tip={`Plays the frames here as a small animation: ${stripFor(def).label}.`}
                         onClick={() => {
                           const s = stripFor(def);
                           play(s.order, s.frameMs, s.pingPong);
@@ -416,7 +501,7 @@ export default function SheetMaker({
                         ▶ {stripFor(def).label}
                       </Btn>
                     ) : (
-                      <Btn variant="danger" onClick={stopPlaying}>
+                      <Btn data-tip="Stops the preview." variant="danger" onClick={stopPlaying}>
                         ■ stop
                       </Btn>
                     )}
@@ -424,15 +509,15 @@ export default function SheetMaker({
 
                   {def.kind === "visemes" && (
                     <div className="mt-3">
-                      <label className={label}>make it say something</label>
+                      <label data-tip="Type some words to see the mouth shapes move with them." className={label}>make it say something</label>
                       <div className="flex gap-2">
-                        <input
+                        <input data-tip="Type a few words and the mouth shapes will play along with them."
                           value={say}
                           onChange={(e) => setSay(e.target.value)}
                           placeholder="hello there"
                           className={field}
                         />
-                        <Btn
+                        <Btn data-tip="Plays the mouth shapes for the words you typed, like the character is talking."
                           onClick={() => {
                             const s = visemesForText(say || "hello");
                             play(s.order, s.frameMs, false);
@@ -450,6 +535,8 @@ export default function SheetMaker({
                 </div>
               </>
             )}
+
+            {frames.length > 0 && <RecipeHelpBox def={def} name={character} frames={frames.length} />}
 
             {!frames.length && !sheetUrl && (
               <p className="rounded-lg border border-line bg-[var(--color-field)] px-3 py-6 text-center text-[12px] text-dust">
