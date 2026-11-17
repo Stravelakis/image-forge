@@ -15,6 +15,8 @@
  * nothing.
  */
 
+import { errorFrom, reportStoreProblem } from "./storeProblems";
+
 const HEADERS = { "X-Forge-App": "1", "Content-Type": "application/json" };
 
 let sent: Record<string, string> = {};
@@ -76,7 +78,12 @@ function snapshot(): Record<string, string> {
 export async function hydrateFromVault(): Promise<void> {
   try {
     const r = await fetch("/app/vault", { headers: HEADERS });
-    if (!r.ok) return;
+    if (!r.ok) {
+      // The file is there but could not be read. Stay inactive: this session
+      // never writes to the vault, so the file and its keys stay as they are.
+      if (r.status === 500) reportStoreProblem(await errorFrom(r, "Image Forge could not read its saved-data file."));
+      return;
+    }
     const { values, harvests } = (await r.json()) as {
       values: Record<string, string> | null;
       harvests: { port: number; values: Record<string, string> }[];
@@ -115,6 +122,9 @@ export async function flushVault(): Promise<void> {
   try {
     const r = await fetch("/app/vault", { method: "PUT", headers: HEADERS, body: JSON.stringify({ changes }) });
     if (r.ok) sent = now;
+    // Refused because the file could not be read: nothing was written, and
+    // the next tick tries again. Say so once.
+    else if (r.status === 500) reportStoreProblem(await errorFrom(r, "Image Forge could not save its data just now."));
   } catch {
     /* tried again on the next tick */
   }

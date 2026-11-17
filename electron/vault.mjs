@@ -49,6 +49,44 @@ async function readLocked(file, crypt) {
   }
 }
 
+/**
+ * Raised when the vault file is there but could not be read (PowerShell timed
+ * out, the file is damaged). "Could not read" is never "empty": nothing is
+ * written after this, so the old file and every key in it stay (review
+ * 16 Nov 2026, B5).
+ */
+export class VaultUnreadable extends Error {
+  constructor(cause) {
+    super(
+      "Image Forge could not read its saved-data file (keys, settings, list), so it will not save over it. " +
+        "The file is untouched. Close and reopen the app; if this keeps happening, restart Windows."
+    );
+    this.name = "VaultUnreadable";
+    this.cause = cause;
+  }
+}
+
+/** Strict read: null when there is no file yet, the data when it reads, throws VaultUnreadable otherwise. */
+async function readStrict(file, crypt) {
+  let buf;
+  try {
+    buf = await fs.promises.readFile(file);
+  } catch (e) {
+    if (e && e.code === "ENOENT") return null;
+    throw new VaultUnreadable(e);
+  }
+  let data;
+  try {
+    data = JSON.parse(await crypt.unlock(buf));
+  } catch (e) {
+    throw new VaultUnreadable(e);
+  }
+  if (!(data && typeof data === "object" && data.values && typeof data.values === "object")) {
+    throw new VaultUnreadable(new Error("unexpected contents"));
+  }
+  return data;
+}
+
 async function writeLocked(file, data, crypt) {
   await fs.promises.mkdir(path.dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
@@ -65,15 +103,19 @@ export function openVault(dir, { crypt } = {}) {
 
   return {
     file,
-    /** { key: value } or null when there is no vault yet. */
+    /** { key: value } or null when there is no vault yet. Throws VaultUnreadable when it is there but cannot be read. */
     async read() {
-      const d = await readLocked(file, c);
+      const d = await readStrict(file, c);
       return d ? d.values : null;
     },
-    /** Apply { key: value | null } (null removes). Returns how many changed. */
+    /**
+     * Apply { key: value | null } (null removes). Returns how many changed.
+     * Throws VaultUnreadable, and writes nothing, when the file is there but
+     * cannot be read.
+     */
     write(changes) {
       return serial(async () => {
-        const values = (await readLocked(file, c))?.values ?? {};
+        const values = (await readStrict(file, c))?.values ?? {};
         let n = 0;
         for (const [k, v] of Object.entries(changes ?? {})) {
           if (typeof k !== "string" || !k) continue;

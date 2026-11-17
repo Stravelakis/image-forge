@@ -20,7 +20,9 @@ const savedEnv = { ...process.env };
 /** Load a fresh copy of the server, as if started with these settings. */
 async function boot(env: Record<string, string> = {}) {
   vi.resetModules();
-  for (const k of ["FORGE_ALLOW_PAID", "FORGE_MAX_USD", "FORGE_PROVIDER", "GEMINI_API_KEY", "GEMINI_API_KEYS", "OPENAI_API_KEY", "OPENAI_API_KEYS"]) delete process.env[k];
+  for (const k of ["FORGE_ALLOW_PAID", "FORGE_MAX_USD", "FORGE_PROVIDER", "FORGE_LOCAL_BASE", "GEMINI_API_KEY", "GEMINI_API_KEYS", "OPENAI_API_KEY", "OPENAI_API_KEYS"]) delete process.env[k];
+  // The day's spending record lives in this test's own folder, never the real one.
+  process.env.FORGE_SPEND_FILE = path.join(dir, "spend.json");
   Object.assign(process.env, env);
   process.argv = [...savedArgv.slice(0, 2), "--csv", path.join(dir, "m.csv"), "--out", path.join(dir, "out")];
   return import("../scripts/mcp-server.js");
@@ -124,6 +126,71 @@ describe("FORGE_MAX_USD", () => {
     const mod = await boot({ FORGE_ALLOW_PAID: "1", FORGE_MAX_USD: "0.05" });
     mod.chargeOrRefuse({ filename: "a.png", model: "ovh-sdxl" });
     expect(mod.spentSoFar()).toBe(0);
+  });
+});
+
+/*
+ * Review 16 Nov 2026, B2: the total lived in memory, so every start began at
+ * $0, and Blacksmith starts a new server for every call. The cap now holds
+ * across starts, for the day.
+ */
+describe("FORGE_MAX_USD holds across restarts", () => {
+  const row = { filename: "a.png", model: "nano-banana-2-lite" }; // $0.0336
+
+  it("a new start remembers what earlier starts spent today", async () => {
+    const env = { FORGE_ALLOW_PAID: "1", FORGE_MAX_USD: "0.1" };
+    const first = await boot(env);
+    first.chargeOrRefuse(row);
+    first.chargeOrRefuse(row);
+    const second = await boot(env); // as Blacksmith does, once per call
+    expect(second.spentSoFar()).toBeCloseTo(0.0672, 6);
+    expect(() => second.chargeOrRefuse(row)).toThrow(/FORGE_MAX_USD/);
+    const third = await boot(env);
+    expect(() => third.chargeOrRefuse(row)).toThrow(/FORGE_MAX_USD/);
+    expect(third.spentSoFar()).toBeCloseTo(0.0672, 6);
+  });
+
+  it("starts again on a new day", async () => {
+    const day = new Date();
+    day.setDate(day.getDate() - 1);
+    const y = `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, "0")}-${String(day.getDate()).padStart(2, "0")}`;
+    fs.writeFileSync(path.join(dir, "spend.json"), JSON.stringify({ v: 1, days: { [y]: 0.1 } }));
+    const mod = await boot({ FORGE_ALLOW_PAID: "1", FORGE_MAX_USD: "0.1" });
+    expect(mod.spentSoFar()).toBe(0);
+    expect(() => mod.chargeOrRefuse(row)).not.toThrow();
+    const saved = JSON.parse(fs.readFileSync(path.join(dir, "spend.json"), "utf8"));
+    expect(saved.days[y]).toBe(0.1); // yesterday kept as it was
+  });
+
+  it("refuses paid rows, and leaves the file alone, when the record is damaged", async () => {
+    fs.writeFileSync(path.join(dir, "spend.json"), "{ not json");
+    const mod = await boot({ FORGE_ALLOW_PAID: "1", FORGE_MAX_USD: "50" });
+    expect(() => mod.chargeOrRefuse(row)).toThrow(/spending record .* damaged/);
+    expect(fs.readFileSync(path.join(dir, "spend.json"), "utf8")).toBe("{ not json");
+    expect(() => mod.chargeOrRefuse({ filename: "f.png", model: "ovh-sdxl" })).not.toThrow(); // free still works
+    const r = await call(mod, "forge_status");
+    expect(r.content[0].text).toMatch(/spending record unreadable/);
+  });
+
+  it("free rows write nothing down", async () => {
+    const mod = await boot({ FORGE_ALLOW_PAID: "1" });
+    mod.chargeOrRefuse({ filename: "f.png", model: "ovh-sdxl" });
+    expect(fs.existsSync(path.join(dir, "spend.json"))).toBe(false);
+  });
+});
+
+/* Review 16 Nov 2026, B3: "your own machine" pointed at another machine is not known to be free. */
+describe("'your own machine' on the agent server", () => {
+  it("is free on this computer", async () => {
+    const mod = await boot({ FORGE_PROVIDER: "local", FORGE_LOCAL_BASE: "http://127.0.0.1:8080/v1" });
+    expect(() => mod.chargeOrRefuse({ filename: "a.png", model: "" })).not.toThrow();
+  });
+
+  it("is refused when it points at another machine, even with paid allowed (price unknown)", async () => {
+    const off = await boot({ FORGE_PROVIDER: "local", FORGE_LOCAL_BASE: "http://100.64.0.10:20128/v1" });
+    expect(() => off.chargeOrRefuse({ filename: "a.png", model: "" })).toThrow(/FORGE_ALLOW_PAID/);
+    const on = await boot({ FORGE_PROVIDER: "local", FORGE_LOCAL_BASE: "http://100.64.0.10:20128/v1", FORGE_ALLOW_PAID: "1", FORGE_MAX_USD: "50" });
+    expect(() => on.chargeOrRefuse({ filename: "a.png", model: "" })).toThrow(/price .* unknown/);
   });
 });
 

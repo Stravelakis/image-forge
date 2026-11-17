@@ -102,6 +102,9 @@ import { FORGE_PALETTE } from "./lib/theme";
 import imageMark from "./assets/image-mark.png";
 import videoMark from "./assets/video-mark.png";
 import { keysFromSettings, fillFromShared, loadSharedKeys, saveSharedKeys } from "./lib/sharedKeys";
+import { onStoreProblem } from "./lib/storeProblems";
+import { filenamesInBatch, resumeRows, withoutBatchRows } from "./lib/batchHold";
+import type { BatchJob } from "./lib/providers";
 import { desktopInfo, installUpdate, videoForgeInstalled, openVideoForge, type LaunchMode } from "./lib/desktop";
 import ChatView from "./components/ChatView";
 import StartView from "./components/StartView";
@@ -165,7 +168,7 @@ function stashRescue(key: string, raw: string): void {
   }
 }
 
-function loadInitial(): { rows: ManifestRow[]; outcome: LoadOutcome } {
+function loadInitial(batchJobs: BatchJob[] = []): { rows: ManifestRow[]; outcome: LoadOutcome } {
   let raw: string | null = null;
   try {
     raw = localStorage.getItem(LS_KEY);
@@ -177,8 +180,11 @@ function loadInitial(): { rows: ManifestRow[]; outcome: LoadOutcome } {
     const parsed = JSON.parse(raw) as { rows?: ManifestRow[] };
     if (Array.isArray(parsed.rows)) {
       return {
-        rows: parsed.rows
-          .map((r) => (r.status === "generating" ? { ...r, status: "pending" as Status } : r))
+        // A row left "generating" by a closed app goes back to pending, EXCEPT
+        // a row already sent to Google in a batch: that one is paid for and
+        // on its way, and running it again would bill it twice at full price
+        // (review 16 Nov 2026, B1). lib/batchHold.ts.
+        rows: resumeRows(parsed.rows, batchJobs)
           // Rows saved before the categories became asset types still say
           // shop / item / event / npc. Changing the type is a compile-time
           // move; the data on disk does not migrate itself, and an unmigrated
@@ -229,7 +235,11 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   // Loaded once, outcome kept: a rescued load must never be autosaved over
   // the data it failed to read.
   const firstLoad = useRef<{ rows: ReturnType<typeof loadInitial>; settings: ReturnType<typeof loadSettings> }>(null!);
-  if (!firstLoad.current) firstLoad.current = { rows: loadInitial(), settings: loadSettings() };
+  if (!firstLoad.current) {
+    // Settings first: the rows need to know which ones are waiting in a Google batch.
+    const settings = loadSettings();
+    firstLoad.current = { rows: loadInitial(settings.settings.batchJobs), settings };
+  }
   const [rows, setRows] = useState<ManifestRow[]>(() => firstLoad.current.rows.rows);
   // The front door (HANDOFF §14.1): one box, one number, one button.
   const [view, setView] = useState<View>("start");
@@ -361,7 +371,11 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
       const changed = Object.fromEntries(Object.entries(mine).filter(([k, v]) => sent[k] !== v));
       if (!Object.keys(changed).length) return;
       sharedSent.current = { ...sent, ...changed };
-      void saveSharedKeys(changed);
+      // Refused (the shared file could not be read): forget we sent it, so the
+      // next change tries again. Nothing was written; the message is shown.
+      void saveSharedKeys(changed).then((ok) => {
+        if (!ok && sharedSent.current) sharedSent.current = sent;
+      });
     }, 1500);
     return () => window.clearTimeout(t);
   }, [settings, isDesktop]);
@@ -442,6 +456,9 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
     setToasts((t) => [...t.slice(-3), { id, kind, msg: shown, action: act }]);
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), act ? 7000 : 4600);
   }, []);
+
+  // A saved-data file could not be read, so the app refused to save over it (lib/storeProblems).
+  useEffect(() => onStoreProblem((msg) => pushToast("err", msg)), [pushToast]);
 
   const pushLog = useCallback((msg: string, kind: LogEntry["kind"]) => {
     setLog((l) => [...l.slice(-90), { t: nowTime(), msg, kind }]);
@@ -864,7 +881,13 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   const runQueue = useCallback(
     async (targets?: number[]) => {
       if (isRunning) return;
-      const ids = targets ?? rowsRef.current.filter((r) => r.status === "pending" || r.status === "failed").map((r) => r.id);
+      const asked = targets ?? rowsRef.current.filter((r) => r.status === "pending" || r.status === "failed").map((r) => r.id);
+      // Never run a row live while it waits in a Google batch: it is already paid for.
+      const held = filenamesInBatch(settingsRef.current.batchJobs);
+      const ids = held.size ? asked.filter((id) => !held.has(rowsRef.current.find((r) => r.id === id)?.filename ?? "")) : asked;
+      if (ids.length < asked.length) {
+        pushLog(`· ${asked.length - ids.length} row(s) left out — already sent in a Google batch. Press "Check batches".`, "info");
+      }
       if (ids.length === 0) return;
 
       // Nothing spends money without being asked. Free engines pass straight through.
@@ -1339,13 +1362,16 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
   /* ---------- advanced: repair / backup / reset / github ---------- */
   const repairForge = useCallback(async () => {
     const fixes: string[] = [];
-    const stuck = rowsRef.current.filter((r) => r.status === "generating").length;
+    // A row waiting in a Google batch is not stuck: it is paid for and on its way.
+    const held = filenamesInBatch(settingsRef.current.batchJobs);
+    const isStuck = (r: ManifestRow) => r.status === "generating" && !held.has(r.filename);
+    const stuck = rowsRef.current.filter(isStuck).length;
     if (stuck) fixes.push(`${stuck} stuck row${stuck > 1 ? "s" : ""} back to pending`);
     const seen = new Set<string>();
     let moved = 0;
     let overdue = 0;
     const repaired = rowsRef.current.map((r) => {
-      let out = r.status === "generating" ? { ...r, status: "pending" as Status } : r;
+      let out = isStuck(r) ? { ...r, status: "pending" as Status } : r;
       // A cooldown that has already passed should have re-queued itself. If
       // the app was closed when it expired, the watcher never saw it.
       if (out.retry_at && Date.parse(out.retry_at) < Date.now()) {
@@ -1396,7 +1422,11 @@ function ForgeApp({ onOpenMarket }: { onOpenMarket?: () => void }) {
 
   const sendBatch = useCallback(async () => {
     const s = settingsRef.current;
-    const waiting = rowsRef.current.filter((r) => r.status === "pending" || r.status === "failed");
+    // Rows already in a waiting batch are never sent a second time.
+    const waiting = withoutBatchRows(
+      rowsRef.current.filter((r) => r.status === "pending" || r.status === "failed"),
+      s.batchJobs
+    );
     if (!waiting.length) {
       pushToast("info", "Nothing pending to send.");
       return;

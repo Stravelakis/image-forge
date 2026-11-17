@@ -6,7 +6,7 @@
  * and a headless run use the same code.
  */
 import { findModel, formatUsd, generateBytes, localRoute, priceFor, resolveRoute, type ProviderId } from "../engines.mjs";
-import { FREE_ENGINES } from "../paidGuard";
+import { isFreeEngine } from "../paidGuard";
 import type { PuppetSpend } from "./spend";
 import { panelVerdict, type Facts, type PanelChecker } from "./quality";
 import type { ForgeSettings } from "../providers";
@@ -156,7 +156,7 @@ export const LOCAL_REST_MS = 20000;
 export function chargeOrRefuse(row: { model: string }, s: ForgeSettings, spend?: PuppetSpend): void {
   const route = resolveRoute(row as never, s as never) as { engine: string; def?: { id: string } };
   // A paused or retired engine stops with its own message further on and bills nothing.
-  if (FREE_ENGINES.has(route.engine) || route.engine === "paused" || route.engine === "retired") return;
+  if (isFreeEngine(route.engine, s) || route.engine === "paused" || route.engine === "retired") return;
   const price = route.def ? priceFor(route.def.id) : null;
   if (price === null || !spend) {
     throw new Error("This engine's price is unknown, so the puppet maker will not use it. Pick a free engine or one with a listed price.");

@@ -333,8 +333,9 @@ export function estimateCost(rows, settings, { batch = false } = {}) {
   let unknown = 0;
   for (const row of rows) {
     const { def, engine } = resolveRoute(row, settings);
-    // A model running on your own machine costs nothing, whatever it is called.
-    if (!def && FREE_ENGINES.has(engine)) continue;
+    // A model running on this computer costs nothing, whatever it is called.
+    // "Own machine" pointed elsewhere has no known price (isFreeEngine).
+    if (!def && isFreeEngine(engine, settings)) continue;
     // A paused or switched-off engine fails at once and never bills anything.
     if (engine === "paused" || engine === "retired") continue;
     const p = def ? priceFor(def.id, { batch }) : null;
@@ -373,8 +374,44 @@ export class RetiredModelError extends Error {
   }
 }
 
-/** Engines that cost nothing, whoever the model turns out to be. */
-const FREE_ENGINES = new Set(["local", "simulated", "cloudflare", "pollinations", "ovh"]);
+/**
+ * Engines that cost nothing, whoever the model turns out to be. "local" is
+ * NOT in here any more: see isFreeEngine.
+ */
+const FREE_ENGINES = new Set(["simulated", "cloudflare", "pollinations", "ovh"]);
+
+/**
+ * Is "your own machine" really this computer? True for localhost, 127.x,
+ * [::1] and *.localhost, and for an empty address (which means the default,
+ * http://localhost:8080/v1). Anything else (another machine, a gateway, a
+ * cloud address) may bill per picture, and nothing here knows its price.
+ */
+export function localIsThisComputer(base) {
+  const b = String(base ?? "").trim();
+  if (!b) return true;
+  let host;
+  try {
+    host = new URL(/^[a-z]+:\/\//i.test(b) ? b : `http://${b}`).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return host === "localhost" || host.endsWith(".localhost") || /^127\.\d+\.\d+\.\d+$/.test(host) || host === "[::1]" || host === "::1";
+}
+
+/**
+ * Does this engine cost nothing, with these settings?
+ *
+ * "Your own machine" used to count as free wherever it pointed, so pointing it
+ * at a model gateway on another machine (which can reach paid models) ran with
+ * no question, no cap, and as "free" in every total (review 16 Nov 2026, B3).
+ * Now it is free only when it really is this computer. Pointed anywhere else,
+ * its price is UNKNOWN: left out of totals and counted as "price unknown", so
+ * the app asks first and the agent server refuses it.
+ */
+export function isFreeEngine(engine, settings) {
+  if (engine === "local") return localIsThisComputer(settings?.localBase);
+  return FREE_ENGINES.has(engine);
+}
 
 /**
  * Google image models the owner has banned: anything called "Pro" (Nano
@@ -398,7 +435,7 @@ export function rowUsesBannedModel(row, settings) {
  */
 export function rowSpend(row, settings, { batch = false } = {}) {
   const route = resolveRoute(row, settings);
-  if (FREE_ENGINES.has(route.engine) || route.engine === "paused" || route.engine === "retired") {
+  if (isFreeEngine(route.engine, settings) || route.engine === "paused" || route.engine === "retired") {
     return { paid: false, price: 0, banned: false, engine: route.engine };
   }
   return {
