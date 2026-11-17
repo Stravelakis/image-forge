@@ -23,7 +23,8 @@
  *   CLOUDFLARE_ACCOUNT_ID + CLOUDFLARE_API_TOKEN, POLLINATIONS_TOKEN
  *   FORGE_PROVIDER (ovh | cloudflare | pollinations | gemini | openai | local)
  *   FORGE_ALLOW_PAID=1  let rows run on paid engines (default: refused)
- *   FORGE_MAX_USD       the most this server may spend in total (default 1 once paid is allowed)
+ *   FORGE_MAX_USD       the most agents may spend through this server per day, across restarts (default 1 once paid is allowed)
+ *   FORGE_SPEND_FILE    where that day total is kept (default %APPDATA%\image-forge\mcp-spend.json)
  * With no keys at all the server uses OVHcloud SDXL, which needs none.
  *
  * Images land in images/ vectors/ lottie/ sheets/ gifs/ under --out
@@ -33,6 +34,7 @@ import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import fs from "node:fs";
+import os from "node:os";
 import { nameForMime } from "../src/lib/engines.mjs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -65,17 +67,73 @@ const SETTINGS_PATH = flag("--settings", "");
  * Money. There is no human here to click "yes", so paid engines are OFF unless
  * the operator turned them on in the environment that starts this server:
  *   FORGE_ALLOW_PAID=1   let rows run on paid engines (default: refuse them)
- *   FORGE_MAX_USD=2.5    the most this server process may spend in total
- *                        (default 1 once paid is allowed; priced rows only)
+ *   FORGE_MAX_USD=2.5    the most agents may spend through this server in one
+ *                        day, across every start (default 1 once paid is
+ *                        allowed; priced rows only)
+ *   FORGE_SPEND_FILE     where the day's spending is written down
+ *                        (default %APPDATA%\image-forge\mcp-spend.json)
  * A row whose price is unknown is treated as paid, never as free.
+ *
+ * Why a file (17 Nov 2026, review B2): the total used to live in memory, so it
+ * went back to $0 every time the server started — and Blacksmith starts a new
+ * server for every call. The cap was per call, not per day. Now every charge is
+ * added to a small file BEFORE the request goes out, and every server reads it.
+ * If that file cannot be read or written, paid rows are refused: a cap that
+ * cannot count must not let money through.
  */
 const ALLOW_PAID = /^(1|true|yes)$/i.test(String(process.env.FORGE_ALLOW_PAID || "").trim());
 const MAX_USD = (() => {
   const n = Number(process.env.FORGE_MAX_USD);
   return Number.isFinite(n) && n >= 0 && String(process.env.FORGE_MAX_USD).trim() !== "" ? n : 1;
 })();
-let spentUsd = 0;
-const spentSoFar = () => spentUsd;
+const SPEND_FILE = path.resolve(
+  String(process.env.FORGE_SPEND_FILE || "").trim() ||
+    path.join(process.env.APPDATA || path.join(os.homedir(), ".config"), "image-forge", "mcp-spend.json")
+);
+/** Today, on this computer's calendar: the cap starts again at local midnight. */
+const today = (d = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+class SpendLedgerError extends Error {}
+
+/** { day: usd }. {} when there is no file yet; throws when it is there but unreadable. */
+function readLedger() {
+  let text;
+  try {
+    text = fs.readFileSync(SPEND_FILE, "utf8");
+  } catch (e) {
+    if (e && e.code === "ENOENT") return {};
+    throw new SpendLedgerError(`could not read the spending record (${SPEND_FILE}): ${e.code || e.message}`);
+  }
+  try {
+    const data = JSON.parse(text);
+    const days = data && typeof data === "object" ? data.days : null;
+    if (!days || typeof days !== "object") throw new Error("no days");
+    for (const v of Object.values(days)) if (typeof v !== "number" || !Number.isFinite(v) || v < 0) throw new Error("bad amount");
+    return { ...days };
+  } catch {
+    throw new SpendLedgerError(`the spending record (${SPEND_FILE}) is damaged, so it cannot be trusted`);
+  }
+}
+
+function writeLedger(days) {
+  // Keep about a month; older days are of no use to the cap.
+  const keep = Object.keys(days).sort().slice(-31);
+  const out = Object.fromEntries(keep.map((k) => [k, days[k]]));
+  fs.mkdirSync(path.dirname(SPEND_FILE), { recursive: true });
+  const tmp = `${SPEND_FILE}.${process.pid}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ v: 1, days: out }, null, 2));
+  fs.renameSync(tmp, SPEND_FILE);
+}
+
+/** What agents have spent today through any start of this server. NaN when the record cannot be read. */
+const spentSoFar = () => {
+  try {
+    return readLedger()[today()] ?? 0;
+  } catch {
+    return Number.NaN;
+  }
+};
 
 /** Raised when a row is not allowed to spend. The row stays as it was. */
 class PaidRefusal extends Error {
@@ -104,13 +162,29 @@ function chargeOrRefuse(row, settings = SETTINGS) {
   if (s.price === null) {
     throw new PaidRefusal(`refused: the price of ${row.filename}'s model is unknown, so it cannot be kept under FORGE_MAX_USD.`);
   }
-  if (spentUsd + s.price > MAX_USD + 1e-9) {
+  let days;
+  try {
+    days = readLedger();
+  } catch (e) {
+    throw new PaidRefusal(`refused: ${e.message}. Paid rows stay off until it can be read again; nothing was spent.`, { stopRun: true });
+  }
+  const day = today();
+  const spent = days[day] ?? 0;
+  if (spent + s.price > MAX_USD + 1e-9) {
     throw new PaidRefusal(
-      `refused: ${row.filename} would take this server past FORGE_MAX_USD (${formatUsd(MAX_USD)}; ${formatUsd(spentUsd)} spent so far).`,
+      `refused: ${row.filename} would go past today's FORGE_MAX_USD (${formatUsd(MAX_USD)}; ${formatUsd(spent)} spent today). It starts again at midnight.`,
       { stopRun: true }
     );
   }
-  spentUsd += s.price;
+  days[day] = spent + s.price;
+  try {
+    writeLedger(days);
+  } catch (e) {
+    throw new PaidRefusal(
+      `refused: could not write down the spending (${SPEND_FILE}: ${e.code || e.message}), so ${row.filename} was not sent.`,
+      { stopRun: true }
+    );
+  }
 }
 
 const COLUMNS = [
@@ -484,7 +558,7 @@ const describeEngine = () => {
     `${SETTINGS.openaiKeys.length} endpoint key(s)`,
   ].join(" · ");
   const money = ALLOW_PAID
-    ? `paid engines: allowed up to ${formatUsd(MAX_USD)} in total (${formatUsd(spentUsd)} spent so far)`
+    ? `paid engines: allowed up to ${formatUsd(MAX_USD)} a day (${Number.isNaN(spentSoFar()) ? "spending record unreadable, so paid rows are refused" : `${formatUsd(spentSoFar())} spent today`})`
     : "paid engines: refused (the operator has not set FORGE_ALLOW_PAID)";
   return `default engine: ${engine} (${apiModel}) · ${cost}\n${wired}\n${money}`;
 };

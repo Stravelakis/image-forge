@@ -204,15 +204,17 @@ stay in step. Node has no CORS, so the MCP server calls both directly.
 
 `paidGuard.checkPaidRun` routes every row on its own, counts only the rows
 that bill, prices each at the billed model's rate, and names the credit that
-runs out soonest. Free engines (`local`, `simulated`, `cloudflare`,
-`pollinations`, `ovh`) are never gated. A paid model with an UNKNOWN price
+runs out soonest. Free engines (`simulated`, `cloudflare`, `pollinations`,
+`ovh`, and `local` only when its address is this computer — `isFreeEngine` in
+`engines.mjs`) are never gated. A paid model with an UNKNOWN price
 counts as paid ("price unknown"), and Google "Pro" image models are refused
 everywhere. Every generating caller (Forge button, variants, Sheet maker, the
 Google half-price queue, the puppet maker) asks through `ensureAffordable()`
 in `src/lib/paidGate.ts`; the puppet maker also has a per-puppet limit
 (Settings, default $0 = free engines only). Over MCP there is no human to
 confirm, so paid engines are **refused** unless `FORGE_ALLOW_PAID=1`, capped
-by `FORGE_MAX_USD` (default 1), one run at a time (lock file).
+by `FORGE_MAX_USD` per day across restarts (default 1, kept in
+`%APPDATA%\image-forge\mcp-spend.json`), one run at a time (lock file).
 
 ---
 
@@ -644,7 +646,7 @@ The plan lives in Video Forge: `docs/FORGES-ULTRA-PLAN.md`.
 
 **Sharp edges:**
 - `src/lib/puppet/spend.ts` repeats maker.ts's 3 tries and 2 fix rounds. Change them together.
-- Engine ids starting with `local` count as free.
+- Engine ids starting with `local` count as free only when `localBase` is this computer (`isFreeEngine`, 17 Nov).
 - The harvest server has no Host check.
 
 
@@ -653,3 +655,20 @@ The plan lives in Video Forge: `docs/FORGES-ULTRA-PLAN.md`.
 - Marks go in `meta.marks`, accepted groups in `meta.acceptedGroups`; a ✗ or "Make again" sets the old `redo` flag and note, so Remake all marked finds it.
 - See it without the desktop app: `npx vite --port 3317`, open `/?demo=workbench` (dev only, sample owl in `src/demo`).
 - Not done: "use this try" (making an older try the part), and the old options/versions pickers are only in the old review.
+
+## 17 Nov 2026 — keys can't be wiped, three money leaks closed (branch `fix/keys-and-money`)
+
+From the 16 Nov review (Blacksmith `reviews-2026-11-16/IMAGE-FORGE-REVIEW.md`, B1, B2, B3, B5, B6, B7). Tests: `tests/keysAndMoney.test.ts`, plus new cases in `mcpMoney.test.ts` and `paidGuard.test.ts`.
+
+- **Key stores never save after a failed read (B5, B6).** `electron/vault.mjs` and `electron/forgeKeys.mjs` now tell "no file yet" (fine, start empty) from "file there but unreadable" (PowerShell timed out, damaged file). The second throws `VaultUnreadable` / `KeyStoreUnreadable`; nothing is written and the old file stays byte for byte. The desktop server returns the plain message (500); `src/lib/storeProblems.ts` carries it to a toast once. If the vault cannot be read at start-up, that session never writes to it.
+- **Unknown shared keys are kept (B7).** `putShared` carries every entry in the file over, including names this app does not know. `gemini-extra` added to `SHARED_NAMES` to match Video Forge.
+- **Google batch rows are never re-run (B1).** `src/lib/batchHold.ts`: on start, a "generating" row that is in a waiting batch stays "generating"; Forge, "Send batch" and Repair all leave such rows out.
+- **MCP cap holds across starts (B2).** `FORGE_MAX_USD` is now per day, written to `%APPDATA%\image-forge\mcp-spend.json` (override `FORGE_SPEND_FILE`) before each paid request. Unreadable or unwritable record = paid rows refused.
+- **"Your own machine" counted honestly (B3).** Free only when `localBase` is this computer (localhost, 127.x, ::1, *.localhost, or empty = default). Pointed anywhere else its price is unknown: left out of totals, counted as "price unknown", asked about in the app, refused by MCP.
+
+**Follow-ups, not done here:**
+- Video Forge's copy (`BYOK-Vid-Creator/tools/lib/forgeKeys.mjs`) still has the old wipe-on-failed-read and drop-unknown-names code. Copy this file over (or do the shared "forge-common" package).
+- Move the vault off PowerShell to Electron's own lock: not small or safe — needs a backup-first migration of the existing `vault.bin`.
+- No "my gateway is free" switch: a free model on another machine is now asked about each run (app) and refused (MCP).
+- A vault file that is truly damaged has no in-app repair yet; the app says so and keeps it.
+- Two MCP servers charging at the same instant can race on the spend file (small window; each re-reads before writing). Cloudflare paid-plan billing (B3 second half) not addressed.

@@ -13,6 +13,7 @@
  */
 import type { ForgeSettings } from "./providers";
 import { FREE_TEXT_MODEL, newKey } from "./providers";
+import { errorFrom, reportStoreProblem } from "./storeProblems";
 
 const HEADERS = { "X-Forge-App": "1" };
 
@@ -124,14 +125,25 @@ export async function loadSharedKeys(): Promise<Record<string, string>> {
   }
 }
 
-export async function saveSharedKeys(keys: Record<string, string>): Promise<void> {
+/**
+ * Returns true when saved (or when there is nothing to save to), false when
+ * the app refused because the shared file could not be read. The refusal's
+ * plain message goes to the screen (lib/storeProblems).
+ */
+export async function saveSharedKeys(keys: Record<string, string>): Promise<boolean> {
   try {
-    await fetch("/app/keys", {
+    const r = await fetch("/app/keys", {
       method: "POST",
       headers: { ...HEADERS, "Content-Type": "application/json" },
       body: JSON.stringify({ keys }),
     });
+    if (r.status === 500) {
+      reportStoreProblem(await errorFrom(r, "Could not save the keys shared with Video Forge."));
+      return false;
+    }
+    return true;
   } catch {
     /* not the desktop app */
+    return true;
   }
 }

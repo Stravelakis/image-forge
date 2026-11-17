@@ -12,10 +12,15 @@
 
 import type { ApiKey, ForgeSettings } from "./providers";
 import { BANNED_MODEL_MESSAGE, estimateCost, formatUsd, resolveRoute, rowUsesBannedModel } from "./providers";
+import { isFreeEngine, localIsThisComputer } from "./engines.mjs";
 import type { ManifestRow } from "../types";
 
-/** Engines that never cost anything. */
-export const FREE_ENGINES = new Set(["local", "simulated", "cloudflare", "pollinations", "ovh"]);
+/**
+ * Does this engine cost nothing, with these settings? One rule for the app,
+ * the puppet maker and the agent server (engines.mjs). "Your own machine" is
+ * free only when it is this computer; pointed elsewhere its price is unknown.
+ */
+export { isFreeEngine } from "./engines.mjs";
 
 export interface CreditNote {
   /** what you called this credit, e.g. "tier 1 voucher" */
@@ -75,7 +80,8 @@ export interface PaidRunCheck {
 /** What free engines are set up and could take this job instead? */
 export function freeAlternativesFor(s: ForgeSettings): { id: string; label: string }[] {
   const out: { id: string; label: string }[] = [];
-  if (s.localBase.trim() && s.localModel.trim()) out.push({ id: "local", label: `your own machine (${s.localModel})` });
+  // Only offered as free when it really is this computer (engines.mjs isFreeEngine).
+  if (s.localBase.trim() && s.localModel.trim() && localIsThisComputer(s.localBase)) out.push({ id: "local", label: `your own machine (${s.localModel})` });
   if (s.cloudflare.accountId.trim() && s.cloudflare.token.trim())
     out.push({ id: "cloudflare", label: "Cloudflare — free, about 690 a day" });
   if (s.pollinationsToken.trim()) out.push({ id: "pollinations", label: "Pollinations — free, a little slow" });
@@ -112,7 +118,7 @@ export function checkPaidRun(rows: ManifestRow[], s: ForgeSettings, opts: { batc
   const paidRows = rows.filter((r) => {
     const route = resolveRoute(r as never, s);
     const engine = String(route.engine);
-    if (FREE_ENGINES.has(engine)) return false;
+    if (isFreeEngine(engine, s)) return false;
     // A paused or retired engine fails at once and bills nothing.
     if (engine === "paused" || engine === "retired") return false;
     if (rowUsesBannedModel(r as never, s)) return true;

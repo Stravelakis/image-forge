@@ -84,7 +84,7 @@ Or use environment variables:
 | `OPENAI_BASE_URL` · `OPENAI_IMAGE_MODEL` | Point at Together, OpenRouter, a local server |
 | `FORGE_PROVIDER` | Force `ovh` / `cloudflare` / `pollinations` / `gemini` / `openai` |
 | `FORGE_ALLOW_PAID` | `1` lets rows run on paid engines. Off by default |
-| `FORGE_MAX_USD` | Most the server may spend in total once paid is allowed. Default 1 |
+| `FORGE_MAX_USD` | Most agents may spend through the server per day, across restarts. Default 1 |
 
 Which engine it uses when a row names none:
 
@@ -106,7 +106,7 @@ A row's own `model` column beats all of it, exactly as in the app.
 your paid balance was. The app's paid confirmation dialog does not exist over
 MCP — there is no human there to confirm — so paid engines are **refused**
 unless the operator starts the server with `FORGE_ALLOW_PAID=1`. Even then it
-stops at `FORGE_MAX_USD` in total (1 if you set nothing), and a model with no
+stops at `FORGE_MAX_USD` per day (1 if you set nothing), and a model with no
 known price is refused. Only one generating run goes at a time. Keep paid keys
 out of its environment unless you want it able to spend.
 

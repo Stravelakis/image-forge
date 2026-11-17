@@ -2,7 +2,8 @@
  * Money should never leave without being asked. These pin that.
  */
 import { describe, expect, it } from "vitest";
-import { checkPaidRun, creditNoteFor, freeAlternativesFor, FREE_ENGINES } from "../src/lib/paidGuard";
+import { checkPaidRun, creditNoteFor, freeAlternativesFor, isFreeEngine } from "../src/lib/paidGuard";
+import { estimateCost, localIsThisComputer, rowSpend } from "../src/lib/engines.mjs";
 import type { ForgeSettings } from "../src/lib/providers";
 import type { ManifestRow } from "../src/types";
 
@@ -49,9 +50,45 @@ describe("free engines are never gated", () => {
   });
 
   it("knows the free engines by name", () => {
-    for (const e of ["local", "simulated", "cloudflare", "pollinations"]) expect(FREE_ENGINES.has(e)).toBe(true);
-    expect(FREE_ENGINES.has("gemini")).toBe(false);
-    expect(FREE_ENGINES.has("openai")).toBe(false);
+    const s = settings();
+    for (const e of ["local", "simulated", "cloudflare", "pollinations", "ovh"]) expect(isFreeEngine(e, s)).toBe(true);
+    expect(isFreeEngine("gemini", s)).toBe(false);
+    expect(isFreeEngine("openai", s)).toBe(false);
+  });
+});
+
+/*
+ * Review 16 Nov 2026, B3: "your own machine" was always free, even when its
+ * address was a model gateway on another machine that can reach paid models.
+ */
+describe("'your own machine' is free only when it is this computer", () => {
+  it.each(["http://localhost:8080/v1", "http://127.0.0.1:7860", "http://[::1]:8080/v1", "http://comfy.localhost/v1", ""])(
+    "%s counts as free",
+    (base) => {
+      expect(localIsThisComputer(base)).toBe(true);
+      expect(checkPaidRun(rows(3), settings({ provider: "local", localBase: base })).costs).toBe(false);
+    }
+  );
+
+  it.each(["http://100.64.0.10:20128/v1", "http://minipc:8080/v1", "https://gateway.example.com/v1", "http://localhost.example.com/v1"])(
+    "%s is NOT counted as free: price unknown, so it asks first",
+    (base) => {
+      const s = settings({ provider: "local", localBase: base });
+      expect(localIsThisComputer(base)).toBe(false);
+      expect(isFreeEngine("local", s)).toBe(false);
+      const c = checkPaidRun(rows(3), s);
+      expect(c.costs).toBe(true);
+      expect(c.unknownPriceRows).toBe(3);
+      expect(c.totalUsd).toBe(0); // left out of the total, not added as $0 "free"
+      expect(estimateCost(rows(3), s)).toMatchObject({ total: 0, unknown: 3 });
+      expect(rowSpend({ model: "" }, s)).toMatchObject({ paid: true, price: null });
+    }
+  );
+
+  it("is not offered as a free alternative when it points elsewhere", () => {
+    const ids = (base: string) => freeAlternativesFor(settings({ localBase: base })).map((a) => a.id);
+    expect(ids("http://localhost:8080/v1")).toContain("local");
+    expect(ids("http://100.64.0.10:20128/v1")).not.toContain("local");
   });
 });
 

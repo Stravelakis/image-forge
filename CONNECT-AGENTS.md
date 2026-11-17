@@ -51,7 +51,7 @@ node scripts/mcp-server.js --settings ./image-forge-backup-2026-09-02.json
 | `FORGE_PROVIDER` | force `local`, `cloudflare`, `pollinations`, `gemini` or `openai` |
 | `GEMINI_IMAGE_MODEL` | e.g. `nano-banana-2-lite` |
 | `FORGE_ALLOW_PAID` | set to `1` to let rows run on paid engines. **Off by default: paid rows are refused.** |
-| `FORGE_MAX_USD` | the most the server may spend in total once paid is allowed (default `1`). A row with no known price is refused. |
+| `FORGE_MAX_USD` | the most agents may spend through the server **per day**, across every start (default `1`); kept in `%APPDATA%\image-forge\mcp-spend.json` (or `FORGE_SPEND_FILE`). A row with no known price is refused, and so is "your own machine" when its address is not this computer. |
 
 **Your own machine works here too.** Point `--settings` at a backup whose local
 address is set, or run the app once to write one. Free, unlimited, private.

@@ -12,7 +12,7 @@ import type { ForgeSettings } from "../lib/providers";
 import { PROVIDER_META, resolveRoute, scribeChat } from "../lib/providers";
 import { readyEngines, currentEngineValue } from "../lib/readyEngines";
 import { listLocalImageModels } from "../lib/puppet/pageIO";
-import { FREE_ENGINES } from "../lib/paidGuard";
+import { isFreeEngine } from "../lib/paidGuard";
 import { STYLE_CATALOGUE } from "../lib/styleCatalogue";
 import { MAX_START, countFromText, planStart } from "../lib/startPlan";
 import { Btn, IHammer, Lightbox } from "./ui";
@@ -91,7 +91,7 @@ export default function StartView({
   // The engine a blank row will use, said plainly: which, and whether it costs.
   const route = resolveRoute({ model: "" } as never, settings);
   const engineName = PROVIDER_META[route.engine as keyof typeof PROVIDER_META]?.name ?? String(route.engine);
-  const free = FREE_ENGINES.has(String(route.engine));
+  const free = isFreeEngine(String(route.engine), settings);
 
   const styles = useMemo(() => {
     const byId = new Map(STYLE_CATALOGUE.map((s) => [s.id, s]));

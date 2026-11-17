@@ -96,6 +96,16 @@ export declare function estimateCost(
   opts?: { batch?: boolean }
 ): { total: number; unknown: number; count: number };
 export declare function formatUsd(n: number): string;
+/** "Your own machine" is free only when its address is this computer. */
+export declare function localIsThisComputer(base: string | undefined | null): boolean;
+/** What a row would do to the wallet (for callers with no dialog to ask). */
+export declare function rowSpend(
+  row: { model?: string },
+  settings: EngineSettings,
+  opts?: { batch?: boolean }
+): { paid: boolean; price: number | null; banned: boolean; engine: string };
+/** Does this engine cost nothing, with these settings? */
+export declare function isFreeEngine(engine: string, settings: { localBase?: string } | undefined | null): boolean;
 export declare function isBannedImageModel(engine: string, ...names: unknown[]): boolean;
 export declare function rowUsesBannedModel(row: EngineRow, settings: EngineSettings): boolean;
 export declare const BANNED_MODEL_MESSAGE: string;

@@ -24,9 +24,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-/** Names both apps understand. Anything else is ignored, both ways. */
+/**
+ * Names this app reads and writes. A name it does not know (one a newer
+ * Video Forge or a future forge added) is never shown here, but it is KEPT
+ * in the file untouched: saving a key here must never delete the other app's.
+ * (17 Nov 2026: the two copies of this list had drifted, and Image Forge's
+ * saves were deleting Video Forge's "gemini-extra" key.)
+ */
 export const SHARED_NAMES = [
-  "gemini", "openrouter", "nvidia", "mistral", "cloudflare-account", "cloudflare-token", "pollinations",
+  "gemini", "gemini-extra", "openrouter", "nvidia", "mistral", "cloudflare-account", "cloudflare-token", "pollinations",
   // 13 Oct 2026: every key either app can use, and room for the forges to come.
   "openai", "groq", "elevenlabs", "fish",
 ];
@@ -71,25 +77,66 @@ export const dpapi = {
 
 /* ---------- read and write ---------- */
 
-/** Everything shared, as { name: { value, at, from } }. Empty when there is nothing or it cannot be read. */
-export async function readShared({ file = sharedKeysFile(), crypt = dpapi } = {}) {
-  if (!crypt.available) return {};
+/**
+ * Raised when the shared-keys file exists but could not be read (PowerShell
+ * timed out, the file is damaged, Windows refused). Nothing is written after
+ * this: "could not read" must never be treated as "empty", or the save that
+ * follows erases every key in the file (review 16 Nov 2026, B6).
+ */
+export class KeyStoreUnreadable extends Error {
+  constructor(cause) {
+    super(
+      "Could not read the keys shared with Video Forge, so nothing was saved (saving now could erase them). " +
+        "The saved keys are untouched. Close and reopen the app, then try again."
+    );
+    this.name = "KeyStoreUnreadable";
+    this.cause = cause;
+  }
+}
+
+/**
+ * The whole file, every entry, including names this app does not know.
+ * { keys: {} } when there is no file yet. Throws KeyStoreUnreadable when the
+ * file is there but cannot be read.
+ */
+async function readSharedFile(file, crypt) {
   let buf;
   try {
     buf = await fs.promises.readFile(file);
-  } catch {
-    return {};
+  } catch (e) {
+    if (e && e.code === "ENOENT") return { keys: {} };
+    throw new KeyStoreUnreadable(e);
   }
+  let data;
   try {
-    const data = JSON.parse(await crypt.unlock(buf));
-    const out = {};
-    for (const [k, e] of Object.entries(data?.keys ?? {})) {
-      if (SHARED_NAMES.includes(k) && e && typeof e.value === "string" && e.value) out[k] = e;
-    }
-    return out;
+    data = JSON.parse(await crypt.unlock(buf));
+  } catch (e) {
+    throw new KeyStoreUnreadable(e);
+  }
+  if (!data || typeof data !== "object" || (data.keys !== undefined && (typeof data.keys !== "object" || data.keys === null))) {
+    throw new KeyStoreUnreadable(new Error("unexpected contents"));
+  }
+  return { keys: { ...(data.keys ?? {}) } };
+}
+
+/**
+ * Everything shared that this app understands, as { name: { value, at, from } }.
+ * Empty when there is nothing or it cannot be read: fine for SHOWING keys.
+ * Saving uses the strict read in putShared.
+ */
+export async function readShared({ file = sharedKeysFile(), crypt = dpapi } = {}) {
+  if (!crypt.available) return {};
+  let data;
+  try {
+    data = await readSharedFile(file, crypt);
   } catch {
     return {};
   }
+  const out = {};
+  for (const [k, e] of Object.entries(data.keys)) {
+    if (SHARED_NAMES.includes(k) && e && typeof e.value === "string" && e.value) out[k] = e;
+  }
+  return out;
 }
 
 /** Just the values: { gemini: "…" }. */
@@ -100,12 +147,16 @@ export async function sharedValues(opts) {
 
 /**
  * Save some keys for both apps. `changes` maps a name to its new value, or to
- * "" / null to remove it. Unknown names and over-long values are ignored.
- * Returns the names that actually changed.
+ * "" / null to remove it. Unknown names and over-long values in `changes` are
+ * ignored; unknown names already in the file are kept as they are. Returns the
+ * names that actually changed. Throws KeyStoreUnreadable, and writes nothing,
+ * when the file exists but cannot be read.
  */
 export async function putShared(changes, from, { file = sharedKeysFile(), crypt = dpapi, now = Date.now() } = {}) {
   if (!crypt.available) return [];
-  const current = await readShared({ file, crypt });
+  // Strict: an unreadable file throws here, before anything is written, so the
+  // old file stays. Every entry is carried over, known to this app or not.
+  const current = (await readSharedFile(file, crypt)).keys;
   const changed = [];
   for (const [name, raw] of Object.entries(changes ?? {})) {
     if (!SHARED_NAMES.includes(name)) continue;
