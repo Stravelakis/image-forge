@@ -653,3 +653,13 @@ The plan lives in Video Forge: `docs/FORGES-ULTRA-PLAN.md`.
 - Marks go in `meta.marks`, accepted groups in `meta.acceptedGroups`; a ✗ or "Make again" sets the old `redo` flag and note, so Remake all marked finds it.
 - See it without the desktop app: `npx vite --port 3317`, open `/?demo=workbench` (dev only, sample owl in `src/demo`).
 - Not done: "use this try" (making an older try the part), and the old options/versions pickers are only in the old review.
+
+## 21 Nov 2026 — docs site rewrite (pilot), branch `docs/three-levels-rewrite`
+
+The docs site (`/site`) moved to the hub look and its three reading levels were rewritten from the code. Nothing is deployed or tagged.
+
+- **Look:** same fonts, frames and colours as docs.stravelakis.com (Unbounded / Figtree / JetBrains Mono, self-hosted), hub dots, pairing bar, scroll-progress line. Small headings and tight spacing for doc pages. New: level cards, sticky level switch, "On this page" menu built from the reading level on screen with a gliding marker, callouts, connected steps, click-open boxes, copy buttons.
+- **Content:** `site/src/docs/dev.md` (architecture, data, engines, money, desktop, link, MCP, manifest, tests, release), `plain.md` (English, for tech-savvy non-coders), `eli5.md` (from-zero course). Terms in `docs/glossary.yml` (49) show as tooltips at the reader's level, once per level.
+- **Source:** `site/scripts/sync-docs.mjs` copies GUIDE.md and INSTALL.md in as "Install (full)" and "Guide (full)". Fixed: links now point at `blob/HEAD/` (the old `blob/main/` was dead on this repo, which uses master) and `site/public/...` images map to the site base.
+- **Written against master (v1.1.1).** PR #15 (keys and money fixes) was merged into the `forge-twins` branch, not `master`, so it is not in v1.1.1. When it reaches master: the MCP cap becomes per day and saved in `mcp-spend.json`, and "your own machine" stops counting as always free. Update `dev.md` (Money, MCP table) and `plain.md` ("Let an AI assistant use it") then.
+- **Known gaps:** pages carry no review stamp yet (shows "Not reviewed yet" until `REVIEW-CHECKLIST` is ticked); Lighthouse not run; the in-app Docs text (`src/components/AgentsView.tsx`) still says there is no spending guard over MCP, which is no longer true.

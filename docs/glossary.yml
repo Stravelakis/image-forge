@@ -1,0 +1,263 @@
+# Jargon tooltips and ELI5 explainers for the Image Forge docs site (STANDARDS.md §7).
+# Hover, tap or keyboard-focus a dotted word to read it at your reading level.
+# explainer: true -> a "What's this?" box the first time it appears in the
+# English and ELI5 levels (never in Dev).
+
+API key:
+  explainer: true
+  eli5: A secret password that lets a program use someone else's service. Think of a library card. Whoever holds the card can borrow in your name, so you never share it.
+  english: A long private code from a company that proves you may use its service (and that the bill is yours). Anyone who has it can use your account, so keep it secret.
+  dev: A bearer credential sent with each request to authenticate and bill calls to a provider's API. Image Forge stores it locally and sends it only to the provider you picked.
+
+BYOK:
+  eli5: Bring Your Own Key. You use your own password with the picture service, so nobody in the middle sees or pays for your work.
+  english: Bring Your Own Key. You paste your own API key, it stays on your computer, and the service bills you directly. There is no Image Forge server.
+  dev: Client-held provider credentials. No proxy account or billing layer between the app and the provider.
+
+engine:
+  eli5: A picture-drawing service on the internet (or on your own computer). Image Forge hands it your sentence and it hands back a picture.
+  english: An AI image service Image Forge can ask to draw a picture, such as OVHcloud, Cloudflare, Google or one running on your own machine.
+  dev: A provider entry in the model registry in engines.mjs, with its routing, price, limits and request format.
+
+AI agent:
+  explainer: true
+  eli5: A computer helper that can do a chain of jobs for you by itself, like a very fast intern who never gets tired.
+  english: An AI assistant (Claude Code, Cursor, n8n and similar) that can use tools and carry out multi-step tasks on its own, not just chat.
+  dev: An LLM-driven client that calls tools (here over MCP) in a loop to reach a goal.
+
+MCP:
+  explainer: true
+  eli5: A standard plug shape. Because every helper and every tool uses the same plug, any helper can use any tool.
+  english: Model Context Protocol. A standard way for AI assistants to discover and use tools. Image Forge ships one so an assistant can fill your list and make pictures.
+  dev: Model Context Protocol, here over stdio via scripts/mcp-server.js, exposing 8 tools that share engines.mjs with the app.
+
+stdio:
+  eli5: The two pipes every program has, one to listen on and one to talk on.
+  english: Standard input and output. A tool and its assistant talk by passing text through these two channels, with no network involved.
+  dev: stdin/stdout transport for MCP; the server is spawned as a child process by the client.
+
+CSV:
+  explainer: true
+  eli5: A very plain table written as lines of text, with commas between the boxes. Any spreadsheet can open it.
+  english: Comma-separated values. A spreadsheet saved as plain text, one row per line. It opens in Excel or Google Sheets and any script can read it.
+  dev: RFC 4180 text format. The manifest is a CSV, so anything that reads and writes CSV is a first-class participant.
+
+manifest:
+  explainer: true
+  eli5: The list of pictures you want, one line each. It is the shopping list the factory works through.
+  english: Image Forge's list of pictures. One row per picture with its filename, description, look, engine and status. You see it as a table under Made.
+  dev: The CSV that is the single source of truth: rows in, files out. Schema in docs/manifest.md.
+
+prompt:
+  explainer: true
+  eli5: The words you type to tell the picture-drawing service what to draw.
+  english: The text description you give an image engine, for example "a village bakery at dawn, watercolour".
+  dev: The text input to the generation request, after the style block and any per-engine rewriting.
+
+seed:
+  eli5: A starting number for the dice. The same number gives the same dice rolls, so the same picture can come back.
+  english: A number that makes the engine's randomness repeatable. Same prompt and same seed usually give the same picture, on engines that accept one.
+  dev: PRNG seed forwarded to the provider. Cloudflare rejects the whole request if one is sent; OVHcloud ignores it.
+
+proxy:
+  explainer: true
+  eli5: A go-between. You hand your letter to the go-between, who posts it for you because you are not allowed to post it yourself.
+  english: A small relay that forwards a request. Image Forge runs one on your computer for engines that refuse to talk to a web page directly.
+  dev: The /cf-api, /nv-api and /local-api/<port> forwarders in vite.config.js and electron/main.js.
+
+CORS:
+  explainer: true
+  eli5: A rule browsers follow that stops one website from secretly using another. Some services have not been told to let your app in.
+  english: A browser safety rule about which websites may talk to which servers. A few engines do not allow it, which is why Image Forge relays their traffic.
+  dev: Cross-Origin Resource Sharing. Cloudflare sends no CORS headers and NVIDIA's preflight lacks Access-Control-Allow-Origin, so both go through a same-origin proxy.
+
+429:
+  eli5: The service saying "slow down, you are asking too fast" or "you have no credit left".
+  english: The standard "too many requests" reply. Image Forge rests that key and tries the next one. For some providers it also means "no balance".
+  dev: HTTP 429. The key is benched and the same row retries with the next healthy key; the row parks with retry_at only when the whole pool rests.
+
+rate limit:
+  eli5: A rule saying how many pictures you may ask for per minute or per day.
+  english: A cap on how fast or how often you can use a free service.
+  dev: Provider-side request quota; paced in-process for OVHcloud (one call every 31 s).
+
+token:
+  eli5: A special password with a smaller job, made for one service.
+  english: A code, like an API key, that a service gives you so a program can act for you. Treat it like a password.
+  dev: A credential (API token or access token) scoped to a service, here used for Cloudflare and Pollinations.
+
+SDXL:
+  eli5: The name of one particular picture-drawing brain.
+  english: Stable Diffusion XL, an open image model. The free OVHcloud engine runs it.
+  dev: Stable Diffusion XL. Reads about 77 tokens of prompt and silently drops the rest, so the style words go first.
+
+FLUX:
+  eli5: The name of another picture-drawing brain, a newer one.
+  english: A family of image models. Cloudflare offers FLUX.2 models, which can also take a reference picture.
+  dev: Black Forest Labs' FLUX models, used via Cloudflare Workers AI (dev and klein variants).
+
+LocalAI:
+  eli5: A picture-drawing brain that lives on your own computer, so nothing goes over the internet.
+  english: Free software that runs AI models on your own machine. Image Forge can use it as a free, private engine.
+  dev: A local OpenAI-compatible server. It refuses page-origin requests (CSRF), so Image Forge reaches it through /local-api/<port>.
+
+Electron:
+  eli5: A box that wraps a web page so it can live on your desktop like a normal program.
+  english: The toolkit that turns a website into a desktop app. It is why the installer is about 115 MB: it carries its own browser engine.
+  dev: Chromium plus Node.js. electron/main.js (ESM) serves dist/ on 127.0.0.1 and owns the proxies, vault and window state.
+
+React:
+  eli5: A building-block kit for making screens that change when you click.
+  english: A popular JavaScript library for building interactive screens out of small reusable pieces.
+  dev: React 19, with no state library; App.tsx orchestrates and each view is one component.
+
+Vite:
+  eli5: A tool that packs the app's pieces into one tidy bundle and shows changes instantly while you work.
+  english: The build tool that runs the app in development and packs it for release.
+  dev: Vite 8. Dev server on port 3000; vite build writes dist/. Note: it does not typecheck.
+
+TypeScript:
+  eli5: A version of JavaScript that checks your spelling of things before the program runs.
+  english: JavaScript with types, which catches many mistakes before the app is ever run.
+  dev: TypeScript 7; checked by npm run typecheck (tsc --noEmit).
+
+vitest:
+  eli5: The robot that runs all the checks and tells us pass or fail.
+  english: The test runner. It runs the automatic checks that tell us the app still works.
+  dev: Vitest 5. 715 tests across 39 files, run in CI on every push and pull request.
+
+Node.js:
+  eli5: A program that lets other programs written in JavaScript run on your computer.
+  english: The runtime you need installed to run Image Forge from source. Version 20 or newer; CI uses 22.
+  dev: Server-side JavaScript runtime. The MCP server and build scripts run on it; Node has no CORS, so the MCP server calls providers directly.
+
+npm:
+  eli5: A shop where programmers fetch ready-made pieces for their projects.
+  english: Node's package manager. npm install fetches everything the project needs.
+  dev: Package manager; scripts in package.json (dev, build, test, typecheck, build-exe).
+
+NSIS:
+  eli5: A tool that builds the installer, the helper that puts the app on your computer.
+  english: The installer builder used for the Windows setup file.
+  dev: Nullsoft Scriptable Install System, driven by electron-builder; build/installer.nsh adds the one uninstall question.
+
+CI:
+  eli5: A robot that checks every change automatically so nobody has to remember to.
+  english: Continuous integration. GitHub runs the type check, the tests and the build on every change and shows red or green.
+  dev: .github/workflows/ci.yml; Node 22; typecheck, test and build on every push and PR.
+
+DPAPI:
+  eli5: A lock built into Windows. Only you, logged in on this computer, can open what it locks.
+  english: A Windows feature that encrypts a file so only your Windows user can read it. Image Forge's vault uses it.
+  dev: Windows Data Protection API, called through PowerShell via stdin. Plain JSON is used off Windows.
+
+vault:
+  explainer: true
+  eli5: A locked drawer the app keeps for your keys and settings, so they are safe even if something goes wrong with the screen.
+  english: A file the app owns and locks (with your Windows login) that holds a copy of your keys, settings and list. It means an update or a busy door can never open the app empty.
+  dev: electron/vault.mjs writes a snapshot of page storage to userData/vault.bin (DPAPI). src/lib/vault.ts loads it before anything reads storage and writes changes back within about two seconds.
+
+localStorage:
+  eli5: A small drawer a web page keeps inside your browser to remember things.
+  english: Browser storage for a page, about 5 MB. Image Forge keeps your list and settings there and mirrors them into the vault.
+  dev: Origin-scoped storage. Because the origin includes the port, a random port would mean an empty store every launch; hence the fixed ports 47821 to 47825.
+
+IndexedDB:
+  eli5: A bigger drawer in the browser, for bigger things like thumbnails.
+  english: A larger browser database. Image Forge keeps small preview pictures and your linked folder's handle there.
+  dev: Holds image-forge/kv.dir (the folder handle) and the thumbnail store (src/lib/thumbStore.ts).
+
+MIME type:
+  eli5: The label on a file that says what kind of thing it is, like picture or music.
+  english: A label saying what a file really is, such as image/jpeg. Image Forge trusts the file's own bytes over what the engine claims.
+  dev: generateBytes() overrides the claimed type with the one the bytes declare (mimeFromBytes), then nameForMime() fixes the extension, never the stem.
+
+RFC 4180:
+  eli5: The official rulebook for how a CSV file is written.
+  english: The standard that defines the CSV format, so every program reads it the same way.
+  dev: The CSV spec the manifest follows: quoted fields, doubled quotes, CRLF or LF.
+
+ESM:
+  eli5: The modern way for JavaScript files to borrow from each other.
+  english: ECMAScript modules, the current JavaScript file format.
+  dev: electron/main.js is ESM ("type": "module"). require() there crashed the Cloudflare and NVIDIA proxies in 1.0.0.
+
+DOM:
+  eli5: The page's skeleton that the browser builds in memory.
+  english: The structure a browser builds from a web page. Code that touches it can only run in a browser.
+  dev: engines.mjs is DOM-free on purpose: no React, window or document, so the app, the desktop shell and the MCP server share it.
+
+Lottie:
+  eli5: A tiny moving picture drawn with math instead of dots.
+  english: A lightweight animation format used on websites and in apps.
+  dev: JSON animation format; Image Forge has the code engine write it and sanitises the result.
+
+SVG:
+  eli5: A picture drawn with lines and shapes, so it stays sharp at any size.
+  english: A vector image format. Scales without blur and can be edited as text.
+  dev: sanitiseSvg() strips scripts and external references before any SVG is shown or saved.
+
+viseme:
+  eli5: A mouth shape that goes with a sound, so a cartoon can look like it is talking.
+  english: A mouth shape for a speech sound. Sheets of them let a puppet talk in Video Forge.
+  dev: Mouth-shape frames in a sheet; each frame gets its own seed and a "change ONLY this" instruction.
+
+puppet:
+  explainer: true
+  eli5: A cartoon character cut into parts (head, eyes, mouth, arms) so it can blink, talk and wave in a video.
+  english: A character Image Forge draws in parts so Video Forge can make it talk, blink, nod and wave.
+  dev: Output of src/lib/puppet/: 4 candidate faces, then about 20 parts with at most 3 tries each, rigged to Video Forge's rig JSON.
+
+command line:
+  explainer: true
+  eli5: A text window where you type instructions to the computer instead of clicking.
+  english: A text window (Terminal, PowerShell) where you run commands by typing them.
+  dev: Any shell. Commands on this site are shown for npm and Node and run the same in PowerShell, bash and zsh.
+
+environment variable:
+  explainer: true
+  eli5: A little note you pin to a program before it starts, like a sticky note saying "use the red pen".
+  english: A named setting passed to a program from outside, such as FORGE_ALLOW_PAID=1.
+  dev: Process-level configuration read from the environment; documented per tool in the agent section.
+
+localhost:
+  explainer: true
+  eli5: The address that means "this very computer". Nothing leaves your machine.
+  english: An address (127.0.0.1) that always points to your own computer. The desktop app and dev server use it, so nothing goes over the internet to reach them.
+  dev: 127.0.0.1 loopback. The desktop app binds to it on fixed ports; the dev server uses http://localhost:3000.
+
+port:
+  explainer: true
+  eli5: A door number on your computer. Each program that listens uses its own door so they do not bump into each other.
+  english: A number that tells your computer which program a connection is for, like an apartment number.
+  dev: TCP port. Image Forge desktop uses fixed 47821 to 47825; dev uses 3000.
+
+SmartScreen:
+  eli5: Windows being careful with programs it does not know yet. It asks "are you sure?" the first time.
+  english: Windows' warning ("Windows protected your PC") for programs without a paid signature. Click More info, then Run anyway.
+  dev: Shown because the exes are unsigned (Get-AuthenticodeSignature reports NotSigned). SignPath Foundation signing is planned.
+
+code signing:
+  eli5: A stamp that proves who made a program and that nobody changed it.
+  english: A digital signature that tells Windows who published an app. Image Forge does not have one yet.
+  dev: Authenticode signature on the installer. Not yet applied; see CODE_SIGNING_POLICY.md.
+
+portable exe:
+  eli5: A program you can run from anywhere without installing it, like a game on a USB stick.
+  english: A single file you run directly. It still keeps settings on the computer it runs on.
+  dev: image-forge-portable.exe from electron-builder; data still in %APPDATA%\image-forge.
+
+backup:
+  eli5: A spare copy, kept somewhere safe, in case the first one is lost.
+  english: A file with your settings and keys. Image Forge writes it on request (Back up to a file). It contains your keys, so keep it private.
+  dev: settingsBackup.ts; a full snapshot including keys in plain text, restored with Restore.
+
+GitHub:
+  eli5: A website where programmers keep their projects and share them.
+  english: Where Image Forge's code, downloads and issue tracker live.
+  dev: github.com/Stravelakis/image-forge; releases carry the installer and portable exe.
+
+repository:
+  eli5: A big folder that remembers every change ever made to a project.
+  english: The project's home on GitHub with all its files and the history of every change.
+  dev: Git repo; docs site built from /site, one source in GUIDE.md and INSTALL.md.
