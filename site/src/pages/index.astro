@@ -3,15 +3,23 @@ import DocsLayout from '../layouts/DocsLayout.astro';
 import VernacularPanels from '../components/VernacularPanels.astro';
 import FeatureCards from '../components/FeatureCards.astro';
 import Carousel from '../components/Carousel.astro';
+import LevelPicker from '../components/LevelPicker.astro';
 import Playground from '../components/Playground.astro';
+import ReviewStamp from '../components/ReviewStamp.astro';
+import Glossary from '../components/Glossary.astro';
 import { siteConfig } from '../../site.config.ts';
 // Read from the app itself, so the version shown can never go stale again
 // (it said v1.0.2 through 1.0.4).
 import pkg from '../../../package.json';
 
-import { Content as Dev } from '../docs/dev.md';
-import { Content as Plain } from '../docs/plain.md';
-import { Content as Eli5 } from '../docs/eli5.md';
+import { Content as Dev, frontmatter as devFm } from '../docs/dev.md';
+import { Content as Plain, frontmatter as plainFm } from '../docs/plain.md';
+import { Content as Eli5, frontmatter as eli5Fm } from '../docs/eli5.md';
+
+// One source: GUIDE.md / INSTALL.md copied in by scripts/sync-docs.mjs.
+const sources = import.meta.glob<{ Content: any }>('../docs/source/*.md', { eager: true });
+const guide = sources['../docs/source/guide.md'];
+const install = sources['../docs/source/install.md'];
 
 const base = import.meta.env.BASE_URL.replace(/\/?$/, '/');
 
@@ -20,41 +28,61 @@ const features = [
   { icon: '🆓', title: 'Free with no key at all', text: 'OVHcloud needs no signup. Cloudflare gives ~690 a day with no card. Your own machine is unlimited.' },
   { icon: '🔑', title: 'Your keys stay yours', text: 'No account, no server. Keys live on your computer and go only to the engine you picked.' },
   { icon: '💸', title: 'Never spends without asking', text: 'Every paid run stops first: how many, which model, the price each, the total, and a free alternative.' },
-  { icon: '🎞️', title: 'Talks to BYOK Vid Creator', text: 'Installed side by side, the video app can ask the forge for its pictures. No keys cross over.' },
+  { icon: '🎞️', title: 'Talks to Video Forge', text: 'Installed side by side, the video app can ask the forge for its pictures. No keys cross over.' },
   { icon: '🤖', title: 'Agents welcome', text: 'An MCP server with eight tools lets Claude Code, Cursor or n8n fill the list and run it.' },
 ];
 
 const slides = [
   { title: 'Start', caption: 'The front door: describe it once, say how many, press the button.', image: `${base}screens/start.png`, alt: 'The Start screen with a request for four potion shop fronts typed in.' },
-  { title: 'Four real pictures', caption: 'Made by the app itself on the free OVHcloud engine — not mock-ups.', image: `${base}screens/start-results.png`, alt: 'The Start screen showing four finished potion shop pictures.' },
+  { title: 'Four real pictures', caption: 'Made by the app itself on the free OVHcloud engine, not mock-ups.', image: `${base}screens/start-results.png`, alt: 'The Start screen showing four finished potion shop pictures.' },
   { title: 'The spreadsheet', caption: 'Full control when you want it: one row per picture, filenames, engines, status.', image: `${base}screens/forge.png`, alt: 'The Forge view: a table of pictures with filename, category, model and status.' },
-  { title: 'Settings', caption: 'Engines, keys and looks — and proof your settings were really saved.', image: `${base}screens/settings.png`, alt: 'Settings showing image engines and the Saved and checked bar.' },
+  { title: 'Settings', caption: 'Engines, keys and looks, and proof your settings were really saved.', image: `${base}screens/settings.png`, alt: 'Settings showing image engines and the Saved and checked bar.' },
   { title: 'Window or browser, and updates', caption: 'Open it in its own window or in your browser, and install new versions with one button.', image: `${base}screens/settings-advanced.png`, alt: 'Settings: where Image Forge opens, and the app update check.' },
   { title: 'Chat', caption: 'Ask for one picture in your own words, or ask how the app works.', image: `${base}screens/chat.png`, alt: 'The Chat view explaining it needs a text model first.' },
 ];
 ---
 <DocsLayout title="Overview" home>
-  <section class="hero reveal" id="top">
-    <span class="eyebrow">Docs · v{pkg.version}</span>
+  <section class="frame hero reveal" id="top">
+    <span class="label">Docs · v{pkg.version}</span>
     <h1 class="hero-title">{siteConfig.projectName}</h1>
     <p class="hero-sub">{siteConfig.description}</p>
-    <p class="hero-sub">
-      <a href="https://github.com/Stravelakis/image-forge/releases/latest">Download for Windows</a>
-      · <a href={siteConfig.repoUrl}>Source on GitHub</a>
-      · <a href="https://github.com/Stravelakis/image-forge/blob/master/CHANGELOG.md">What changed</a>
-    </p>
+    <div class="btns">
+      {siteConfig.heroLinks.map((l) => (
+        <a class:list={['btn', { primary: l.primary }]} href={l.href}>{l.label}</a>
+      ))}
+    </div>
+    <div class="pills">
+      {siteConfig.heroPills.map((t) => (
+        <span class="pill"><i></i>{t}</span>
+      ))}
+    </div>
   </section>
+
+  <LevelPicker />
 
   <FeatureCards features={features} title="What it does" />
   <Carousel slides={slides} label="Screenshots" />
 
-  <section class="doc-body reveal" id="docs" aria-label="Documentation">
+  <section class="doc-body reveal" id="docs" aria-label="Documentation" data-glossary>
     <VernacularPanels>
-      <Dev slot="dev" />
-      <Plain slot="plain" />
-      <Eli5 slot="eli5" />
+      <Fragment slot="dev"><ReviewStamp {...devFm} /><Dev /></Fragment>
+      <Fragment slot="plain"><ReviewStamp {...plainFm} /><Plain /></Fragment>
+      <Fragment slot="eli5"><ReviewStamp {...eli5Fm} /><Eli5 /></Fragment>
     </VernacularPanels>
   </section>
 
+  {/* No "reveal" on Install and Guide: it waits for part of a section to be on screen, which a long section never reaches (found on Video Forge, 18 Nov 2026). */}
+  {install && (
+    <section class="doc-body doc-source" id="install" aria-label="Install" data-glossary>
+      <install.Content />
+    </section>
+  )}
+  {guide && (
+    <section class="doc-body doc-source" id="guide" aria-label="Guide" data-glossary>
+      <guide.Content />
+    </section>
+  )}
+
   {siteConfig.playground.enabled && <Playground />}
+  <Glossary />
 </DocsLayout>

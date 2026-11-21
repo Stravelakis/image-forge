@@ -1,8 +1,9 @@
 ---
-import '@fontsource-variable/sora';
+import '@fontsource-variable/unbounded';
+import '@fontsource-variable/figtree';
+import '@fontsource-variable/jetbrains-mono';
 import '../styles/theme.css';
 import Sidebar from '../components/Sidebar.astro';
-import DotField from '../components/DotField.astro';
 import PairingBar from '../components/PairingBar.astro';
 import { siteConfig } from '../../site.config.ts';
 
@@ -15,6 +16,7 @@ interface Props {
 
 const { title, description = siteConfig.description, home = false } = Astro.props;
 const vernIds = siteConfig.vernaculars.map((v) => v.id);
+const defaultVern = vernIds.includes(siteConfig.defaultVernacular) ? siteConfig.defaultVernacular : vernIds[0];
 const pageTitle = home && siteConfig.seoTitle ? siteConfig.seoTitle : `${title} · ${siteConfig.projectName}`;
 const canonical = Astro.site ? new URL(Astro.url.pathname, Astro.site).href : undefined;
 // Social cards need an absolute URL; a relative og:image is ignored.
@@ -23,7 +25,7 @@ const socialImage =
   Astro.site && siteConfig.socialImage ? new URL(base + siteConfig.socialImage, Astro.site).href : undefined;
 ---
 <!doctype html>
-<html lang="en" data-vern={vernIds[0]}>
+<html lang="en" data-vern={defaultVern}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -59,8 +61,8 @@ const socialImage =
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
-    <DotField class="page-field" options={siteConfig.backgrounds.page} />
-
+    <canvas id="dots" aria-hidden="true"></canvas>
+    <div class="glow" aria-hidden="true"></div>
     <PairingBar />
     <div class="layout">
       <Sidebar />
@@ -71,18 +73,17 @@ const socialImage =
       </main>
     </div>
 
+    {/* Phones hide the sidebar's footer, so the author links live here too. */}
+    <footer class="page-foot">
+      <span>Made by {siteConfig.author.name}</span>
+      {siteConfig.author.links.map((link) => <a href={link.href} rel="me">{link.label}</a>)}
+    </footer>
+
     <script>
-      const revealObserver = new IntersectionObserver(
-        (entries) => {
-          entries.forEach((entry) => {
-            if (!entry.isIntersecting) return;
-            entry.target.classList.add('in-view');
-            revealObserver.unobserve(entry.target);
-          });
-        },
-        { threshold: 0.12 }
-      );
-      document.querySelectorAll('.reveal').forEach((el) => revealObserver.observe(el));
+      import { startDots } from '../scripts/dots';
+      import { prepareDocs } from '../scripts/docs-runtime';
+      startDots(document.getElementById('dots') as HTMLCanvasElement | null);
+      prepareDocs();
     </script>
   </body>
 </html>
