@@ -1,3 +1,8 @@
+---
+checkedAgainst: v1.1.1
+checkedOn: 2026-11-21
+---
+
 ## Orientation
 
 Image Forge is a **manifest-driven image pipeline**. One [CSV](https://www.rfc-editor.org/rfc/rfc4180) is the single source of truth: rows describe pictures, a queue runner turns rows into files, files land sorted on disk. It runs three ways from one codebase.

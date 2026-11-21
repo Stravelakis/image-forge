@@ -1,3 +1,8 @@
+---
+checkedAgainst: v1.1.1
+checkedOn: 2026-11-21
+---
+
 ## Start here
 
 This page takes you from "I have never done anything like this" to "I made a folder of pictures". Go slowly. Nothing here can break your computer, and every step says what you should see, so you always know if it worked.

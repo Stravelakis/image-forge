@@ -1,3 +1,8 @@
+---
+checkedAgainst: v1.1.1
+checkedOn: 2026-11-21
+---
+
 ## What Image Forge is
 
 A Windows app that makes pictures in bulk. You say what you need and how many, it asks an AI image service to draw them, names each file sensibly, puts them in a folder, and keeps a list of what happened to each one.
