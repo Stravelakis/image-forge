@@ -195,7 +195,7 @@ link/processing/<id>.json  claimed, being made
 link/outbox/<id>/*         pictures, then done.json
 ```
 
-Requests are validated in the main process only (id shape, at most 60 rows, plain filenames, size limit). Invalid ones move to `inbox/rejected/` with a `.why.txt`. The page polls `/link/requests` every 5 s behind the `X-Forge-Link: 1` header. Rows carry `request_id`; when all end, the page `PUT`s each picture and `POST`s `done`. The Video Forge side is `tools/lib/forgeLink.mjs` and `npm run ask-forge`. Free requests start by themselves; paid ones stop at the usual dialog. Keys never cross over.
+Requests are validated in the main process only (id shape, at most 60 rows, plain filenames, size limit). Invalid ones move to `inbox/rejected/` with a `.why.txt`. The page polls `/link/requests` every 5 s behind the `X-Forge-Link: 1` header. Rows carry `request_id`; when all end, the page `PUT`s each picture and `POST`s `done`. The Video Forge side is `tools/lib/forgeLink.mjs`. GUIDE.md names an `npm run ask-forge` command for it, but Video Forge's public release has no such script (checked 21 Nov 2026), so treat that command as unconfirmed. Free requests start by themselves; paid ones stop at the usual dialog. Keys never cross over.
 
 ## The agent API (MCP)
 
